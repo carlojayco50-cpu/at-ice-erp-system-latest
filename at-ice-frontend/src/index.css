@@ -1,0 +1,503 @@
+@import "tailwindcss";
+@import "./default_shadcn_theme.css";
+@import "./neumorphism.css";
+
+/* Design tokens. Surfaces: base slate-50 / slate-950 (see nightOverlay in
+   lib/theme.js), cards white/80 and slate-900/80 with a 12px blur. */
+:root {
+  --surface-card: rgba(255, 255, 255, 0.8);
+  --surface-card-dark: rgba(15, 23, 42, 0.8);
+  --control-height: 2.5rem;
+  --control-radius: 0.75rem;
+  --focus-ring: 0 0 0 2px rgba(6, 182, 212, 0.5);
+  --accent: rgb(6, 182, 212);
+}
+
+/* Brand logo: the AT-ICE snowflake on its own (transparent picture), the same
+   in light and dark mode. No tile behind it; a soft cyan glow gives it depth on
+   both backgrounds. Any padding a page gives the picture is dropped so the
+   snowflake fills its box. */
+.brand-logo {
+  position: relative;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.brand-logo img {
+  padding: 0 !important;
+  filter: drop-shadow(0 2px 6px rgba(34, 211, 238, 0.28)) drop-shadow(0 1px 1px rgba(15, 23, 42, 0.25));
+}
+
+/* Splash snow on the light stage: tinted flakes, since white ones would vanish */
+.snow-on-light .snowflake {
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.6) 0%, rgba(34, 211, 238, 0.35) 45%, rgba(34, 211, 238, 0) 70%);
+}
+/* Theme switch fade. NightMode adds .theme-switching to <html> for 350ms. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition:
+    background-color 300ms ease-in-out,
+    border-color 300ms ease-in-out,
+    color 300ms ease-in-out,
+    fill 300ms ease-in-out,
+    stroke 300ms ease-in-out,
+    box-shadow 300ms ease-in-out !important;
+}
+
+/* Let the ice background show behind the full-page role screens. */
+.ice-scope > .min-h-screen.bg-slate-50,
+.cp-dark.ice-scope > .min-h-screen.bg-slate-50 {
+  background-color: transparent !important;
+}
+
+/* Form controls in the app content: one height, one radius, one focus ring.
+   Controls that set their own height (h-* class) keep it, e.g. the compact
+   quantity steppers. Checkboxes, radios and file pickers are left alone. */
+:is(.ice-main, .ice-scope) :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select):not([class*=" h-"], [class^="h-"]) {
+  height: var(--control-height);
+  /* the fixed height centers the text; vertical padding from the page would clip it */
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: var(--control-radius);
+}
+:is(.ice-main, .ice-scope) textarea {
+  border-radius: var(--control-radius);
+}
+:is(.ice-main, .ice-scope) :is(input, select, textarea):focus {
+  outline: none;
+}
+
+/* ---- Buttons: one size system for the whole app -------------------------
+   Pages write their buttons with all kinds of padding; these rules give them
+   the same sizes no matter which page they are on.
+   Regular (toolbar, form and dialog actions): the control height, 40px.
+   Compact (actions in a table row): 30px, every variant the same.
+   Chips (rounded-full filters): 30px.
+   Buttons that set their own size (h-* / w-* classes), round knobs, and the
+   big tappable card buttons (text-left, rounded-2xl) keep their own size. */
+:is(.ice-main, .ice-scope) button:is(
+    [type="submit"], [class*="bg-"], .border,
+    [class*=" px-3"], [class^="px-3"], [class*=" px-4"], [class^="px-4"]
+  ):not([class*=" h-"], [class^="h-"], .rounded-full, .rounded-2xl, .rounded-3xl, .text-left, .bg-transparent, :is(.bg-slate-50, .bg-slate-100) > *) {
+  min-height: var(--control-height);
+  border-radius: var(--control-radius);
+  /* a button label never wraps, and the button never gets squeezed */
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* Segmented toggles (a row of buttons inside a gray well, e.g. Bar / Line):
+   every option the same size, the selected one shown by its fill only */
+:is(.ice-main, .ice-scope) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl):has(> button) {
+  padding: 3px !important;
+  gap: 3px !important;
+  border-radius: 11px !important;
+}
+:is(.ice-main, .ice-scope) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl):has(> button) > button {
+  min-height: 28px;
+  padding: 0 12px !important;
+  border-radius: 8px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  border: 0 !important;
+}
+:is(.ice-main, .ice-scope) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl):has(> button[aria-pressed]) > button:not([aria-pressed="true"]) {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Icon buttons (Back, Sign out...) written as a bare icon with p-1: a 40px
+   square like the buttons beside them, and a comfortable tap target */
+:is(.ice-main, .ice-scope) button.p-1:not(td button, .rounded-full) {
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-radius: var(--control-radius);
+  flex-shrink: 0;
+}
+:is(.neu .ice-main, .neu.ice-scope) button.p-1:not(td button, .rounded-full) {
+  background-color: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+}
+/* Compact: actions inside table rows */
+:is(.ice-main, .ice-scope) td button:not(.rounded-full, .text-left, .bg-transparent) {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-inline: 10px !important;
+  border-radius: 10px !important;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+/* Tables, every page: everything in a row sits in the vertical middle of the
+   row (a cell with two lines, e.g. Position + Department, is centered as a
+   block). Badges are 20px tall like a line of text. */
+:is(.ice-main, .ice-scope) :is(td, th) {
+  vertical-align: middle;
+}
+:is(.ice-main, .ice-scope) td {
+  line-height: 20px;
+}
+:is(.ice-main, .ice-scope) td :is(span, div).rounded-full:is([class*="px-"]) {
+  line-height: 14px; /* + 2px padding and 1px border each side = 20px */
+  vertical-align: top; /* fills its 20px line exactly, so it is centered like text */
+}
+/* Every table, every page: every column centered (headers, text, badges and
+   row actions). */
+:is(.ice-main, .ice-scope) table :is(th, td) {
+  text-align: center !important;
+}
+:is(.ice-main, .ice-scope) table td > :is(div, span).flex {
+  justify-content: center !important;
+}
+/* Email shown in a table or list: one chip everywhere (Customers, Employees) */
+.email-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 10px 0 8px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  color: #155e75;
+  background-color: rgba(6, 182, 212, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.25);
+}
+.email-chip::before {
+  content: "";
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='4' width='20' height='16' rx='2'/%3E%3Cpolyline points='2,4 12,13 22,4'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='4' width='20' height='16' rx='2'/%3E%3Cpolyline points='2,4 12,13 22,4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+:is(.cp-dark, .neu-dark) .email-chip {
+  color: #a5f3fc;
+  background-color: rgba(34, 211, 238, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.28);
+}
+/* The row actions column (last column holding buttons) is only as wide as its
+   buttons, so it sits at the right end of the table, with its header and
+   buttons centered on each other. */
+:is(.ice-main, .ice-scope) table:has(td:last-child button) :is(th, td):last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+/* Row actions: the buttons line up with each other */
+:is(.ice-main, .ice-scope) td > :is(div, span).flex:has(> button) { align-items: center; }
+/* ...icon-only ones (a set width) are square */
+:is(.ice-main, .ice-scope) td button:is([class*=" w-"], [class^="w-"]):not(.rounded-full) {
+  width: 30px !important;
+  padding-inline: 0 !important;
+}
+/* Chips (filters) */
+:is(.ice-main, .ice-scope) button.rounded-full:not([class*=" h-"], [class^="h-"], [class*=" w-"], [class^="w-"]) {
+  min-height: 30px;
+  padding-inline: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Search boxes (icon + field in one bordered row) are as tall as a button */
+:is(.ice-main, .ice-scope) div.flex.items-center.border:has(> :is(input, select)) {
+  min-height: var(--control-height);
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-radius: var(--control-radius) !important;
+}
+:is(.ice-main, .ice-scope) div.flex.items-center.border:has(> :is(input, select)) > :is(input, select) {
+  height: calc(var(--control-height) - 2px);
+}
+/* Search boxes, every page: one magnifying glass, same size, spacing and
+   color in light and night mode (the icon used to take whatever text color
+   its box had, so in night mode some were nearly invisible). */
+:is(.ice-main, .ice-scope) div.flex.items-center.border:has(> input) {
+  gap: 8px !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+:is(.ice-main, .ice-scope) div.flex.items-center.border:has(> input) > :is(svg, span:has(> svg)) {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  color: var(--neu-faint) !important;
+}
+:is(.ice-main, .ice-scope) div.flex.items-center.border:has(> input) > span:has(> svg) > svg { width: 15px; height: 15px; }
+:is(.ice-main, .ice-scope) div.flex.items-center.border:has(> input):focus-within > :is(svg, span:has(> svg)) {
+  color: var(--neu-accent) !important;
+}
+:is(.ice-main, .ice-scope) div.flex.items-center.border:has(> input) > input {
+  color: var(--neu-text) !important;
+  font-size: 13px;
+}
+:is(.ice-main, .ice-scope) :is(input[type="search"], input[placeholder^="Search" i])::placeholder {
+  color: var(--neu-faint);
+  opacity: 1;
+}
+/* A search field on its own (no icon beside it) gets the same glass */
+:is(.ice-main, .ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input) {
+  padding-left: 36px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' fill='none' stroke='%23566173' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: 12px center !important;
+  background-size: 15px !important;
+}
+.cp-dark :is(.ice-main, .ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input),
+.cp-dark:is(.ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' fill='none' stroke='%239aa6b8' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") !important;
+}
+
+/* ---- Sidebar rail (Admin, HR and Customer layouts, desktop) ---------------
+   The sidebar hides itself down to its icons. It opens while the mouse is on
+   it (or the keyboard focus is inside it) and closes again when the mouse
+   leaves, after a short pause (so a mouse that slips off for a moment does
+   not close it). Its slot in the layout widens with it, so the page beside it
+   narrows and every page re-lays out to fit (nothing is covered). Below
+   1024px the menu button and the drawer are used instead. Labels to hide
+   carry .rail-label. */
+/* Closing waits 400ms; opening is immediate. (A transition-delay belongs to
+   the state being entered, so the closed state carries the pause.) */
+.rail-slot {
+  width: 64px;
+  transition: width 220ms ease 400ms;
+}
+.rail-slot:has(> aside.rail:is(:hover, :focus-within)) {
+  width: 248px;
+  transition-delay: 0ms;
+}
+aside.rail {
+  width: 100%;
+}
+/* The logo, page icons and avatar always keep their full size, open or closed */
+aside.rail :is(.brand-logo, svg, .rounded-full) {
+  flex-shrink: 0;
+}
+.neu aside.rail { z-index: 20 !important; }
+aside.rail .rail-label {
+  white-space: nowrap;
+  transition: opacity 150ms ease;
+}
+aside.rail:not(:hover, :focus-within) .rail-label {
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 400ms;
+}
+/* Section titles stay visible when the rail is closed, small and centered so
+   the groups of icons read as groups instead of odd gaps (the longest,
+   DELIVERIES, fits the 64px rail). */
+aside.rail .rail-section {
+  white-space: nowrap;
+  overflow: hidden;
+  /* text-align cannot animate, so it switches as a discrete step: on closing
+     it waits out the same pause as the width, instead of centering the titles
+     while the sidebar is still open */
+  transition: font-size 150ms ease, padding 150ms ease, letter-spacing 150ms ease, text-align 0s;
+  transition-behavior: allow-discrete;
+}
+aside.rail:not(:hover, :focus-within) .rail-section {
+  transition-delay: 400ms;
+  font-size: 8px !important;
+  letter-spacing: 0.04em !important;
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-slot, aside.rail .rail-label, aside.rail .rail-section { transition: none; }
+}
+
+/* ---- Responsive, every page ----------------------------------------------
+   The layouts already collapse the sidebar into a drawer below 1024px. These
+   rules keep the page content usable on tablets and phones without each page
+   having to do it. */
+/* Wide tables scroll sideways inside their card instead of squeezing */
+:is(.ice-main, .ice-scope) :has(> table) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 1023px) {
+  :is(.ice-main, .ice-scope) table { min-width: 640px; }
+  :is(.ice-main, .ice-scope) td:has(> :is(div, span).flex > button) { white-space: nowrap; }
+}
+@media (max-width: 767px) {
+  /* Rows of tabs or filter buttons wrap onto a second line */
+  :is(.ice-main, .ice-scope) .flex:has(> button[aria-pressed]) {
+    flex-wrap: wrap;
+  }
+  /* Card headers and toolbars wrap instead of overflowing */
+  :is(.ice-main, .ice-scope) .flex.items-center.justify-between,
+  :is(.ice-main, .ice-scope) .flex.items-center:has(> button):has(> div > input) {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+  /* Fixed-width search boxes take the free width */
+  :is(.ice-main, .ice-scope) div.flex.items-center.border:has(> :is(input, select))[class*="w-["] {
+    width: auto;
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+}
+@media (max-width: 639px) {
+  /* Stat tiles: 4-6 across become 2 across */
+  :is(.ice-main, .ice-scope) .grid:is(.grid-cols-4, .grid-cols-5, .grid-cols-6):not([class*=":grid-cols"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* Cards two across stack one per row */
+  :is(.ice-main, .ice-scope) .grid.grid-cols-2:not([class*=":grid-cols"]):has(> :is(.bg-white, [class*="bg-white/"])) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Two-column forms become one column */
+  :is(.ice-main, .ice-scope) form .grid.grid-cols-2:not([class*=":grid-cols"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :is(.ice-main, .ice-scope) form .grid.grid-cols-2:not([class*=":grid-cols"]) > [class*="col-span-"] {
+    grid-column: 1 / -1;
+  }
+  /* Dialogs use the full width with a small margin */
+  .neu .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) {
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* Every button: soft transitions, and a press you can see. lib/pressFeedback.js
+   keeps [data-pressed] on for a moment after a quick click, so even a fast tap
+   shows the button going in. */
+#root button {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform, scale, translate, filter;
+  transition-duration: 160ms;
+  transition-timing-function: ease-out;
+}
+#root button:not(:disabled):is(:active, [data-pressed]) {
+  scale: 0.96;
+}
+#root button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Headings: slightly tighter tracking. */
+:is(.ice-main, .ice-scope) :is(h1, h2, h3) {
+  letter-spacing: -0.015em;
+}
+
+/* Thin scrollbars that match the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.35) transparent;
+}
+.cp-dark,
+.cp-dark * {
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.35);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.55);
+}
+
+/* Loading skeletons (see components/Skeleton.jsx). */
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.skeleton {
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.16) 25%, rgba(148, 163, 184, 0.28) 37%, rgba(148, 163, 184, 0.16) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  #root button:not(:disabled):is(:active, [data-pressed]) { scale: 1; }
+}
+
+/* Attendance Station result pop-up: pops in, and a bar shows the time left. */
+@keyframes kiosk-pop-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes kiosk-pop-timer { from { width: 100%; } to { width: 0%; } }
+.kiosk-pop { animation: kiosk-pop-in 180ms ease-out; }
+.kiosk-pop-timer { animation-name: kiosk-pop-timer; animation-timing-function: linear; animation-fill-mode: forwards; }
+@media (prefers-reduced-motion: reduce) { .kiosk-pop { animation: none; } }
+
+/* HR PIN boxes (PinEntry in KioskScreens.jsx): shake on a wrong PIN, dot pop, blinking caret. */
+@keyframes pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+.pin-shake { animation: pin-shake 0.4s ease-in-out; }
+@keyframes pin-dot { from { transform: scale(0); } to { transform: scale(1); } }
+.pin-dot { animation: pin-dot 0.15s ease-out; }
+@keyframes pin-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.pin-caret { animation: pin-caret 1s step-end infinite; }
+
+/* Snowfall (components/Snowfall.jsx). Each flake falls with its own size,
+   speed, drift and delay, set as CSS variables. Transform and opacity only. */
+@keyframes snow-fall {
+  0% { transform: translate3d(0, -12vh, 0); }
+  50% { transform: translate3d(calc(var(--drift) * 0.5 + var(--sway)), 50vh, 0); }
+  100% { transform: translate3d(var(--drift), 112vh, 0); }
+}
+.snowflake {
+  position: absolute;
+  top: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(207, 250, 254, 0.7) 45%, rgba(207, 250, 254, 0) 70%);
+  will-change: transform;
+  animation: snow-fall var(--dur) linear var(--delay) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .snowflake, .pin-shake, .pin-caret { animation: none; }
+  .snowflake { display: none; }
+}
+
+/* Saved-password autofill: the browser paints its own color inside the field,
+   which hides the soft UI dent. Clipping the background to the text keeps the
+   field see-through, so the neumorphic shadow shows through as usual. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: var(--neu-text);
+  caret-color: var(--neu-text);
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+#login-email:-webkit-autofill,
+#login-password:-webkit-autofill {
+  -webkit-text-fill-color: #1e293b;
+}

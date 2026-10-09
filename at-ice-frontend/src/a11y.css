@@ -1,0 +1,56 @@
+/* Readable text in light and night mode (WCAG AA, 4.5:1), for every page
+   that uses a layout (.ice-main) or NightScope (.ice-scope), plus the
+   sidebars and top bars. Found with a light/night audit of all page styles.
+   Plain CSS (no @layer), so it wins over the Tailwind color classes. */
+
+/* Light mode: light grays and bright colors on white were too faint.
+   Each is moved to the shade that reaches 4.5:1 on white. */
+:is(.ice-main, .ice-scope, aside, header):not(.cp-dark, .cp-dark *) :is(.text-slate-300, .text-slate-400) { color: #64748b; } /* slate-500 */
+:is(.ice-main, .ice-scope, aside, header):not(.cp-dark, .cp-dark *) :is(.text-cyan-500, .text-cyan-600) { color: #0e7490; } /* cyan-700 */
+:is(.ice-main, .ice-scope, aside, header):not(.cp-dark, .cp-dark *) .text-amber-600 { color: #b45309; } /* amber-700 */
+:is(.ice-main, .ice-scope, aside, header):not(.cp-dark, .cp-dark *) :is(.text-red-400, .text-red-500) { color: #dc2626; } /* red-600 */
+:is(.ice-main, .ice-scope, aside, header):not(.cp-dark, .cp-dark *) :is(.text-green-500, .text-green-600) { color: #15803d; } /* green-700 */
+:is(.ice-main, .ice-scope, aside, header):not(.cp-dark, .cp-dark *) .text-emerald-600 { color: #047857; } /* emerald-700 */
+
+/* ...and on a light gray fill (bg-slate-100), slate-500 needs one step more */
+:is(.ice-main, .ice-scope, aside, header):not(.cp-dark, .cp-dark *) :is(.bg-slate-100.text-slate-500, .bg-slate-100 .text-slate-500) { color: #475569; } /* slate-600 */
+
+/* Text on a solid colored fill keeps its own color */
+#root :is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-orange-500) :is(.text-cyan-500, .text-cyan-600, .text-red-500, .text-emerald-600) { color: inherit; }
+
+/* Solid action buttons, both modes. White on cyan-500 is only 2.4:1, so cyan
+   buttons use dark text (like the login and kiosk buttons). Red and emerald
+   use a deeper fill so their white text passes. */
+:is(button, a, label):is(.bg-cyan-500, .bg-cyan-600).text-white { color: #0f172a; }
+:is(button, a):is(.bg-cyan-500, .bg-cyan-600) .border-white\/40 { border-color: rgba(15, 23, 42, 0.25); border-top-color: #0f172a; }
+:is(button, a).bg-red-500 { background-color: #dc2626; }
+:is(button, a).bg-red-500:not(:disabled):hover { background-color: #b91c1c; }
+:is(button, a).bg-emerald-500 { background-color: #047857; }
+:is(button, a).bg-emerald-500:not(:disabled):hover { background-color: #065f46; }
+
+/* Clicked fields: no cyan ring or glow anywhere (pages still carry
+   focus:ring-* / focus:border-cyan-* classes; these cancel them). */
+#root :is(input, select, textarea):focus {
+  outline: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+#root :is(input, select, textarea):not(.ice-main *, .ice-scope *):focus[class*="focus:border-cyan"] {
+  border-color: #e2e8f0 !important; /* slate-200, the usual field border */
+}
+
+/* Hover: every button changes color under the mouse so it is clear what
+   will be clicked. Filled buttons get a shade darker (lighter at night);
+   plain buttons with no fill get a light cyan tint. */
+@media (hover: hover) {
+  #root :is(button, [role="button"], label.cursor-pointer):not(:disabled, [aria-disabled="true"]):hover {
+    filter: brightness(0.93);
+  }
+  #root .cp-dark :is(button, [role="button"], label.cursor-pointer):not(:disabled, [aria-disabled="true"]):hover,
+  #root .cp-dark:is(button, [role="button"]):not(:disabled):hover {
+    filter: brightness(1.2);
+  }
+  #root :is(.ice-main, .ice-scope, aside, header) button:is(:not([class*="bg-"]), .bg-transparent):not(:disabled, [aria-disabled="true"], .text-left):hover {
+    background-color: rgba(6, 182, 212, 0.12) !important;
+  }
+}

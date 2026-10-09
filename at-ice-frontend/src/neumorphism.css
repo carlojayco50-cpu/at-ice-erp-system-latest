@@ -1,0 +1,582 @@
+/* Neumorphism ("Soft UI Evolution"): surfaces look pressed out of one material.
+   Raised = light shadow top-left + dark shadow bottom-right. Inset = the same
+   shadows inside. Text keeps 4.5:1 contrast and focus stays clearly visible,
+   so the soft look never costs readability.
+
+   Tokens: change the look of every neumorphic surface here.
+   Dark tokens apply under .cp-dark (night mode) and .neu-dark. */
+:root {
+  --neu-bg: #e0e5ec;
+  --neu-hi: rgba(255, 255, 255, 0.65);
+  --neu-lo: rgba(163, 177, 198, 0.7);
+  --neu-text: #334155;
+  --neu-muted: #4a5567; /* 6:1 on --neu-bg */
+  --neu-faint: #566173; /* 5:1 on --neu-bg */
+  --neu-accent: #155e75; /* cyan-800, 5.5:1 on --neu-bg */
+  --neu-veil: rgba(224, 229, 236, 0.84); /* --neu-bg over the ice photo */
+  --neu-radius: 16px;
+  --neu-radius-sm: 12px;
+}
+.cp-dark,
+.neu-dark {
+  --neu-bg: #1e2431;
+  --neu-hi: rgba(255, 255, 255, 0.055);
+  --neu-lo: rgba(0, 0, 0, 0.5);
+  --neu-text: #e2e8f0;
+  --neu-muted: #b4bfcf;
+  --neu-faint: #9aa6b8;
+  --neu-accent: #67e8f9;
+  --neu-veil: rgba(30, 36, 49, 0.9);
+}
+
+/* Composite shadows are declared again in every themed scope so they pick up
+   that scope's colors (a var() inside a custom property resolves where it is declared). */
+:root,
+.cp-dark,
+.neu-dark {
+  --neu-raised: 6px 6px 14px var(--neu-lo), -6px -6px 14px var(--neu-hi);
+  --neu-raised-sm: 3px 3px 8px var(--neu-lo), -3px -3px 8px var(--neu-hi);
+  --neu-inset: inset 4px 4px 8px var(--neu-lo), inset -4px -4px 8px var(--neu-hi);
+  --neu-inset-sm: inset 2px 2px 5px var(--neu-lo), inset -2px -2px 5px var(--neu-hi);
+  --neu-focus: 0 0 0 2px var(--neu-bg), 0 0 0 4px rgba(6, 182, 212, 0.75);
+}
+
+/* Floating surfaces (dialogs, drawers, notices, dropdown popups) sit above a
+   dimmed page, not on the same material, so they cast a real drop shadow
+   instead of the white neumorphic highlight (which glows like a halo over a
+   dark backdrop). One token per theme keeps light and night mode alike. */
+:root {
+  --float-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.32), 0 10px 20px -10px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.06);
+  --float-shadow-sm: 0 12px 28px -10px rgba(15, 23, 42, 0.28), 0 4px 10px -4px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+.cp-dark,
+.neu-dark {
+  --float-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.7), 0 10px 20px -10px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --float-shadow-sm: 0 12px 28px -10px rgba(0, 0, 0, 0.65), 0 4px 10px -4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* Building blocks (used directly by the login page) */
+.neu-raised { background-color: var(--neu-bg); box-shadow: var(--neu-raised); }
+.neu-raised-sm { background-color: var(--neu-bg); box-shadow: var(--neu-raised-sm); }
+.neu-inset { background-color: var(--neu-bg); box-shadow: var(--neu-inset); }
+
+
+/* ---- Layouts marked .neu -------------------------------------------------
+   AdminLayout, HrLayout and CustomerLayout put .neu on their root; the page
+   content is .ice-main. NightScope (Checker, Salesman, Maintenance, Driver,
+   My Leave) puts .neu and .ice-scope on the same root. Every rule below is
+   scoped to one of the two, so pages need no classes of their own. */
+
+/* The ice photo stays on every page. Its tint is the base color, strong enough
+   that the soft shadows still read on top of it. */
+.neu { background-color: var(--neu-bg) !important; }
+.neu .ice-main,
+.neu.ice-scope {
+  box-shadow: inset 0 0 0 9999px var(--neu-veil) !important;
+}
+.neu.ice-scope > .min-h-screen:is(.bg-slate-50, .bg-white) { background-color: transparent !important; }
+
+/* Every white surface takes the base color (round knobs and dots excepted). */
+.neu :is(div, form, section, aside, header, nav, footer, table, label):is(.bg-white, [class*="bg-white/"]):not(.rounded-full) {
+  background-color: var(--neu-bg) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Mobile menu drawer (Admin, HR, Customer layouts) floats over the page */
+.neu .fixed.inset-0 > aside:is(.bg-white, [class*="bg-white/"]) { box-shadow: var(--float-shadow) !important; }
+
+/* Sidebar and top bars: same material, lifted by a soft shadow */
+.neu :is(aside, header):is(.bg-white, [class*="bg-white/"]) { border-color: transparent !important; }
+.neu aside:is(.bg-white, [class*="bg-white/"]) { box-shadow: 6px 0 16px -6px var(--neu-lo) !important; z-index: 1; }
+.neu header:is(.bg-white, [class*="bg-white/"]) { box-shadow: 0 6px 16px -8px var(--neu-lo) !important; }
+.neu aside :is(.border-b, .border-t) { border-color: transparent !important; }
+/* Sticky and fixed bars inside pages (sub-headers, bottom action bars) */
+.neu :is(div, nav, footer):is(.sticky, .fixed):is(.bg-white, [class*="bg-white/"]):not([class*="rounded"], .inset-0) {
+  border-color: transparent !important;
+  box-shadow: 0 0 16px -6px var(--neu-lo) !important;
+}
+
+/* Top bar chips (date, search) */
+.neu header div:is(.bg-white, [class*="bg-white/"], .bg-slate-50).border {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  border-radius: var(--neu-radius-sm) !important;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* Sidebar items: soft pills; the current page is pressed in */
+.neu aside nav .border-l-2 {
+  margin: 4px 12px;
+  padding-left: 12px;
+  border-radius: var(--neu-radius-sm);
+  border-left-color: transparent !important;
+}
+.neu aside nav .border-l-2:hover:not(.border-cyan-500) {
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm);
+}
+.neu aside nav .border-l-2.border-cyan-500 {
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm);
+  color: var(--neu-accent) !important;
+  font-weight: 600;
+}
+
+/* Cards: white boxes with a border, and the big tappable card buttons */
+:is(.neu .ice-main, .neu.ice-scope) :is(div, form, section):is(.bg-white, [class*="bg-white/"]).border:is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl),
+:is(.neu .ice-main, .neu.ice-scope) button:is(.bg-white, [class*="bg-white/"]):is(.rounded-2xl, .rounded-3xl) {
+  border-color: transparent !important;
+  border-radius: var(--neu-radius) !important;
+  box-shadow: var(--neu-raised) !important;
+}
+/* A card inside a card is a flatter step, so nesting stays readable */
+:is(.neu .ice-main, .neu.ice-scope) :is(div, form):is(.bg-white, [class*="bg-white/"]).border :is(div, form):is(.bg-white, [class*="bg-white/"]).border {
+  box-shadow: var(--neu-raised-sm) !important;
+  border-radius: var(--neu-radius-sm) !important;
+}
+
+/* Bordered panels without a fill (table wrappers, detail boxes) become a
+   flatter soft step. Colored and dashed borders keep their meaning. */
+:is(.neu .ice-main, .neu.ice-scope) :is(div, label).border:is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):not([class^="bg-"], [class*=" bg-"], .border-dashed, [class*="border-red"], [class*="border-amber"], [class*="border-emerald"], [class*="border-green"], [class*="border-cyan"], [class*="border-orange"], [class*="border-blue"], [class*="border-violet"]):not(:has(> :is(input, select))) {
+  border-color: transparent !important;
+  border-radius: var(--neu-radius-sm) !important;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* Dialogs (anywhere in the layout, including the sign-out confirmation) */
+.neu :is(div, form):is(.bg-white, [class*="bg-white/"]):is(.shadow-xl, .shadow-2xl):not(aside) {
+  border-color: transparent !important;
+  border-radius: 20px !important;
+  box-shadow: var(--float-shadow) !important;
+}
+
+/* Modals: whatever classes a page gave its panel (rounded-md, a border, no
+   shadow...), every white panel in a full-screen overlay looks the same.
+   #modal-panel never matches; it only lifts this rule above the card rules. */
+.neu .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]) {
+  border-color: transparent !important;
+  border-radius: 20px !important;
+  box-shadow: var(--float-shadow) !important;
+}
+/* Long dialogs: the title bar and the action buttons stay in place while the
+   middle scrolls. The panel is the scroll box (overflow-y-auto); its first
+   child with a bottom border is the title bar, and the last row of buttons
+   (up to three levels down, e.g. inside its form) is the action bar. */
+.fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > div.border-b:first-child {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background-color: var(--neu-bg);
+}
+.fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > div.flex:has(> button):last-child:not(:first-child),
+.fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > * > div.flex:has(> button):last-child:not(:first-child),
+.fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > * > * > div.flex:has(> button):last-child:not(:first-child) {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background-color: var(--neu-bg);
+  /* reach the panel edges over the usual 20px side padding */
+  margin-inline: -20px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(163, 177, 198, 0.4);
+}
+.cp-dark .fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) :is(div.flex:has(> button):last-child) { border-top-color: rgba(0, 0, 0, 0.35); }
+
+/* Phone bottom sheets keep square bottom corners */
+@media (max-width: 639px) {
+  .neu .fixed.inset-0 > :is(div, form, #modal-panel).rounded-t-2xl:is(.bg-white, [class*="bg-white/"]) {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+}
+/* One backdrop for every modal */
+.neu .fixed.inset-0:is([class*="bg-black/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"]) {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+/* Wells: search boxes, read-only rows and segmented tabs are pressed in */
+:is(.neu .ice-main, .neu.ice-scope) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):not(.min-h-screen) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset-sm);
+}
+
+/* Tables: the header row sits on the card, rows are split by soft grooves */
+:is(.neu .ice-main, .neu.ice-scope) :is(thead, thead tr, th, tr):is(.bg-slate-50, [class*="bg-slate-50/"]) {
+  background-color: transparent !important;
+}
+:is(.neu .ice-main, .neu.ice-scope) thead tr { border-color: transparent !important; box-shadow: inset 0 -1px 0 var(--neu-lo); }
+:is(.neu .ice-main, .neu.ice-scope) tbody tr:hover { background-color: rgba(163, 177, 198, 0.12) !important; }
+.neu.cp-dark :is(.ice-main, .ice-scope) tbody tr:hover { background-color: rgba(255, 255, 255, 0.03) !important; }
+
+/* Form fields are pressed in */
+:is(.neu .ice-main, .neu.ice-scope) :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset);
+  color: var(--neu-text);
+}
+/* Fields with an error keep a clear red outline on top of the dent */
+:is(.neu .ice-main, .neu.ice-scope) :is(input, select, textarea):is([class*=" border-red"], [class^="border-red"]) {
+  box-shadow: var(--neu-inset), 0 0 0 1.5px rgba(239, 68, 68, 0.8) !important;
+}
+
+/* Search boxes: an icon and a field inside one bordered row. The row is the
+   dent; the field inside it stays flat, so there is never a box in a box. */
+:is(.neu .ice-main, .neu.ice-scope) div.flex.items-center.border:has(> :is(input, select)) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  border-radius: var(--neu-radius-sm) !important;
+  box-shadow: var(--neu-inset-sm);
+}
+:is(.neu .ice-main, .neu.ice-scope) div.flex.items-center.border:has(> :is(input, select)) > :is(input, select),
+:is(.neu .ice-main, .neu.ice-scope) div.flex.items-center.border:has(> :is(input, select)) > :is(input, select):focus {
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+/* ...except a bare field that sits inside a well (search boxes): the well is the dent */
+:is(.neu .ice-main, .neu.ice-scope) div:is(.bg-slate-50, .bg-slate-100) > :is(input, select) {
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+/* A clicked field shows no cyan ring; it stays the same dent. */
+
+/* Buttons: white ones become raised, pressed when held. Text-only buttons with
+   padding (Cancel, Close in dialogs) are the same raised button, so a dialog's
+   actions all look alike. */
+.neu button:is(.bg-white, [class*="bg-white/"], .bg-slate-50, .bg-slate-100),
+:is(.neu .ice-main, .neu.ice-scope) button.border:not([class^="bg-"], [class*=" bg-"]),
+:is(.neu .ice-main, .neu.ice-scope) button:is([class*=" px-3"], [class^="px-3"], [class*=" px-4"], [class^="px-4"]):not([class^="bg-"], [class*=" bg-"], .border, .text-left) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-raised-sm);
+}
+/* Pressed: every button sinks in while held and for a moment after a click
+   ([data-pressed], lib/pressFeedback.js) */
+.neu button:not(:disabled):is(:active, [data-pressed]):not([class*="bg-cyan-"], [class*="bg-red-"], [class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-orange-"], [class*="bg-amber-"], [class*="bg-blue-"], [class*="bg-violet-"], [class*="bg-slate-9"], [class*="bg-slate-8"], .rounded-full:not([class*="px-"])) {
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+  color: var(--neu-accent) !important;
+}
+/* Solid colored buttons (cyan primary, red, green...) keep their color and
+   gain the same depth */
+.neu button:is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600, .bg-orange-500, .bg-orange-600, .bg-blue-500, .bg-blue-600, .bg-amber-500, .bg-violet-500) {
+  box-shadow: 4px 4px 10px var(--neu-lo), -4px -4px 10px var(--neu-hi);
+}
+/* ...and press in and darken */
+.neu button:not(:disabled):is(:active, [data-pressed]):is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600, .bg-orange-500, .bg-orange-600, .bg-blue-500, .bg-blue-600, .bg-amber-500, .bg-violet-500) {
+  box-shadow: inset 3px 3px 6px rgba(8, 30, 50, 0.45), inset -3px -3px 6px rgba(255, 255, 255, 0.18) !important;
+  filter: brightness(0.9);
+}
+
+/* Selected toggles, tabs and filters turn blue (the cyan fill of the selected
+   filter chip), pressed in, so it is always clear which one is on. Underline
+   tabs (border-b-2) keep their underline and take the accent color instead. */
+:is(.neu .ice-main, .neu.ice-scope, .neu) button:is([aria-pressed="true"], [aria-selected="true"], [data-state="active"], [data-state="on"]):not(.border-b-2) {
+  background-color: #06b6d4 !important;
+  border-color: transparent !important;
+  color: #0f172a !important;
+  font-weight: 600;
+  box-shadow: inset 2px 2px 5px rgba(8, 51, 68, 0.35), inset -2px -2px 4px rgba(255, 255, 255, 0.2) !important;
+}
+.neu button:is([aria-pressed="true"], [aria-selected="true"], [data-state="active"], [data-state="on"]) :is(span, svg) { color: inherit !important; }
+.neu button.border-b-2:is([aria-pressed="true"], [aria-selected="true"]) {
+  color: var(--neu-accent) !important;
+  border-color: #06b6d4 !important;
+  font-weight: 600;
+}
+/* Label buttons (e.g. the photo picker chip over an image) are raised like buttons */
+.neu label:is(.bg-white, [class*="bg-white/"]).border {
+  border-color: transparent !important;
+  box-shadow: var(--neu-raised-sm);
+}
+
+/* Selected filter chips with a tinted fill (bg-cyan-50) are pressed in */
+.neu button.bg-cyan-50 {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset-sm);
+  color: var(--neu-accent) !important;
+  font-weight: 600;
+}
+/* Pill filters: the selected (cyan) pill keeps its color; the others are raised */
+.neu button.rounded-full:is(.bg-cyan-500, .bg-cyan-600) { border-color: transparent !important; }
+
+/* Keyboard focus is always visible, never only a shadow change */
+.neu :is(button, a, [role="button"], [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--neu-focus) !important;
+}
+
+/* Text: muted grays darkened to keep 4.5:1 on the gray base (light mode) */
+.neu:not(.cp-dark) .text-slate-500 { color: var(--neu-muted) !important; }
+.neu:not(.cp-dark) :is(.text-slate-400, .text-slate-300) { color: var(--neu-faint) !important; }
+.neu:not(.cp-dark) .text-cyan-500 { color: var(--neu-accent) !important; }
+
+/* Colored text darkened one or two steps so it keeps 4.5:1 on the gray base
+   (light mode; night mode already uses light tints that pass). */
+.neu:not(.cp-dark) :is(.text-cyan-500, .text-cyan-600, .text-cyan-700) { color: var(--neu-accent) !important; }
+.neu:not(.cp-dark) :is(.text-amber-500, .text-amber-600, .text-amber-700) { color: #92400e !important; }
+.neu:not(.cp-dark) :is(.text-red-400, .text-red-500, .text-red-600) { color: #991b1b !important; }
+.neu:not(.cp-dark) :is(.text-green-500, .text-green-600, .text-green-700) { color: #166534 !important; }
+.neu:not(.cp-dark) :is(.text-emerald-500, .text-emerald-600, .text-emerald-700) { color: #065f46 !important; }
+.neu:not(.cp-dark) :is(.text-blue-500, .text-blue-600) { color: #1d4ed8 !important; }
+.neu:not(.cp-dark) .text-orange-600 { color: #9a3412 !important; }
+.neu.cp-dark .text-slate-300 { color: #8f9cb1 !important; }
+/* ...but text on a solid colored fill stays as designed */
+.neu :is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-emerald-500, .bg-emerald-600, .bg-orange-500, .bg-green-500) :is(.text-cyan-500, .text-cyan-600, .text-red-500, .text-emerald-600) { color: inherit !important; }
+
+/* Solid action buttons: text and fill chosen for 4.5:1.
+   Cyan buttons use dark text everywhere (as on the login and kiosk screens). */
+.neu :is(button, a, label):is(.bg-cyan-500, .bg-cyan-600) { color: #0f172a !important; }
+.neu :is(button, a, label):is(.bg-cyan-500, .bg-cyan-600) :is(span, svg) { color: inherit; }
+.neu :is(button, a):is(.bg-cyan-500, .bg-cyan-600) .border-white\/40 { border-color: rgba(15, 23, 42, 0.25) !important; border-top-color: #0f172a !important; }
+.neu :is(button, a).bg-red-500 { background-color: #dc2626 !important; }
+.neu :is(button, a).bg-red-500:not(:disabled):hover { background-color: #b91c1c !important; }
+.neu :is(button, a).bg-emerald-500 { background-color: #047857 !important; }
+.neu :is(button, a).bg-emerald-500:not(:disabled):hover { background-color: #065f46 !important; }
+
+/* Dividers: soft grooves instead of hard lines */
+.neu :is(.divide-black\/\[0\.06\], .divide-black\/\[0\.05\], .divide-slate-100) > *,
+.neu :is(.ice-main, .ice-scope) :is(.border-b, .border-t):is(.border-black\/\[0\.06\], .border-black\/\[0\.05\], .border-black\/\[0\.08\], .border-slate-100) {
+  border-color: rgba(163, 177, 198, 0.4) !important;
+}
+.neu.cp-dark :is(.divide-black\/\[0\.06\], .divide-black\/\[0\.05\], .divide-slate-100) > *,
+.neu.cp-dark :is(.ice-main, .ice-scope) :is(.border-b, .border-t):is(.border-black\/\[0\.06\], .border-black\/\[0\.05\], .border-black\/\[0\.08\], .border-slate-100) {
+  border-color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* ---- Kiosk screens (KioskScreens.jsx) and other dark full-page screens ---- */
+.neu-dark .neu-field {
+  background-color: var(--neu-bg);
+  border-color: transparent;
+  box-shadow: var(--neu-inset);
+}
+
+/* HR PIN boxes on a dark neumorphic surface (login page Attendance Station panel) */
+.neu-dark .pin-box {
+  background-color: var(--neu-bg);
+  border-color: transparent;
+  box-shadow: var(--neu-inset);
+}
+.neu-dark .pin-box.pin-active { box-shadow: var(--neu-inset), 0 0 0 2px rgba(34, 211, 238, 0.8); }
+.neu-dark .pin-box.pin-error { box-shadow: var(--neu-inset), 0 0 0 1px rgba(248, 113, 113, 0.55); }
+
+/* ---- Notices (info, success, warning, error boxes), every page ----------
+   Pages wrote these with many different tints, borders, radii and paddings.
+   Any padded, rounded box with a tinted background gets one look: a soft
+   tint of its tone, a 3px accent bar on the left, no box border, the same
+   radius and text size, and text colors that keep 4.5:1 in light and night
+   mode. Badges (rounded-full), icon tiles (fixed size) and section bars
+   (not rounded) are left alone. */
+:is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-blue-"], [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-500/"], [class*="bg-sky-"]) {
+  --notice: #0284c7; --notice-text: #075985;
+}
+:is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-emerald-"], [class*="bg-green-"]):not(.bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600) {
+  --notice: #059669; --notice-text: #065f46;
+}
+:is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-orange-50"], [class*="bg-orange-100"], [class*="bg-orange-500/"]) {
+  --notice: #d97706; --notice-text: #92400e;
+}
+:is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-red-50"], [class*="bg-red-100"], [class*="bg-red-500/"], [class*="bg-red-400/"]) {
+  --notice: #dc2626; --notice-text: #991b1b;
+}
+:is(.cp-dark, .neu-dark) :is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-blue-"], [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-500/"], [class*="bg-sky-"]) { --notice: #38bdf8; --notice-text: #bae6fd; }
+:is(.cp-dark, .neu-dark) :is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-emerald-"], [class*="bg-green-"]):not(.bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600) { --notice: #34d399; --notice-text: #a7f3d0; }
+:is(.cp-dark, .neu-dark) :is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-orange-50"], [class*="bg-orange-100"], [class*="bg-orange-500/"]) { --notice: #fbbf24; --notice-text: #fde68a; }
+:is(.cp-dark, .neu-dark) :is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-red-50"], [class*="bg-red-100"], [class*="bg-red-500/"], [class*="bg-red-400/"]) { --notice: #f87171; --notice-text: #fecaca; }
+
+:is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-blue-"], [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-500/"], [class*="bg-sky-"], [class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-orange-50"], [class*="bg-orange-100"], [class*="bg-orange-500/"], [class*="bg-red-50"], [class*="bg-red-100"], [class*="bg-red-500/"], [class*="bg-red-400/"]):not(.bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600) {
+  background-color: color-mix(in srgb, var(--notice) 10%, var(--neu-bg)) !important;
+  border: 0 !important;
+  border-left: 3px solid var(--notice) !important;
+  border-radius: var(--neu-radius-sm) !important;
+  box-shadow: none !important;
+  color: var(--notice-text) !important;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:is(.cp-dark, .neu-dark) :is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-blue-"], [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-500/"], [class*="bg-sky-"], [class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-orange-50"], [class*="bg-orange-100"], [class*="bg-orange-500/"], [class*="bg-red-50"], [class*="bg-red-100"], [class*="bg-red-500/"], [class*="bg-red-400/"]):not(.bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600) {
+  background-color: color-mix(in srgb, var(--notice) 14%, var(--neu-bg)) !important;
+}
+/* Text inside a notice that had its own tint color follows the notice */
+:is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-blue-"], [class*="bg-cyan-50"], [class*="bg-cyan-100"], [class*="bg-cyan-500/"], [class*="bg-sky-"], [class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-amber-"], [class*="bg-yellow-"], [class*="bg-orange-50"], [class*="bg-orange-100"], [class*="bg-orange-500/"], [class*="bg-red-50"], [class*="bg-red-100"], [class*="bg-red-500/"], [class*="bg-red-400/"]) :is([class*="text-red-"], [class*="text-amber-"], [class*="text-emerald-"], [class*="text-green-"], [class*="text-blue-"], [class*="text-cyan-"], [class*="text-orange-"], [class*="text-yellow-"]) {
+  color: var(--notice-text) !important;
+}
+/* A notice never hugs the field above it */
+:is(div, p):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):is([class*=" px-"], [class^="px-"], [class*=" p-"], [class^="p-"]):not(.grid > *, .rounded-full, [class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]):is([class*="bg-blue-"], [class*="bg-cyan-50"], [class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-amber-"], [class*="bg-red-50"], [class*="bg-red-500/"])[class*="-mt-"] {
+  margin-top: 0 !important;
+}
+
+/* ---- Pop-up notices at the top center (components/Toaster.jsx) ----------- */
+.soft-toasts {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(92vw, 420px);
+  pointer-events: none;
+}
+.soft-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--neu-radius);
+  background-color: var(--neu-bg);
+  color: var(--neu-text);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--float-shadow-sm);
+  animation: soft-toast-in 180ms ease-out;
+}
+.soft-toast > span:nth-child(2) { flex: 1; }
+.soft-toast-icon {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  box-shadow: var(--neu-inset-sm);
+}
+.soft-toast.is-success .soft-toast-icon { color: #047857; }
+.soft-toast.is-error .soft-toast-icon { color: #b91c1c; }
+.soft-toast.is-info .soft-toast-icon { color: var(--neu-accent); }
+.neu-dark .soft-toast.is-success .soft-toast-icon { color: #6ee7b7; }
+.neu-dark .soft-toast.is-error .soft-toast-icon { color: #fca5a5; }
+.soft-toast-close {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border: 0; border-radius: 9px;
+  background: transparent;
+  color: var(--neu-faint);
+  cursor: pointer;
+  font-size: 12px;
+}
+.soft-toast-close:hover { box-shadow: var(--neu-raised-sm); }
+.soft-toast-close:focus-visible { outline: none; box-shadow: var(--neu-focus); }
+@keyframes soft-toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .soft-toast { animation: none; } }
+
+/* ---- Dropdown and calendar popups (components/SoftPickers.jsx) ------------ */
+.soft-pop {
+  position: fixed;
+  z-index: 1500;
+  background-color: var(--neu-bg);
+  color: var(--neu-text);
+  border-radius: var(--neu-radius);
+  box-shadow: var(--float-shadow-sm);
+  padding: 8px;
+  overflow-y: auto;
+  font-size: 13px;
+  animation: soft-pop-in 140ms ease-out;
+}
+@keyframes soft-pop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .soft-pop { animation: none; } }
+
+/* Dropdown list */
+.soft-list { display: flex; flex-direction: column; gap: 2px; outline: none; }
+.soft-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 36px; padding: 6px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--neu-text);
+}
+.soft-opt.is-active { box-shadow: var(--neu-raised-sm); }
+.soft-opt.is-selected { box-shadow: var(--neu-inset-sm); color: var(--neu-accent); font-weight: 600; }
+.soft-opt.is-disabled { color: var(--neu-faint); opacity: 0.6; cursor: not-allowed; }
+.soft-list:focus-visible .soft-opt.is-active { box-shadow: var(--neu-raised-sm), 0 0 0 2px rgba(6, 182, 212, 0.6); }
+
+/* Calendar */
+.soft-cal { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.soft-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.soft-icon-btn, .soft-cal-caption, .soft-day, .soft-cell, .soft-done, .soft-link {
+  border: 0; background: var(--neu-bg); color: var(--neu-text); cursor: pointer; font: inherit;
+}
+.soft-icon-btn { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; box-shadow: var(--neu-raised-sm); }
+.soft-icon-btn:active { box-shadow: var(--neu-inset-sm); }
+.soft-cal-caption { flex: 1; height: 32px; border-radius: 10px; font-weight: 600; }
+.soft-cal-caption:not(:disabled):hover { box-shadow: var(--neu-raised-sm); }
+.soft-cal-caption:disabled { cursor: default; }
+.soft-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.soft-dow { text-align: center; font-size: 11px; font-weight: 600; color: var(--neu-faint); padding: 4px 0; }
+.soft-day { height: 34px; border-radius: 10px; font-size: 12.5px; }
+.soft-day:not(:disabled):hover { box-shadow: var(--neu-raised-sm); }
+.soft-day.is-outside { color: var(--neu-faint); opacity: 0.55; }
+.soft-day.is-today { color: var(--neu-accent); font-weight: 700; box-shadow: inset 0 0 0 1.5px rgba(6, 182, 212, 0.55); }
+.soft-day.is-selected, .soft-cell.is-selected { background: #06b6d4; color: #0f172a; font-weight: 700; box-shadow: inset 2px 2px 5px rgba(8, 51, 68, 0.35); opacity: 1; }
+.soft-day:disabled, .soft-cell:disabled { opacity: 0.3; cursor: not-allowed; }
+.soft-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.soft-cell { height: 44px; border-radius: 12px; box-shadow: var(--neu-raised-sm); font-weight: 500; }
+.soft-cell:not(:disabled):active { box-shadow: var(--neu-inset-sm); }
+.soft-cal-time { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 4px; }
+.soft-cal-time label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--neu-muted); }
+.soft-cal-time input {
+  flex: 1; height: 36px; padding: 0 12px; border: 0; border-radius: 10px; outline: none;
+  background: var(--neu-bg); color: var(--neu-text); box-shadow: var(--neu-inset-sm); font: inherit;
+}
+.soft-cal-time input::-webkit-calendar-picker-indicator { display: none; }
+.soft-cal-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
+.soft-link { padding: 6px 10px; border-radius: 10px; color: var(--neu-accent); font-weight: 600; font-size: 12px; }
+.soft-link:hover { box-shadow: var(--neu-raised-sm); }
+.soft-done { padding: 7px 16px; border-radius: 10px; background: #06b6d4; color: #0f172a; font-weight: 700; font-size: 12px; box-shadow: 3px 3px 8px var(--neu-lo), -3px -3px 8px var(--neu-hi); }
+.soft-pop :is(button, [role="listbox"]):focus-visible { outline: none; box-shadow: 0 0 0 2px var(--neu-bg), 0 0 0 4px rgba(6, 182, 212, 0.75); }
+
+/* The fields themselves: one calendar icon and one chevron everywhere, in the
+   theme color (the browser's own picker icons are hidden). */
+input:is([type="date"], [type="month"], [type="datetime-local"]):not([data-native])::-webkit-calendar-picker-indicator { display: none; }
+input:is([type="date"], [type="month"], [type="datetime-local"]):not([data-native]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2306b6d4' stroke-width='2' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 15px;
+  padding-right: 34px !important;
+  cursor: pointer;
+}
+select:not([multiple], [size]:not([size="1"]), [data-native]) {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2306b6d4' stroke-width='2.4' viewBox='0 0 24 24'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 32px !important;
+  cursor: pointer;
+}
+
+/* Summary counts that filter the list (Salesman, Driver): they stay pressed-in
+   wells like before; the one that matches the current filter gets a cyan
+   outline, and a tap sinks it a little more. */
+.neu button.stat-pill {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset-sm) !important;
+  color: inherit !important;
+}
+.neu button.stat-pill.is-active {
+  box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(6, 182, 212, 0.75) !important;
+}
+
+/* Phone screens: every button, field and dropdown is at least 44px tall, so
+   it is easy to tap with a thumb (map controls keep their own size). */
+@media (max-width: 639px) {
+  .ice-scope :is(button, select, input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"])):not(.leaflet-container *) {
+    min-height: 44px;
+  }
+  .ice-scope button.p-1:not(.leaflet-container *) {
+    min-width: 44px;
+  }
+}
