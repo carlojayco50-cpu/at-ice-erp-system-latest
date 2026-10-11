@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
@@ -57,11 +58,27 @@ export default function CustomerPriceManagement() {
   const [draft, setDraft] = useState({ bags: "", small_sack: "", big_sack: "" });
   const [saving, setSaving] = useState(false);
 
+  // ?customer=ID (sent after Admin adds a customer): open that customer's
+  // prices for editing once the list has loaded, then drop the parameter.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusId = Number(searchParams.get("customer")) || null;
+  const focusRowRef = useRef(null);
+
   // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["prices", "customers"]);
   useEffect(() => {
     fetchPrices();
   }, [live]);
+
+  useEffect(() => {
+    if (!focusId || loading) return;
+    const row = rows.find((r) => r.customer_id === focusId);
+    if (row) {
+      startEdit(row);
+      requestAnimationFrame(() => focusRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    }
+    setSearchParams({}, { replace: true });
+  }, [focusId, loading, rows, setSearchParams]);
 
   async function fetchPrices() {
     setLoading(true);
@@ -201,7 +218,11 @@ export default function CustomerPriceManagement() {
                   const partial = setCount(row) > 0 && !complete;
 
                   return (
-                    <tr key={row.customer_id} className="border-t border-black/[0.06]">
+                    <tr
+                      key={row.customer_id}
+                      ref={isEditing ? focusRowRef : undefined}
+                      className={`border-t border-black/[0.06] ${isEditing ? "bg-cyan-50/60" : ""}`}
+                    >
                       <td className="px-[18px] py-2.5 text-slate-800">{row.customer_name}</td>
 
                       {PRODUCT_ORDER.map((p) => (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import PhoneInput from "../../components/PhoneInput";
 import { ANY_REGEX, ANY_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
@@ -65,6 +66,7 @@ function authHeaders() {
 }
 
 export default function CustomersPage() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
@@ -205,6 +207,7 @@ export default function CustomersPage() {
       // A new customer gets a portal login with a one-time password. Show it once.
       if (!editingId && data?.login) {
         setNewAccount({
+          customerId: data.id,
           customerName: data.name,
           email: data.login.email,
           password: data.login.password,
@@ -566,11 +569,19 @@ export default function CustomersPage() {
               <CredentialRow label="Email" value={newAccount.email} onCopy={copyToClipboard} />
               <CredentialRow label="Password" value={newAccount.password} onCopy={copyToClipboard} />
             </div>
+            <p className="text-[11px] text-slate-500 mb-3">
+              Next, set this customer's prices. Deliveries need them.
+            </p>
+            {/* Done goes straight to this customer's prices */}
             <button
-              onClick={() => setNewAccount(null)}
+              onClick={() => {
+                const id = newAccount.customerId;
+                setNewAccount(null);
+                if (id) navigate(`/admin/customer-prices?customer=${id}`);
+              }}
               className="w-full px-3.5 py-2 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium flex items-center justify-center gap-1.5"
             >
-              <CheckIcon /> Done
+              <CheckIcon /> Done, set prices
             </button>
           </div>
         </div>
@@ -650,35 +661,23 @@ function MapLinkField({ value, onChange, onPlace }) {
   );
 }
 
-const EMAIL_DOMAIN = "atice.cloud";
+// A company address is never the customer's own mailbox (the server refuses
+// it too, see App\Rules\ExistingMailbox).
+const COMPANY_DOMAINS = ["atice.cloud", "atice.com"];
+const isCompanyEmail = (value) =>
+  COMPANY_DOMAINS.includes(value.trim().toLowerCase().split("@")[1] || "");
 
-// Full address with the company domain, or null when there is nothing to
-// suggest. "juan" and "juan@at" both suggest "juan@atice.cloud"; an address
-// on another domain ("juan@gmail.com") is left alone.
-function suggestEmail(value) {
-  const v = value.trim();
-  if (!v) return null;
-  const at = v.indexOf("@");
-  if (at === -1) return `${v}@${EMAIL_DOMAIN}`;
-  const local = v.slice(0, at);
-  const domain = v.slice(at + 1).toLowerCase();
-  if (!local || domain === EMAIL_DOMAIN || !EMAIL_DOMAIN.startsWith(domain)) return null;
-  return `${local}@${EMAIL_DOMAIN}`;
-}
-
-// Email input that offers the @atice.cloud domain while typing. The
-// suggestion is used on Tab, on a click, or when the field loses focus.
-// When the field loses focus, GET /customers/check-email says whether the
-// email account exists, so a typo shows before saving (the server refuses a
+// Contact email input: the customer's own existing email (e.g. Gmail). When
+// the field loses focus, GET /customers/check-email says whether the email
+// account exists, so a typo shows before saving (the server refuses a
 // non-existing account when saving too). `savedEmail` is not checked again.
 function EmailDomainField({ label, value, onChange, required, savedEmail = "" }) {
-  const suggestion = suggestEmail(value);
   const [check, setCheck] = useState({ email: "", result: "" });
   const seq = useRef(0);
 
   const verify = async (email) => {
     const v = email.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) || v === savedEmail.trim().toLowerCase()) { setCheck({ email: "", result: "" }); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) || v === savedEmail.trim().toLowerCase() || isCompanyEmail(v)) { setCheck({ email: "", result: "" }); return; }
     const id = ++seq.current;
     setCheck({ email: v, result: "checking" });
     try {
@@ -689,10 +688,8 @@ function EmailDomainField({ label, value, onChange, required, savedEmail = "" })
       if (id === seq.current) setCheck({ email: v, result: "unknown" });
     }
   };
-  const accept = () => {
-    if (suggestion) onChange(suggestion);
-    verify(suggestion || value);
-  };
+  // An unchanged saved email (an older customer) is left as it is.
+  const companyEmail = isCompanyEmail(value) && value.trim().toLowerCase() !== savedEmail.trim().toLowerCase();
   const shown = check.email && check.email === value.trim().toLowerCase() ? check.result : "";
 
   return (
@@ -702,26 +699,18 @@ function EmailDomainField({ label, value, onChange, required, savedEmail = "" })
         type="email"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={accept}
-        onKeyDown={(e) => {
-          if (e.key === "Tab" && suggestion) accept();
-        }}
+        onBlur={() => verify(value)}
         required={required}
-        placeholder={`name@${EMAIL_DOMAIN}`}
+        placeholder="name@gmail.com"
         autoComplete="off"
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
       />
-      {suggestion && (
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={accept}
-          className="mt-1 text-[11px] text-slate-500 hover:text-cyan-600 cursor-pointer"
-        >
-          Use <span className="font-medium text-cyan-600">{suggestion}</span> (Tab)
-        </button>
+      {companyEmail && (
+        <div className="mt-1 text-[11px] text-red-600">
+          ✗ Use the customer's own email (e.g. Gmail), not an @atice.cloud address.
+        </div>
       )}
-      {shown && (
+      {shown && !companyEmail && (
         <div className={`mt-1 text-[11px] ${shown === "valid" ? "text-emerald-600" : shown === "invalid" ? "text-red-600" : shown === "checking" ? "text-slate-400" : "text-amber-600"}`}>
           {shown === "checking" && "Checking that this email account exists…"}
           {shown === "valid" && "✓ This email account exists."}

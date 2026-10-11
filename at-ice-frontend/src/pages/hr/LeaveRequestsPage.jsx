@@ -223,7 +223,6 @@ export default function LeaveRequestsPage() {
     setFormError("");
     if (!form.employee_id) return setFormError("Select an employee.");
     if (!form.start_date || !form.end_date) return setFormError("Enter the start and end dates.");
-    if (form.start_date < todayStr()) return setFormError("The start date cannot be in the past.");
     if (form.end_date < form.start_date) return setFormError("The end date cannot be before the start date.");
     if (!form.reason.trim()) return setFormError("Enter the reason for the leave.");
 
@@ -433,7 +432,7 @@ export default function LeaveRequestsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Start Date">
-                <input type="date" value={form.start_date} min={todayStr()} onChange={(e) => { const v = e.target.value; setForm({ ...form, start_date: v, end_date: form.end_date < v ? v : form.end_date }); }} className={inputClass} />
+                <input type="date" value={form.start_date} onChange={(e) => { const v = e.target.value; setForm({ ...form, start_date: v, end_date: form.end_date < v ? v : form.end_date }); }} className={inputClass} />
               </Field>
               <Field label="End Date">
                 <input type="date" value={form.end_date} min={form.start_date || undefined} onChange={(e) => setForm({ ...form, end_date: e.target.value })} className={inputClass} />

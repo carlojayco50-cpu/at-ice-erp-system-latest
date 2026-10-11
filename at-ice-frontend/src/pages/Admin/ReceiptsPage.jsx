@@ -63,11 +63,7 @@ export default function ReceiptsPage() {
     setLoading(true);
     setError("");
     try {
-      // Trigger the auto-mark-overdue side effect first, then load the
-      // full list and summary so everything reflects the just-updated
-      // statuses.
-      await fetch(`/api/receipts/overdue`, { headers: authHeaders() });
-
+      // The list and summary mark overdue receipts themselves (Receipt::markOverdue).
       const [listRes, summaryRes] = await Promise.all([
         fetch(`/api/receipts`, { headers: authHeaders() }),
         fetch(`/api/receipts/summary`, { headers: authHeaders() }),

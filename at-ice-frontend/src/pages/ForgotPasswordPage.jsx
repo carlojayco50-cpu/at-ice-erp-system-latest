@@ -4,7 +4,7 @@ import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import PasswordRules from "../components/PasswordRules";
 import { RevealButton } from "../components/PasswordInput";
-import { useHoldReveal } from "../lib/useHoldReveal";
+import { useReveal } from "../lib/useReveal";
 import { isStrongPassword } from "../lib/password";
 
 const MailIcon = () => (
@@ -55,8 +55,8 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [form, setForm] = useState({ password: "", password_confirmation: "" });
-  const [showNew, newRevealProps] = useHoldReveal();
-  const [showConfirm, confirmRevealProps] = useHoldReveal();
+  const [showNew, newRevealProps] = useReveal();
+  const [showConfirm, confirmRevealProps] = useReveal();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");

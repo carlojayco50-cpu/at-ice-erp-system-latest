@@ -161,4 +161,20 @@ class PasswordResetTest extends TestCase
         $this->getJson('/api/customers/check-email?email=no-such-user-123@gmail.com')->assertOk()->assertJson(['result' => 'invalid']);
         Mail::assertNothingSent();
     }
+
+    public function test_a_company_address_is_not_a_customer_email(): void
+    {
+        Mail::fake();
+        Sanctum::actingAs(User::create(['name' => 'Admin', 'email' => 'admin@atice.cloud', 'password' => 'secret-password', 'role' => 'admin']));
+
+        $this->postJson('/api/customers', [
+            'name' => 'Alfamart Amparo', 'email' => 'Alfamart@ATICE.cloud', 'mop' => 'cash',
+            'contact_person' => 'Juan Dela Cruz', 'contact_number' => '+639171234567',
+            'street' => 'Makabud Street', 'barangay' => 'Barangay 183', 'city' => 'Caloocan', 'province' => 'Metro Manila',
+            'latitude' => 14.7482688, 'longitude' => 121.0796465,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['email' => 'not an @atice.cloud address']);
+
+        $this->assertDatabaseCount('customers', 0);
+        Mail::assertNothingSent();
+    }
 }

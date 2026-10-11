@@ -4,7 +4,7 @@ import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import { PinEntry } from "../components/KioskScreens";
 import { RevealButton } from "../components/PasswordInput";
-import { useHoldReveal } from "../lib/useHoldReveal";
+import { useReveal } from "../lib/useReveal";
 import { clearSession, postLoginPath, saveSession } from "../lib/auth";
 import { isBlockedDevice } from "../lib/kiosk";
 import { takeSessionExpiredNotice } from "../lib/sessionExpiry";
@@ -38,8 +38,8 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // the password shows only while the eye is held down
-  const [showPassword, revealProps] = useHoldReveal();
+  // the eye button shows or hides the password
+  const [showPassword, revealProps] = useReveal();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   // "Your session expired..." after an API call came back 401 (see lib/sessionExpiry.js)

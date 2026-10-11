@@ -7,6 +7,7 @@ use App\Models\CustomerPrice;
 use App\Models\Delivery;
 use App\Models\DeliveryProof;
 use App\Models\Receipt;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -110,49 +111,66 @@ class DeliveryProofController extends Controller
         }
 
         $photoPath = null;
-
-        DB::beginTransaction();
+        $totalQuantity = array_sum(array_column($lineItems, 'quantity'));
+        $totalAmount = array_sum(array_column($lineItems, 'line_total'));
 
         try {
             $photoPath = $request->file('photo')->store('delivery_proofs', 'public');
 
-            $totalQuantity = array_sum(array_column($lineItems, 'quantity'));
-            $totalAmount = array_sum(array_column($lineItems, 'line_total'));
+            // Retried when two receipts made at the same moment get the same number.
+            for ($attempt = 1; ; $attempt++) {
+                try {
+                    [$proof, $receipt, $refusal] = DB::transaction(function () use ($request, $lineItems, $photoPath, $totalQuantity, $totalAmount) {
+                        // Lock the delivery and check it again: a second confirmation
+                        // sent at the same moment, or an Admin cancel, waits here and
+                        // then sees the new state.
+                        $locked = Delivery::lockForUpdate()->findOrFail($request->delivery_id);
+                        if ($locked->status !== 'in_transit') {
+                            return [null, null, "This delivery cannot be confirmed because it is {$locked->status}."];
+                        }
+                        if (DeliveryProof::where('delivery_id', $locked->id)->exists()) {
+                            return [null, null, 'This delivery has already been confirmed.'];
+                        }
 
-            $proof = DeliveryProof::create([
-                'delivery_id' => $request->delivery_id,
-                'salesman_id' => auth()->id(),
-                'quantity' => $totalQuantity,
-                'photo_path' => $photoPath,
-                'confirmed_at' => now(),
-            ]);
+                        $proof = DeliveryProof::create([
+                            'delivery_id' => $locked->id,
+                            'salesman_id' => auth()->id(),
+                            'quantity' => $totalQuantity,
+                            'photo_path' => $photoPath,
+                            'confirmed_at' => now(),
+                        ]);
 
-            $receipt = Receipt::create([
-                'receipt_no' => Receipt::generateReceiptNo(),
-                'delivery_id' => $request->delivery_id,
-                'delivery_proof_id' => $proof->id,
-                'customer_id' => $delivery->customer_id,
-                'salesman_id' => auth()->id(),
-                'quantity' => $totalQuantity,
-                'unit_price' => null, // multi-product, see receipt_items for breakdown
-                'total_amount' => $totalAmount,
-                'payment_status' => 'unpaid',
-            ]);
+                        $receipt = Receipt::create([
+                            'receipt_no' => Receipt::generateReceiptNo(),
+                            'delivery_id' => $locked->id,
+                            'delivery_proof_id' => $proof->id,
+                            'customer_id' => $locked->customer_id,
+                            'salesman_id' => auth()->id(),
+                            'quantity' => $totalQuantity,
+                            'unit_price' => null, // multi-product, see receipt_items for breakdown
+                            'total_amount' => $totalAmount,
+                            'payment_status' => 'unpaid',
+                        ]);
 
-            foreach ($lineItems as $item) {
-                $receipt->items()->create($item);
+                        foreach ($lineItems as $item) {
+                            $receipt->items()->create($item);
+                        }
+
+                        $locked->update([
+                            'status' => 'delivered',
+                            'delivered_at' => now(),
+                        ]);
+
+                        return [$proof, $receipt, null];
+                    });
+                    break;
+                } catch (UniqueConstraintViolationException $e) {
+                    if ($attempt >= 3) {
+                        throw $e;
+                    }
+                }
             }
-
-            $delivery->update([
-                'status' => 'delivered',
-                'delivered_at' => now(),
-            ]);
-
-            DB::commit();
-
         } catch (\Throwable $e) {
-            DB::rollBack();
-
             // Remove the uploaded photo so a failed confirmation leaves no file behind
             if ($photoPath) {
                 Storage::disk('public')->delete($photoPath);
@@ -168,6 +186,12 @@ class DeliveryProofController extends Controller
             return response()->json([
                 'message' => 'Something went wrong. Please try again.',
             ], 500);
+        }
+
+        if ($refusal) {
+            Storage::disk('public')->delete($photoPath);
+
+            return response()->json(['message' => $refusal], 422);
         }
 
         try {

@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Events\DeliveryStatusUpdated;
+use App\Models\Customer;
 use App\Models\CustomerPrice;
 use App\Models\Delivery;
+use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -74,8 +77,58 @@ class DeliveryController extends Controller
             ], 422);
         }
 
-        // Highest DEL-0000 number so far. LIKE + a PHP check instead of REGEXP,
-        // which SQLite (local dev) does not have.
+        $data['prepared_by'] = Auth::id();
+        unset($data['items']);
+
+        // Retried when two deliveries made at the same moment get the same number.
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                $delivery = DB::transaction(function () use ($data, $items) {
+                    // No double booking: one delivery per customer per day. Only a
+                    // cancelled one frees the day. The customer row is locked so two
+                    // Admins booking the same day at the same moment cannot both pass.
+                    if (! empty($data['customer_id'])) {
+                        Customer::whereKey($data['customer_id'])->lockForUpdate()->first();
+                        $booked = Delivery::where('customer_id', $data['customer_id'])
+                            ->whereDate('scheduled_date', $data['scheduled_date'])
+                            ->where('status', '!=', 'cancelled')
+                            ->first();
+                        if ($booked) {
+                            return $booked;
+                        }
+                    }
+
+                    $delivery = Delivery::create($data + ['delivery_no' => self::nextDeliveryNo()]);
+
+                    foreach ($items as $item) {
+                        $delivery->items()->create($item);
+                    }
+
+                    return $delivery;
+                });
+                break;
+            } catch (UniqueConstraintViolationException $e) {
+                if ($attempt >= 3) {
+                    throw $e;
+                }
+            }
+        }
+
+        // An existing booking came back instead of a new delivery.
+        if (! $delivery->wasRecentlyCreated) {
+            $day = Carbon::parse($data['scheduled_date'])->format('M j, Y');
+            $text = "This customer already has delivery {$delivery->delivery_no} ({$delivery->status}) on {$day}. Cancel it first, or pick another date.";
+
+            return response()->json(['message' => $text, 'errors' => ['scheduled_date' => [$text]]], 422);
+        }
+
+        return response()->json($delivery->load(['driver', 'customer', 'items.product']), 201);
+    }
+
+    // Highest DEL-0000 number so far, plus 1. LIKE + a PHP check instead of
+    // REGEXP, which SQLite (local dev) does not have.
+    private static function nextDeliveryNo(): string
+    {
         $last = Delivery::withTrashed()
             ->where('delivery_no', 'like', 'DEL-____')
             ->pluck('delivery_no')
@@ -83,22 +136,8 @@ class DeliveryController extends Controller
             ->max();
 
         $next = $last ? ((int) substr($last, 4)) + 1 : 1;
-        $data['delivery_no'] = 'DEL-'.str_pad($next, 4, '0', STR_PAD_LEFT);
 
-        $data['prepared_by'] = Auth::id();
-        unset($data['items']);
-
-        $delivery = DB::transaction(function () use ($data, $items) {
-            $delivery = Delivery::create($data);
-
-            foreach ($items as $item) {
-                $delivery->items()->create($item);
-            }
-
-            return $delivery;
-        });
-
-        return response()->json($delivery->load(['driver', 'customer', 'items.product']), 201);
+        return 'DEL-'.str_pad($next, 4, '0', STR_PAD_LEFT);
     }
 
     public function show($id)
@@ -110,13 +149,20 @@ class DeliveryController extends Controller
 
     public function cancel($id)
     {
-        $delivery = Delivery::findOrFail($id);
+        // Locked so a cancel cannot cross a Salesman confirmation in progress
+        // (DeliveryProofController@confirm locks the same row).
+        $status = DB::transaction(function () use ($id) {
+            $delivery = Delivery::lockForUpdate()->findOrFail($id);
+            if ($delivery->status !== 'delivered') {
+                $delivery->update(['status' => 'cancelled']);
+            }
 
-        if ($delivery->status === 'delivered') {
+            return $delivery->status;
+        });
+
+        if ($status === 'delivered') {
             return response()->json(['message' => 'Cannot cancel a delivered delivery.'], 422);
         }
-
-        $delivery->update(['status' => 'cancelled']);
 
         return response()->json(['message' => 'Delivery cancelled']);
     }

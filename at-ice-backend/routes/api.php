@@ -261,6 +261,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     Route::middleware('role:employee,maintenance')->group(function () {
 
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
+        Route::get('stock-out-items', [StockOutRequestController::class, 'items']);
 
         // Maintenance views its own requests (the controller filters by
         // requester). The Admin reaches these same two endpoints through the

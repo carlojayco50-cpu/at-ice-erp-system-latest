@@ -18,6 +18,7 @@ class User extends Authenticatable
         'role',      // admin | hr | employee | driver | customer
         'sub_role',  // checker | salesman | maintenance | null
         'must_change_password', // new customer accounts: change the one-time password on first login
+        'is_active', // false: login refused (deactivated employee, removed customer)
     ];
 
     protected $hidden = [
@@ -31,6 +32,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'must_change_password' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 

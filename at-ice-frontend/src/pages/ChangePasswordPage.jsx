@@ -5,7 +5,7 @@ import logo from "../assets/logo.png";
 import { LOGIN_PATH, clearSession, homePathFor } from "../lib/auth";
 import PasswordRules from "../components/PasswordRules";
 import { RevealButton } from "../components/PasswordInput";
-import { useHoldReveal } from "../lib/useHoldReveal";
+import { useReveal } from "../lib/useReveal";
 import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import { isStrongPassword } from "../lib/password";
 
@@ -38,9 +38,9 @@ export default function ChangePasswordPage() {
   const role = localStorage.getItem("role");
   const subRole = localStorage.getItem("sub_role");
   const [form, setForm] = useState({ password: "", password_confirmation: "" });
-  // each password shows only while its eye is held down
-  const [showNew, newRevealProps] = useHoldReveal();
-  const [showConfirm, confirmRevealProps] = useHoldReveal();
+  // each eye button shows or hides its password
+  const [showNew, newRevealProps] = useReveal();
+  const [showConfirm, confirmRevealProps] = useReveal();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 

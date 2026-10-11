@@ -93,6 +93,12 @@ class AttendanceController extends Controller
         $faceData = FaceData::select('id', 'worker_name', 'role', 'employee_id')
             ->findOrFail($request->face_data_id);
 
+        // A deactivated employee can no longer record attendance.
+        if ($faceData->employee_id && ! Employee::whereKey($faceData->employee_id)->where('is_active', true)->exists()) {
+            return $this->reject($faceData, 'inactive',
+                'This employee is no longer active. Please inform HR.');
+        }
+
         $now = now();
         $today = $now->toDateString();
 
@@ -227,12 +233,31 @@ class AttendanceController extends Controller
     {
         $attendance = Attendance::findOrFail($id);
 
-        $attendance->update($request->only([
-            'time_out',
-            'hours_worked',
-            'status',
-            'notes',
-        ]));
+        $data = $request->validate([
+            'time_out' => ['sometimes', 'nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
+            'status' => 'sometimes|in:present,absent,late,half_day,on_leave',
+            'notes' => 'sometimes|nullable|string|max:500',
+        ], [
+            'time_out.regex' => 'Time Out must be a time like 17:30.',
+        ]);
+
+        // Hours worked always come from Time In and Time Out, never typed in.
+        // A Time Out earlier than the Time In is the next morning (night shift).
+        if (array_key_exists('time_out', $data)) {
+            if ($data['time_out'] === null || ! $attendance->time_in) {
+                $data['hours_worked'] = 0;
+            } else {
+                $data['time_out'] = Carbon::parse($data['time_out'])->format('H:i:s');
+                $in = Carbon::parse($attendance->time_in);
+                $out = Carbon::parse($data['time_out']);
+                if ($out->lt($in)) {
+                    $out->addDay();
+                }
+                $data['hours_worked'] = round($in->diffInMinutes($out, true) / 60, 2);
+            }
+        }
+
+        $attendance->update($data);
 
         return response()->json([
             'message' => 'Attendance updated successfully!',

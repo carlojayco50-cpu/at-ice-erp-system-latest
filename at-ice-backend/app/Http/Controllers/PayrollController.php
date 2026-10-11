@@ -58,44 +58,8 @@ class PayrollController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Days worked cannot exceed the calendar days in the period.
-        // (Carbon 3 returns a float from diffInDays, so round and cast to int.)
-        $periodDays = (int) round(abs(Carbon::parse($request->period_start)
-            ->startOfDay()
-            ->diffInDays(Carbon::parse($request->period_end)->startOfDay()))) + 1;
-
-        if ((float) $request->days_worked > $periodDays) {
-            return response()->json(['errors' => [
-                'days_worked' => ["Days worked ({$request->days_worked}) cannot be more than the {$periodDays} calendar days in this period."],
-            ]], 422);
-        }
-
-        // One payroll per employee per period: block overlapping periods.
-        $overlap = Payroll::where('employee_id', $request->employee_id)
-            ->whereDate('period_start', '<=', $request->period_end)
-            ->whereDate('period_end', '>=', $request->period_start)
-            ->first();
-
-        if ($overlap) {
-            $from = Carbon::parse($overlap->period_start)->format('M j, Y');
-            $to = Carbon::parse($overlap->period_end)->format('M j, Y');
-
-            return response()->json(['errors' => [
-                'period_start' => ["This employee already has a payroll for {$from} to {$to}. Payroll periods cannot overlap."],
-            ]], 422);
-        }
-
-        // Net pay must equal gross pay minus all deductions.
-        $deductions = (float) ($request->sss_deduction ?? 0)
-            + (float) ($request->philhealth_deduction ?? 0)
-            + (float) ($request->pagibig_deduction ?? 0)
-            + (float) ($request->tax_deduction ?? 0)
-            + (float) ($request->other_deductions ?? 0);
-
-        if (abs(((float) $request->gross_pay - $deductions) - (float) $request->net_pay) > 0.01) {
-            return response()->json(['errors' => [
-                'net_pay' => ['Net pay does not match gross pay minus total deductions.'],
-            ]], 422);
+        if ($error = $this->periodAndPayErrors((int) $request->employee_id, $request->all())) {
+            return response()->json(['errors' => $error], 422);
         }
 
         $status = $request->status ?? 'pending';
@@ -120,6 +84,49 @@ class PayrollController extends Controller
         ]);
 
         return response()->json(['message' => 'Payroll record created.', 'data' => $payroll], 201);
+    }
+
+    // Checks shared by a new payroll and an edit ($ignoreId: the payroll being
+    // edited, so it does not overlap itself). Returns the errors, or null.
+    private function periodAndPayErrors(int $employeeId, array $p, ?int $ignoreId = null): ?array
+    {
+        $start = Carbon::parse($p['period_start'])->startOfDay();
+        $end = Carbon::parse($p['period_end'])->startOfDay();
+
+        if ($end->lt($start)) {
+            return ['period_end' => ['Period end cannot be before period start.']];
+        }
+
+        // Days worked cannot exceed the calendar days in the period.
+        // (Carbon 3 returns a float from diffInDays, so round and cast to int.)
+        $periodDays = (int) round(abs($start->diffInDays($end))) + 1;
+        if ((float) $p['days_worked'] > $periodDays) {
+            return ['days_worked' => ["Days worked ({$p['days_worked']}) cannot be more than the {$periodDays} calendar days in this period."]];
+        }
+
+        // One payroll per employee per period: block overlapping periods.
+        $overlap = Payroll::where('employee_id', $employeeId)
+            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+            ->whereDate('period_start', '<=', $end->toDateString())
+            ->whereDate('period_end', '>=', $start->toDateString())
+            ->first();
+        if ($overlap) {
+            $from = Carbon::parse($overlap->period_start)->format('M j, Y');
+            $to = Carbon::parse($overlap->period_end)->format('M j, Y');
+
+            return ['period_start' => ["This employee already has a payroll for {$from} to {$to}. Payroll periods cannot overlap."]];
+        }
+
+        // Net pay must equal gross pay minus all deductions.
+        $deductions = 0.0;
+        foreach (['sss_deduction', 'philhealth_deduction', 'pagibig_deduction', 'tax_deduction', 'other_deductions'] as $field) {
+            $deductions += (float) ($p[$field] ?? 0);
+        }
+        if (abs(((float) $p['gross_pay'] - $deductions) - (float) $p['net_pay']) > 0.01) {
+            return ['net_pay' => ['Net pay does not match gross pay minus total deductions.']];
+        }
+
+        return null;
     }
 
     // GET /api/payrolls/{id}
@@ -165,12 +172,16 @@ class PayrollController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // When only one end of the period is sent, compare it with the stored other end.
-        $newStart = $request->input('period_start', $payroll->period_start);
-        $newEnd = $request->input('period_end', $payroll->period_end);
-        if (Carbon::parse($newEnd)->lt(Carbon::parse($newStart))) {
+        // A paid payroll is final: nothing on it changes any more.
+        if ($payroll->status === 'paid') {
+            return response()->json(['message' => 'This payroll is already paid and can no longer be changed.'], 422);
+        }
+
+        // Status only moves forward: pending -> approved -> paid.
+        $order = ['pending' => 0, 'approved' => 1, 'paid' => 2];
+        if ($request->has('status') && $order[$request->status] < $order[$payroll->status]) {
             return response()->json(['errors' => [
-                'period_end' => ['Period end cannot be before period start.'],
+                'status' => ["A payroll that is {$payroll->status} cannot go back to {$request->status}."],
             ]], 422);
         }
 
@@ -180,6 +191,16 @@ class PayrollController extends Controller
             'pagibig_deduction', 'tax_deduction', 'other_deductions',
             'net_pay', 'status', 'notes',
         ]);
+
+        // The same checks as a new payroll, on the values it will have after
+        // this change (fields not sent keep their stored value).
+        $after = $data + $payroll->only([
+            'period_start', 'period_end', 'days_worked', 'gross_pay', 'net_pay',
+            'sss_deduction', 'philhealth_deduction', 'pagibig_deduction', 'tax_deduction', 'other_deductions',
+        ]);
+        if ($error = $this->periodAndPayErrors($payroll->employee_id, $after, $payroll->id)) {
+            return response()->json(['errors' => $error], 422);
+        }
 
         if ($request->has('status')) {
             $data['paid_at'] = $request->status === 'paid'
@@ -202,6 +223,10 @@ class PayrollController extends Controller
 
         if (! $payroll) {
             return response()->json(['message' => 'Payroll not found.'], 404);
+        }
+
+        if ($payroll->status === 'paid') {
+            return response()->json(['message' => 'A paid payroll is kept as a record and cannot be deleted.'], 422);
         }
 
         $payroll->delete();

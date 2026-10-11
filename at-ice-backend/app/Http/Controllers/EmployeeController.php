@@ -6,7 +6,9 @@ use App\Models\Employee;
 use App\Models\User;
 use App\Services\AddressFormatter;
 use App\Services\PhoneFormatter;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -171,12 +173,36 @@ class EmployeeController extends Controller
         $subRole = self::POSITION_ROLES[$request->position];
         $isDriver = $subRole === 'driver';
 
+        $password = $noAccount ? null : self::defaultPassword($request->last_name, $request->phone);
+
+        // Login and employee record are created together, or not at all.
+        // Retried when two employees added at the same moment get the same code.
+        for ($attempt = 1; ; $attempt++) {
+            try {
+                [$user, $employee] = DB::transaction(fn () => $this->createEmployee($request, $noAccount, $isDriver, $subRole, $password));
+                break;
+            } catch (UniqueConstraintViolationException $e) {
+                if ($attempt >= 3) {
+                    throw $e;
+                }
+            }
+        }
+
+        return response()->json([
+            'message' => 'Employee created successfully!',
+            'employee' => $employee,
+            // Sent back once so HR can give them to the employee (null: no account).
+            'email' => $user?->email,
+            'password' => $password,
+        ], 201);
+    }
+
+    // The login (when the position has one) and the employee row, with the next free code.
+    private function createEmployee(Request $request, bool $noAccount, bool $isDriver, string $subRole, ?string $password): array
+    {
         $code = self::nextEmployeeCode();
         $user = null;
-        $password = null;
         if (! $noAccount) {
-            $password = self::defaultPassword($request->last_name, $request->phone);
-
             $user = User::create([
                 'name' => Employee::composeName($request->first_name, $request->middle_initial, $request->last_name, $request->suffix),
                 'email' => self::employeeEmail($request->last_name, $request->first_name, $code),
@@ -222,13 +248,7 @@ class EmployeeController extends Controller
             'vehicle_plate' => $isDriver ? $request->vehicle_plate : null,
         ]);
 
-        return response()->json([
-            'message' => 'Employee created successfully!',
-            'employee' => $employee,
-            // Sent back once so HR can give them to the employee (null: no account).
-            'email' => $user?->email,
-            'password' => $password,
-        ], 201);
+        return [$user, $employee];
     }
 
     // GET single employee

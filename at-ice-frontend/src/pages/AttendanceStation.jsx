@@ -198,7 +198,7 @@ export default function AttendanceStation() {
   // the kiosk token in the X-Kiosk-Token header proves the terminal was unlocked by HR). The kiosk sends the matched face id and the
   // selected mode (time_in or time_out). The server decides the date and
   // the time. Returns { type, hours } where type is time_in, time_out,
-  // already_timed_in, no_time_in, completed or error.
+  // already_timed_in, no_time_in, completed, inactive or error.
   const recordAttendance = useCallback(async (faceDataId, type) => {
     try {
       const res = await fetch("/api/attendances", {
@@ -277,6 +277,7 @@ export default function AttendanceStation() {
     already_timed_in: { label: "Already Timed In",    sub: "Select Time Out at the end of your shift", bg: "bg-amber-600/90", tone: "#d97706", icon: <ClockIcon /> },
     no_time_in:       { label: "No Time In Found",    sub: "Select Time In first, or inform HR", bg: "bg-amber-600/90", tone: "#d97706", icon: <ClockIcon /> },
     completed:        { label: "Done for Today",      sub: "Time In and Time Out are already recorded", bg: "bg-amber-600/90", tone: "#d97706", icon: <ClockIcon /> },
+    inactive:         { label: "Not Active",          sub: "This employee is no longer active. Please inform HR.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
     "no-match":       { label: "Face Not Recognized", sub: "Not enrolled in the system. Please see HR.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
     error:            { label: "Could Not Record",    sub: "Please try again or inform HR", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
   };

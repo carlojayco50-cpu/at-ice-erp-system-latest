@@ -79,6 +79,7 @@ export default function DeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
   const [search, setSearch]   = useState("");
+  const [customerFilter, setCustomerFilter] = useState(""); // customer id, "" = all
 
   const [showForm, setShowForm]     = useState(false);
   const [form, setForm]             = useState(emptyForm);
@@ -217,11 +218,18 @@ export default function DeliveriesPage() {
     }
   }
 
+  // Customer filter: the customers that have deliveries (a removed customer's
+  // old deliveries still show under their name). The status counts follow it.
+  const customerOptions = [...new Map(
+    deliveries.filter((d) => d.customer_id).map((d) => [String(d.customer_id), d.customer?.name || `Customer #${d.customer_id}`])
+  )].sort((a, b) => a[1].localeCompare(b[1]));
+  const forCustomer = customerFilter ? deliveries.filter((d) => String(d.customer_id) === customerFilter) : deliveries;
+
   const counts = STATUS_FILTERS.reduce((acc, f) => {
-    acc[f.value] = f.value === "all" ? deliveries.length : deliveries.filter((d) => d.status === f.value).length;
+    acc[f.value] = f.value === "all" ? forCustomer.length : forCustomer.filter((d) => d.status === f.value).length;
     return acc;
   }, {});
-  const filtered = deliveries.filter((d) => {
+  const filtered = forCustomer.filter((d) => {
     if (statusFilter !== "all" && d.status !== statusFilter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -241,6 +249,17 @@ export default function DeliveriesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <select
+              value={customerFilter}
+              onChange={(e) => setCustomerFilter(e.target.value)}
+              aria-label="Filter by customer"
+              className="bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500 max-w-[220px]"
+            >
+              <option value="">All customers</option>
+              {customerOptions.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
               <input
@@ -300,7 +319,7 @@ export default function DeliveriesPage() {
               )}
               {!loading && filtered.length === 0 && (
                 <tr><td colSpan={7} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
-                  {search || statusFilter !== "all" ? "No deliveries match this filter." : "No deliveries yet."}
+                  {search || customerFilter || statusFilter !== "all" ? "No deliveries match this filter." : "No deliveries yet."}
                 </td></tr>
               )}
               {!loading && filtered.map((d) => {

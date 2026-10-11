@@ -54,14 +54,25 @@ class LeaveRequestController extends Controller
         return response()->json($query->orderBy('created_at', 'desc')->get(), 200);
     }
 
+    // A pending or approved leave of this employee that shares a day with start..end.
+    private function overlaps(int $employeeId, string $start, string $end): bool
+    {
+        return LeaveRequest::where('employee_id', $employeeId)
+            ->whereIn('status', ['pending', 'approved'])
+            ->whereDate('start_date', '<=', $end)
+            ->whereDate('end_date', '>=', $start)
+            ->exists();
+    }
+
     // POST /api/leave-requests
     // HR encodes the leave on behalf of the employee (verbal or paper request).
+    // A past date is allowed: a paper sick leave is often handed in afterwards.
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:employees,id',
             'leave_type' => 'required|in:'.self::LEAVE_TYPES,
-            'start_date' => 'required|date|after_or_equal:today',
+            'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'reason' => 'required|string|max:500',
             'is_half_day' => 'nullable|boolean',
@@ -73,6 +84,13 @@ class LeaveRequestController extends Controller
 
         $half = $request->boolean('is_half_day');
         $end = $half ? $request->start_date : $request->end_date;
+
+        if ($this->overlaps((int) $request->employee_id, $request->start_date, $end)) {
+            return response()->json([
+                'message' => 'This employee already has a pending or approved leave on those dates.',
+                'errors' => ['start_date' => ['This employee already has a pending or approved leave on those dates.']],
+            ], 422);
+        }
 
         $leave = LeaveRequest::create([
             'employee_id' => $request->employee_id,
@@ -214,13 +232,7 @@ class LeaveRequestController extends Controller
         $end = $half ? $start : $request->end_date;
 
         // No overlapping pending or approved leave for the same employee
-        $overlap = LeaveRequest::where('employee_id', $employee->id)
-            ->whereIn('status', ['pending', 'approved'])
-            ->where('start_date', '<=', $end)
-            ->where('end_date', '>=', $start)
-            ->exists();
-
-        if ($overlap) {
+        if ($this->overlaps($employee->id, $start, $end)) {
             return response()->json([
                 'message' => 'You already have a pending or approved leave on those dates.',
             ], 422);

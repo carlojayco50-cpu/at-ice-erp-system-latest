@@ -149,12 +149,17 @@ class FaceDataController extends Controller
         return response()->json(['message' => 'Face data deleted.']);
     }
 
-    // Serve all descriptors to AttendanceStation for matching
+    // Serve the descriptors to AttendanceStation for matching
     // GET /api/face-descriptors
+    // A deactivated employee's face is left out, so they can no longer time in.
+    // Older enrollments with no employee link are still served.
     public function descriptors()
     {
         return response()->json(
-            FaceData::select('id', 'worker_name', 'role', 'employee_id', 'descriptor')->get()
+            FaceData::select('id', 'worker_name', 'role', 'employee_id', 'descriptor')
+                ->where(fn ($q) => $q->whereNull('employee_id')
+                    ->orWhereHas('employee', fn ($e) => $e->where('is_active', true)))
+                ->get()
         );
     }
 }

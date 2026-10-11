@@ -1,8 +1,7 @@
-import { useHoldReveal } from "../lib/useHoldReveal";
+import { useReveal } from "../lib/useReveal";
 
-// Show/hide for every password and PIN field in the app: the text shows only
-// while the eye button is held down (mouse, finger, or Space/Enter on the
-// keyboard) and hides again as soon as it is let go.
+// Show/hide for every password and PIN field in the app: clicking the eye
+// button shows the text, clicking it again hides it.
 
 const EyeIcon = () => (
   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
@@ -20,7 +19,7 @@ export function RevealButton({ revealed, buttonProps, className = "" }) {
   return (
     <button
       {...buttonProps}
-      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center cursor-pointer select-none touch-none text-slate-400 hover:text-slate-600 ${className}`}
+      className={`flex-shrink-0 w-10 h-10 flex items-center justify-center cursor-pointer select-none text-slate-400 hover:text-slate-600 ${className}`}
     >
       {revealed ? <EyeOffIcon /> : <EyeIcon />}
     </button>
@@ -30,7 +29,7 @@ export function RevealButton({ revealed, buttonProps, className = "" }) {
 // Drop-in for <input type="password">: same props, with the eye button inside
 // the right end of the field.
 export default function PasswordInput({ className = "", style, ...props }) {
-  const [revealed, buttonProps] = useHoldReveal();
+  const [revealed, buttonProps] = useReveal();
   return (
     <div className="relative w-full">
       <input

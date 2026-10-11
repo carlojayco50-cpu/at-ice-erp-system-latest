@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class CustomerController extends Controller
@@ -159,7 +160,10 @@ class CustomerController extends Controller
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
             // A changed email must be an existing account; an unchanged one is not checked again.
-            'email' => array_merge(['bail', 'required', 'email:rfc,filter,dns', 'max:255'],
+            // Not another customer's email, nor another account's login.
+            'email' => array_merge(['bail', 'required', 'email:rfc,filter,dns', 'max:255',
+                Rule::unique('customers', 'email')->ignore($customer->id)->whereNull('deleted_at'),
+                Rule::unique('users', 'email')->ignore($customer->user_id)],
                 mb_strtolower(trim((string) $request->email)) !== mb_strtolower((string) $customer->email) ? [new ExistingMailbox] : []),
             'mop' => 'sometimes|in:cash,gcash,check,bank_transfer',
             'street' => $addressRule,
@@ -185,6 +189,7 @@ class CustomerController extends Controller
             ],
         ], [
             'postal_code.regex' => 'Postal code must be 4 digits.',
+            'email.unique' => 'Another customer or login already uses this email.',
         ]);
 
         // Codes are fixed at creation, and never change when the name is edited.
@@ -220,9 +225,19 @@ class CustomerController extends Controller
         return response()->json($customer->fresh());
     }
 
+    // Removing a customer also disables their portal login and signs it out
+    // everywhere. Receipts and delivery history are kept.
     public function destroy($id)
     {
-        Customer::findOrFail($id)->delete();
+        $customer = Customer::with('user')->findOrFail($id);
+
+        DB::transaction(function () use ($customer) {
+            $customer->delete();
+            if ($customer->user) {
+                $customer->user->update(['is_active' => false]);
+                $customer->user->tokens()->delete();
+            }
+        });
 
         return response()->json(['message' => 'Customer deleted.']);
     }

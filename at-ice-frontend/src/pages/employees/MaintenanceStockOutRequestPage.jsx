@@ -52,7 +52,10 @@ export default function MaintenanceStockOutRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const [itemName, setItemName] = useState("");
+  // The inventory items that can be requested (GET /api/stock-out-items)
+  const [items, setItems] = useState([]);
+  const [itemsError, setItemsError] = useState("");
+  const [productId, setProductId] = useState("");
   const [notice, setNotice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -87,23 +90,46 @@ export default function MaintenanceStockOutRequestPage() {
     }
   }, [token]);
 
+  const fetchItems = useCallback(async () => {
+    setItemsError("");
+    try {
+      const res = await fetch("/api/stock-out-items", {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(firstError(data, "Failed to load the items."));
+      setItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setItemsError(err.message || "Could not load the items.");
+    }
+  }, [token]);
+
   // Load on open
   // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["stock-out", "inventory"]);
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests, live]);
+  useEffect(() => {
+    if (showForm) fetchItems();
+  }, [showForm, fetchItems, live]);
+
+  const selectedItem = items.find((i) => String(i.id) === String(productId));
 
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError("");
 
-    if (!itemName.trim() || !quantity || !purpose.trim()) {
+    if (!productId || !quantity || !purpose.trim()) {
       setFormError("Please fill in all fields.");
       return;
     }
     if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
       setFormError("Quantity must be a whole number, at least 1.");
+      return;
+    }
+    if (selectedItem && Number(quantity) > selectedItem.current_stock) {
+      setFormError(`Not enough stock. Available: ${selectedItem.current_stock} ${selectedItem.unit || ""}.`.trim());
       return;
     }
 
@@ -117,18 +143,17 @@ export default function MaintenanceStockOutRequestPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-        item_name: itemName.trim(),
-        quantity: Number(quantity),
-        purpose: purpose.trim(),
+          product_id: Number(productId),
+          quantity: Number(quantity),
+          purpose: purpose.trim(),
         }),
-
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(firstError(data, "Failed to submit request."));
 
       toast.success("Stock-out request was submitted.");
       setNotice("Request submitted. Waiting for Admin approval.");
-      setItemName("");
+      setProductId("");
       setQuantity("");
       setPurpose("");
       setShowForm(false);
@@ -178,20 +203,29 @@ export default function MaintenanceStockOutRequestPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
 
             <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-            Requested Part
-        </label>
-        <input
-          type="text"
-          placeholder="e.g. Brake Pad, Fan Belt, Engine Oil, Clutch Lining"
-          value={itemName}
-          onChange={(e) => setItemName(e.target.value)}
-          className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
-          />
-          <span className="text-[11px] text-slate-400 px-0.5">
-          Enter the truck part or maintenance item you need.
-        </span>
-        </div>
+              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+                Requested Item
+              </label>
+              <select
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
+              >
+                <option value="">Choose an item…</option>
+                {items.map((i) => (
+                  <option key={i.id} value={i.id} disabled={i.current_stock < 1}>
+                    {i.name} ({i.current_stock} {i.unit || ""} left)
+                  </option>
+                ))}
+              </select>
+              <span className="text-[11px] text-slate-400 px-0.5">
+                {itemsError
+                  ? itemsError
+                  : items.length === 0
+                    ? "No items in the inventory yet. Ask the Checker to add the item first."
+                    : "Choose the truck part or maintenance item you need from the inventory."}
+              </span>
+            </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
                 Quantity
@@ -269,10 +303,10 @@ export default function MaintenanceStockOutRequestPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="text-[14px] font-semibold text-slate-800">
-                    {req.item_name}
+                    {req.product?.name || req.item_name}
                   </div>
                   <div className="text-[12px] text-slate-400 mt-0.5">
-                    Quantity: {req.quantity}
+                    Quantity: {req.quantity} {req.product?.unit || ""}
                   </div>
                 </div>
                 <span

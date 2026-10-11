@@ -64,7 +64,14 @@ class StockMovementController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($movement, $request) {
+            DB::transaction(function () use (&$movement, $request) {
+                // Read the movement again under a lock: two confirms sent at the
+                // same moment must not both apply it to the stock.
+                $movement = StockMovement::lockForUpdate()->findOrFail($movement->id);
+                if ($movement->status !== 'pending') {
+                    throw new \RuntimeException('Movement already processed.');
+                }
+
                 $product = Product::lockForUpdate()->findOrFail($movement->product_id);
 
                 // Stock may have changed since this movement was logged.
@@ -109,13 +116,20 @@ class StockMovementController extends Controller
 
     public function cancel(Request $request, $id)
     {
-        $movement = StockMovement::findOrFail($id);
+        // Locked so a cancel and a confirm at the same moment cannot both win.
+        $cancelled = DB::transaction(function () use ($id) {
+            $movement = StockMovement::lockForUpdate()->findOrFail($id);
+            if ($movement->status !== 'pending') {
+                return false;
+            }
+            $movement->update(['status' => 'cancelled']);
 
-        if ($movement->status !== 'pending') {
+            return true;
+        });
+
+        if (! $cancelled) {
             return response()->json(['message' => 'Only pending movements can be cancelled.'], 422);
         }
-
-        $movement->update(['status' => 'cancelled']);
 
         return response()->json(['message' => 'Movement cancelled.']);
     }

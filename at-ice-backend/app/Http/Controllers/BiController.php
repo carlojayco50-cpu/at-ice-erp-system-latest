@@ -22,7 +22,7 @@ class BiController extends Controller
 
     // Receipts unpaid for longer than this many days count as overdue
     // (same rule as ReceiptController@overdue).
-    private const OVERDUE_DAYS = 15;
+    private const OVERDUE_DAYS = Receipt::OVERDUE_DAYS;
 
     // SQL for the month number (1-12) of a date column. MONTH() is MySQL
     // only; local dev and tests run on SQLite, which has strftime() instead.
@@ -363,6 +363,7 @@ class BiController extends Controller
                 ]);
             });
 
+        Receipt::markOverdue();
         $cutoff = Carbon::now()->subDays(self::OVERDUE_DAYS);
         Receipt::with('customer')
             ->where(fn ($q) => $q->where('payment_status', 'overdue')
@@ -568,6 +569,7 @@ class BiController extends Controller
     // counted, so the card showed 0 once the Receipts page had marked them.
     public function overdueReceipts()
     {
+        Receipt::markOverdue();
         $cutoff = Carbon::now()->subDays(self::OVERDUE_DAYS);
 
         $overdue = Receipt::with(['delivery.customer'])

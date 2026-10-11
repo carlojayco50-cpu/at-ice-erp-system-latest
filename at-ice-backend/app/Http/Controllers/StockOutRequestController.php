@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\InventoryAlert;
+use App\Models\Product;
+use App\Models\StockMovement;
 use App\Models\StockOutRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class StockOutRequestController extends Controller
 {
@@ -11,7 +16,21 @@ class StockOutRequestController extends Controller
         'requestedBy:id,name',
         'approvedBy:id,name',
         'releasedBy:id,name',
+        'product:id,name,unit,current_stock',
     ];
+
+    /**
+     * GET /api/stock-out-items
+     * The inventory items Maintenance can request, with the stock on hand.
+     */
+    public function items()
+    {
+        return response()->json(
+            Product::where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'unit', 'category', 'current_stock'])
+        );
+    }
 
     /**
      * Maintenance sees only their own requests.
@@ -42,10 +61,8 @@ class StockOutRequestController extends Controller
     }
 
     /**
-     * Maintenance submits a request.
-     *
-     * The requested part can be ANY text.
-     * It does NOT need to exist in the products table.
+     * Maintenance submits a request for an inventory item.
+     * The stock is deducted only when the Admin releases it.
      */
     public function store(Request $request)
     {
@@ -62,14 +79,25 @@ class StockOutRequestController extends Controller
         }
 
         $validated = $request->validate([
-            'item_name' => 'required|string|max:255',
+            'product_id' => ['required', Rule::exists('products', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'quantity' => 'required|integer|min:1',
             'purpose' => 'required|string|max:1000',
+        ], [
+            'product_id.required' => 'Choose the item you need.',
+            'product_id.exists' => 'That item is no longer in the inventory.',
         ]);
+
+        $product = Product::findOrFail($validated['product_id']);
+        if ($validated['quantity'] > $product->current_stock) {
+            $text = "Not enough stock. Available: {$product->current_stock} {$product->unit}.";
+
+            return response()->json(['message' => $text, 'errors' => ['quantity' => [$text]]], 422);
+        }
 
         $stockOutRequest = StockOutRequest::create([
             'requested_by' => $user->id,
-            'item_name' => $validated['item_name'],
+            'product_id' => $product->id,
+            'item_name' => $product->name,
             'quantity' => $validated['quantity'],
             'purpose' => $validated['purpose'],
             'status' => 'pending',
@@ -169,11 +197,10 @@ class StockOutRequestController extends Controller
 
     /**
      * ADMIN ONLY:
-     * Mark an approved request as released/completed.
-     *
-     * IMPORTANT:
-     * Since Maintenance can request ANY part, this request does not
-     * automatically deduct inventory from the products table.
+     * Release an approved request: the item's stock is deducted and a
+     * confirmed Stock Out is recorded in the movement history.
+     * An older free-text request (no item linked) is released without a
+     * stock change, since there is no item to deduct from.
      */
     public function release(
         Request $request,
@@ -187,20 +214,65 @@ class StockOutRequestController extends Controller
             ], 403);
         }
 
-        if ($stockOutRequest->status !== 'approved') {
-            return response()->json([
-                'message' => 'Only approved requests can be released.',
-            ], 422);
+        try {
+            DB::transaction(function () use ($stockOutRequest, $user) {
+                // Locked and read again, so a double click releases (and deducts) once.
+                $locked = StockOutRequest::lockForUpdate()->findOrFail($stockOutRequest->id);
+                if ($locked->status !== 'approved') {
+                    throw new \RuntimeException('Only approved requests can be released.');
+                }
+
+                $movementId = null;
+                if ($locked->product_id) {
+                    $product = Product::lockForUpdate()->find($locked->product_id);
+                    if (! $product) {
+                        throw new \RuntimeException('This item is no longer in the inventory, so it cannot be released.');
+                    }
+                    if ($locked->quantity > $product->current_stock) {
+                        throw new \RuntimeException("Not enough stock to release. Available: {$product->current_stock} {$product->unit}.");
+                    }
+
+                    $newStock = $product->current_stock - $locked->quantity;
+                    $movement = StockMovement::create([
+                        'product_id' => $product->id,
+                        'type' => 'stock_out',
+                        'quantity' => $locked->quantity,
+                        'stock_before' => $product->current_stock,
+                        'stock_after' => $newStock,
+                        'reference_no' => 'SOR-'.str_pad($locked->id, 4, '0', STR_PAD_LEFT),
+                        'source' => 'maintenance',
+                        'reason' => $locked->purpose,
+                        'status' => 'confirmed',
+                        'entered_by' => $locked->requested_by,
+                        'confirmed_by' => $user->id,
+                        'confirmed_at' => now(),
+                    ]);
+                    $product->update(['current_stock' => $newStock]);
+                    $movementId = $movement->id;
+
+                    if ($product->isLowStock()) {
+                        InventoryAlert::firstOrCreate(
+                            ['product_id' => $product->id, 'alert_type' => 'low_stock', 'is_resolved' => false],
+                            ['message' => "{$product->name} is low on stock. Current: {$newStock} {$product->unit}(s)."]
+                        );
+                    }
+                }
+
+                $locked->update([
+                    'status' => 'released',
+                    'released_by' => $user->id,
+                    'released_at' => now(),
+                    'stock_movement_id' => $movementId,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $stockOutRequest->update([
-            'status' => 'released',
-            'released_by' => $user->id,
-            'released_at' => now(),
-        ]);
-
         return response()->json([
-            'message' => 'Request released successfully.',
+            'message' => $stockOutRequest->product_id
+                ? 'Item released and stock updated.'
+                : 'Request released. No inventory item is linked, so the stock was not changed.',
             'request' => $stockOutRequest
                 ->fresh()
                 ->load(self::RELATIONS),

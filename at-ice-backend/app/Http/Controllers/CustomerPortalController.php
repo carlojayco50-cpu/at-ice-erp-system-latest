@@ -98,6 +98,8 @@ class CustomerPortalController extends Controller
             return response()->json(['message' => 'No customer account linked to this login.'], 404);
         }
 
+        Receipt::markOverdue();
+
         // delivery and customer are sent too, for the printable receipt.
         $receipts = Receipt::with(['items', 'delivery', 'customer'])
             ->where('customer_id', $customer->id)
