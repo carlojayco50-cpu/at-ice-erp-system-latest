@@ -157,14 +157,24 @@ class CustomerController extends Controller
             ? 'required|string|max:255'
             : 'nullable|string|max:255|required_with:block_lot,street,subdivision,barangay,postal_code';
 
+        // Contact person, contact number and email are required when a customer is
+        // added. When editing, they are checked only for a field that is being CHANGED
+        // (including emptying one that has a value). So an old customer without them,
+        // like the seeded ones, can still be edited, and nobody has to invent a
+        // contact just to change the payment method.
+        $same = fn ($a, $b) => mb_strtolower(trim((string) $a)) === mb_strtolower(trim((string) $b));
+        $changing = fn (string $field) => $request->exists($field) && ! $same($request->input($field), $customer->{$field});
+
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            // A changed email must be an existing account; an unchanged one is not checked again.
-            // Not another customer's email, nor another account's login.
-            'email' => array_merge(['bail', 'required', 'email:rfc,filter,dns', 'max:255',
-                Rule::unique('customers', 'email')->ignore($customer->id)->whereNull('deleted_at'),
-                Rule::unique('users', 'email')->ignore($customer->user_id)],
-                mb_strtolower(trim((string) $request->email)) !== mb_strtolower((string) $customer->email) ? [new ExistingMailbox] : []),
+            // A changed email must be an existing account, not another customer's email
+            // and not another account's login. An unchanged one is not checked again.
+            'email' => $changing('email')
+                ? ['bail', 'required', 'email:rfc,filter,dns', 'max:255',
+                    Rule::unique('customers', 'email')->ignore($customer->id)->whereNull('deleted_at'),
+                    Rule::unique('users', 'email')->ignore($customer->user_id),
+                    new ExistingMailbox]
+                : ['nullable', 'string', 'max:255'],
             'mop' => 'sometimes|in:cash,gcash,check,bank_transfer',
             'street' => $addressRule,
             'barangay' => $addressRule,
@@ -173,21 +183,16 @@ class CustomerController extends Controller
             'block_lot' => 'nullable|string|max:255',
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
-            'contact_person' => 'required|string|max:255',
+            'contact_person' => $changing('contact_person') ? 'required|string|max:255' : 'nullable|string|max:255',
             'notes' => 'nullable|string',
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
             // A saved number in an old format stays editable as long as it is not changed.
-            'contact_number' => [
-                'required',
-                function ($attribute, $value, $fail) use ($customer) {
-                    if ($value !== null && $value !== '' && $value !== $customer->contact_number
-                        && ! preg_match(self::CONTACT_REGEX, $value)) {
-                        $fail(self::CONTACT_MESSAGE);
-                    }
-                },
-            ],
+            'contact_number' => $changing('contact_number')
+                ? ['required', 'regex:'.self::CONTACT_REGEX]
+                : ['nullable'],
         ], [
+            'contact_number.regex' => self::CONTACT_MESSAGE,
             'postal_code.regex' => 'Postal code must be 4 digits.',
             'email.unique' => 'Another customer or login already uses this email.',
         ]);

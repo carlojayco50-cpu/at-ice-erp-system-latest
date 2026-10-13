@@ -76,22 +76,28 @@ class EmployeeController extends Controller
         }
     }
 
-    // Password of a new employee account: last name + last two digits of the
-    // phone + "!", e.g. "Jayco" with +639171234550 -> "Jayco50!", and
-    // "dela cruz" -> "DelaCruz50!". The frontend shows HR the same value
-    // (defaultPassword in src/lib/password.js) to hand over.
-    private static function defaultPassword(string $lastName, string $phone): string
+    // One-time password of a new employee account: 12 random characters with an
+    // uppercase letter, a lowercase letter, a digit and a symbol (so it passes the
+    // password rules), without look-alike characters (O 0, l 1 I) because HR reads
+    // it out or writes it down. It comes from random_int(), the secure generator,
+    // and is not built from any detail of the employee. It is shown to HR once, in
+    // the response that creates the account, and stored only as a hash. The
+    // account must change it on first login.
+    private static function oneTimePassword(): string
     {
-        $words = preg_split('/\s+/', trim($lastName)) ?: [];
-        $name = '';
-        foreach ($words as $w) {
-            $w = preg_replace('/[^\p{L}]/u', '', $w);
-            if ($w !== '') {
-                $name .= mb_strtoupper(mb_substr($w, 0, 1)).mb_strtolower(mb_substr($w, 1));
-            }
+        $sets = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '!@#$%&*?'];
+        $all = implode('', $sets);
+
+        $chars = array_map(fn ($set) => $set[random_int(0, strlen($set) - 1)], $sets);
+        while (count($chars) < 12) {
+            $chars[] = $all[random_int(0, strlen($all) - 1)];
+        }
+        for ($i = count($chars) - 1; $i > 0; $i--) { // shuffle
+            $j = random_int(0, $i);
+            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
         }
 
-        return ($name ?: 'Employee').substr(preg_replace('/\D/', '', $phone), -2).'!';
+        return implode('', $chars);
     }
 
     private const NAME_MESSAGES = [
@@ -139,8 +145,9 @@ class EmployeeController extends Controller
             'first_name' => 'required|string',
             'last_name' => 'required|string',
             // The login email is made by the server (employeeEmail), never sent.
-            // No password from HR: it is made from the last name and this
-            // number (see defaultPassword), so the phone is required for an account.
+            // No password from HR either: the server makes a random one-time
+            // password (oneTimePassword). The phone is required for an account so
+            // HR can reach the employee.
             'phone' => [$noAccount ? 'nullable' : 'required', 'regex:'.self::PHONE_REGEX],
             'street' => 'required|string|max:255',
             'barangay' => 'required|string|max:255',
@@ -173,7 +180,7 @@ class EmployeeController extends Controller
         $subRole = self::POSITION_ROLES[$request->position];
         $isDriver = $subRole === 'driver';
 
-        $password = $noAccount ? null : self::defaultPassword($request->last_name, $request->phone);
+        $password = $noAccount ? null : self::oneTimePassword();
 
         // Login and employee record are created together, or not at all.
         // Retried when two employees added at the same moment get the same code.
@@ -191,7 +198,8 @@ class EmployeeController extends Controller
         return response()->json([
             'message' => 'Employee created successfully!',
             'employee' => $employee,
-            // Sent back once so HR can give them to the employee (null: no account).
+            // Sent back ONCE, in this response only, so HR can hand them over (null: no
+            // account). The password is never returned, logged or emailed anywhere else.
             'email' => $user?->email,
             'password' => $password,
         ], 201);

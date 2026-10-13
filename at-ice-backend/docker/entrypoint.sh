@@ -2,8 +2,9 @@
 set -e
 cd /var/www/html
 
-# Volumes mount over storage/app/public, so re-assert ownership every start.
-mkdir -p storage/app/public storage/framework/cache/data storage/framework/sessions \
+# Volumes mount over storage/app/public and storage/app/private, so re-assert
+# ownership every start.
+mkdir -p storage/app/public storage/app/private storage/framework/cache/data storage/framework/sessions \
          storage/framework/views storage/logs bootstrap/cache
 chown -R www-data:www-data storage bootstrap/cache
 

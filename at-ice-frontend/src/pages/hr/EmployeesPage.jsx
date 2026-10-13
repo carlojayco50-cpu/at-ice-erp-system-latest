@@ -5,7 +5,6 @@ import FaceCapture from "../../components/FaceCapture";
 import PhoneInput from "../../components/PhoneInput";
 import LoginEmailChip from "../../components/LoginEmailChip";
 import { toast } from "../../lib/toast";
-import { defaultEmployeePassword } from "../../lib/password";
 import { MOBILE_REGEX, MOBILE_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
 import { SkeletonList, SkeletonTableRows } from "../../components/Skeleton";
 import { NAME_SUFFIXES, cleanInitial, fullName } from "../../lib/names";
@@ -421,10 +420,9 @@ export default function EmployeesPage() {
       setFormErrors({ phone: [MOBILE_MESSAGE] });
       return;
     }
-    // The password is made from the last name and the mobile number, so a
-    // new employee needs a mobile number.
+    // A new employee with a login account needs a mobile number, so HR can reach them.
     if (editingId === null && !noAccountForm && !form.phone) {
-      setFormErrors({ phone: ["Enter the mobile number. The password uses its last two digits."] });
+      setFormErrors({ phone: ["Enter the mobile number of the employee."] });
       return;
     }
     if (addressRequired) {
@@ -526,8 +524,8 @@ export default function EmployeesPage() {
   };
 
 
-  // Mobile number field: beside Email when adding (it is required then, since
-  // the password uses it), in the address section when editing.
+  // Mobile number field: beside Email when adding (it is required then), in the
+  // address section when editing.
   const phoneField = (
     <Field label={editingId ? "Phone" : "Mobile Number"} required={!editingId && !noAccountForm} error={formErrors.phone}>
       <PhoneInput
@@ -807,14 +805,10 @@ export default function EmployeesPage() {
                   <div className="col-span-2 flex flex-col gap-1">
                     <span className="text-[11px] text-slate-500">Password (made automatically)</span>
                     <div className="flex items-center min-h-[40px] px-3 rounded-lg bg-slate-50 border border-black/[0.09] text-[13px]">
-                      {defaultEmployeePassword(form.last_name, form.phone) ? (
-                        <span className="font-mono font-semibold text-slate-800 select-all">{defaultEmployeePassword(form.last_name, form.phone)}</span>
-                      ) : (
-                        <span className="text-slate-400">Fill in the Last Name and Mobile Number</span>
-                      )}
+                      <span className="text-slate-400">A random one-time password is made when you save</span>
                     </div>
                     <span className="text-[10px] text-slate-400 leading-snug">
-                      Last name + last two digits of the mobile number + "!". Give it to the employee with their email.
+                      It is shown once, right after saving. Give it to the employee with their email. They must change it on first sign-in.
                     </span>
                   </div>
                 </div>
@@ -1004,8 +998,8 @@ export default function EmployeesPage() {
           <div className="bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-sm p-5">
             <div className="text-[15px] font-semibold text-slate-800" id="acct-created-title">Account created</div>
             <p className="text-xs text-slate-500 mt-1">
-              Give these login details to <b className="text-slate-700">{createdAccount.name}</b>. They are shown only now.
-              The employee sets a new password on first sign-in.
+              Give these login details to <b className="text-slate-700">{createdAccount.name}</b>. They are shown only now
+              and cannot be looked up again. The employee must set a new password on first sign-in.
             </p>
             <div className="mt-4 flex flex-col gap-2">
               {[["Email", createdAccount.email], ["Password", createdAccount.password]].map(([label, value]) => (
@@ -1058,8 +1052,6 @@ function Field({ label, error, required, children }) {
 // Enrolled: shows the saved picture, with Re-enroll (opens the camera to
 // replace it) and Remove Face.
 // Saved pictures are on the backend's public disk, served at /storage/...
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
-const storageUrl = (p) => (p ? `${BACKEND_URL}/storage/${String(p).replace(/^\/+/, "")}` : null);
 const fmtDateTime = (d) =>
   d ? new Date(d).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
 
@@ -1071,8 +1063,34 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
   const enrolled = employee.face_data; // { id, employee_id, photo_path, created_at, updated_at } or null
   const [capturing, setCapturing] = useState(!enrolled);
   const [photoBroken, setPhotoBroken] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState(null);
   const name = fullName(employee);
-  const savedPhoto = enrolled && !photoBroken ? storageUrl(enrolled.photo_path) : null;
+
+  // The enrolled picture is private: it is fetched with the login token and shown
+  // from an in-memory URL (an <img src> cannot send the token).
+  const photoId = enrolled?.photo_path ? enrolled.id : null;
+  useEffect(() => {
+    if (!photoId) return undefined;
+    let cancelled = false;
+    let url = null;
+    fetch(`${API_BASE}/face-data/${photoId}/photo`, {
+      headers: { Accept: "image/jpeg", Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+    })
+      .then((res) => (res.ok ? res.blob() : Promise.reject(new Error("no picture"))))
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        if (cancelled) URL.revokeObjectURL(url);
+        else setPhotoUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoBroken(true);
+      });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [photoId]);
+  const savedPhoto = photoId && !photoBroken ? photoUrl : null;
   const onCapture = (d, p) => { setDescriptor(d); setPhoto(p); };
 
   const send = async (url, method, body) => {

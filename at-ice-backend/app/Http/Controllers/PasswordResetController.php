@@ -22,7 +22,9 @@ use Throwable;
 // 3. POST /api/reset-password {email, code, password, password_confirmation}:
 //    a correct code sets the new password and signs the account out everywhere.
 // The code is stored hashed in password_reset_tokens, works for 15 minutes and
-// only once, and 5 wrong tries cancel it.
+// only once. 5 wrong tries lock the email for 15 minutes: the code is cancelled,
+// no new code is made or sent, and asking for a new code does not reset the
+// count. The count is kept in the cache and works on the database store.
 class PasswordResetController extends Controller
 {
     private const MINUTES = 15;
@@ -35,13 +37,15 @@ class PasswordResetController extends Controller
         $request->validate(['email' => 'required|email|max:255']);
 
         $user = User::where('email', $request->email)->first();
-        if ($user) {
+        // While locked nothing is made or sent, and the answer below is the same.
+        if ($user && ! $this->isLocked($user->email)) {
             $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            // The wrong-try count is NOT reset here, so a new code cannot be used
+            // to get more guesses.
             DB::table('password_reset_tokens')->updateOrInsert(
                 ['email' => $user->email],
                 ['token' => Hash::make($code), 'created_at' => now()],
             );
-            Cache::forget($this->triesKey($user->email));
             try {
                 Mail::to($user->email)->send(new PasswordResetCode($code, self::MINUTES));
             } catch (Throwable $e) {
@@ -96,16 +100,19 @@ class PasswordResetController extends Controller
     }
 
     // True when the code is right and not expired. A wrong code counts as a
-    // try, and the 5th wrong try cancels the code.
+    // try, and the 5th wrong try cancels the code and locks the email.
     private function codeMatches(string $email, string $code): bool
     {
+        if ($this->isLocked($email)) {
+            return false;
+        }
+
         $row = DB::table('password_reset_tokens')->where('email', $email)->first();
         if (! $row || now()->diffInMinutes($row->created_at, true) > self::MINUTES) {
             return false;
         }
         if (! Hash::check($code, $row->token)) {
-            $tries = Cache::increment($this->triesKey($email));
-            if ($tries >= self::MAX_TRIES) {
+            if ($this->recordWrongTry($email) >= self::MAX_TRIES) {
                 DB::table('password_reset_tokens')->where('email', $email)->delete();
             }
 
@@ -113,6 +120,23 @@ class PasswordResetController extends Controller
         }
 
         return true;
+    }
+
+    private function isLocked(string $email): bool
+    {
+        return (int) Cache::get($this->triesKey($email), 0) >= self::MAX_TRIES;
+    }
+
+    // Adds one wrong try and returns the total. The counter is created first with
+    // add(): on the database cache store increment() does nothing for a key that
+    // does not exist yet, so without this the count would never start. add() also
+    // fixes the lifetime at the first wrong try, so the lock ends 15 minutes later.
+    private function recordWrongTry(string $email): int
+    {
+        $key = $this->triesKey($email);
+        Cache::add($key, 0, now()->addMinutes(self::MINUTES));
+
+        return (int) (Cache::increment($key) ?: 1);
     }
 
     private function wrongCode()

@@ -217,6 +217,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('face-data', [FaceDataController::class, 'index']);
         Route::put('face-data/{id}', [FaceDataController::class, 'update']);
         Route::delete('face-data/{id}', [FaceDataController::class, 'destroy']);
+        // The enrolled face picture: private, HR and Admin only (Admin passes every role check)
+        Route::get('face-data/{id}/photo', [FaceDataController::class, 'photo']);
     });
 
     // EMPLOYEE: CHECKER ROUTES

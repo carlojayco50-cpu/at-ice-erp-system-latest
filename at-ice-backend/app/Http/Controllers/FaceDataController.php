@@ -20,8 +20,12 @@ class FaceDataController extends Controller
     // The face picture comes from the webcam as a JPEG data URL (up to ~1.5 MB).
     private const PHOTO_RULE = ['nullable', 'string', 'max:2000000', 'starts_with:data:image/jpeg;base64,'];
 
-    // Saves the picture on the public disk (served at /storage/face-photos/...)
-    // under a random name, and returns its path.
+    // Face pictures are personal data. They are kept on the PRIVATE disk
+    // (storage/app/private), which nginx does not serve, and are sent only to
+    // HR and Admin by photo() below. Never put them on the public disk.
+    private const PHOTO_DISK = 'local';
+
+    // Saves the picture on the private disk under a random name and returns its path.
     private function storePhoto(?string $dataUrl): ?string
     {
         if (! $dataUrl) {
@@ -32,7 +36,7 @@ class FaceDataController extends Controller
             throw ValidationException::withMessages(['photo' => 'The face picture could not be read. Capture it again.']);
         }
         $path = 'face-photos/'.Str::uuid().'.jpg';
-        Storage::disk('public')->put($path, $bytes);
+        Storage::disk(self::PHOTO_DISK)->put($path, $bytes);
 
         return $path;
     }
@@ -40,7 +44,8 @@ class FaceDataController extends Controller
     private function deletePhoto(?string $path): void
     {
         if ($path) {
-            Storage::disk('public')->delete($path);
+            Storage::disk(self::PHOTO_DISK)->delete($path);
+            Storage::disk('public')->delete($path); // a picture saved before they moved to the private disk
         }
     }
 
@@ -147,6 +152,26 @@ class FaceDataController extends Controller
         $faceData->delete();
 
         return response()->json(['message' => 'Face data deleted.']);
+    }
+
+    // The enrolled face picture of one worker.
+    // GET /api/face-data/{id}/photo (HR and Admin only, see routes/api.php)
+    // The browser cannot send the login token from an <img> tag, so the HR page
+    // fetches this with the token and shows the result.
+    public function photo($id)
+    {
+        $path = FaceData::findOrFail($id)->photo_path;
+        $disk = Storage::disk(self::PHOTO_DISK);
+
+        if (! $path || ! $disk->exists($path)) {
+            return response()->json(['message' => 'No picture was saved with this enrollment.'], 404);
+        }
+
+        return $disk->response($path, null, [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     // Serve the descriptors to AttendanceStation for matching

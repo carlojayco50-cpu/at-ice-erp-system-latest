@@ -101,6 +101,9 @@ class PasswordResetTest extends TestCase
         // cancelled after 5 wrong tries, even with the right code
         $this->postJson('/api/reset-password', $body($code))->assertUnprocessable();
 
+        // the lock lasts 15 minutes; after that a new code can be requested
+        $this->travel(16)->minutes();
+
         // a fresh code expires after 15 minutes
         Mail::fake();
         $code = $this->requestCode('shop@atice.cloud');

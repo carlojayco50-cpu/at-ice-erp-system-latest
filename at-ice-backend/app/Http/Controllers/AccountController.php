@@ -26,8 +26,9 @@ class AccountController extends Controller
     }
 
     // PUT /api/accounts/{user}/email
-    // Fixes a wrong login email. For a customer, the contact email on the
-    // customer record follows when it was the same as the old login.
+    // Fixes a wrong login email. The account is signed out everywhere. For a
+    // customer, the contact email on the customer record follows when it was the
+    // same as the old login.
     public function updateEmail(Request $request, User $user)
     {
         if (! $this->mayManage($request, $user)) {
@@ -48,6 +49,9 @@ class AccountController extends Controller
         $old = $user->email;
         DB::transaction(function () use ($user, $old, $request) {
             $user->update(['email' => $request->email]);
+            // The login changed, so every session of this account ends: whoever was
+            // signed in with the old email (or holds a stolen token) must sign in again.
+            $user->tokens()->delete();
             if ($user->role === 'customer') {
                 Customer::where('user_id', $user->id)->where('email', $old)->update(['email' => $request->email]);
             }

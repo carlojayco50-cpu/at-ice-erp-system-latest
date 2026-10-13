@@ -65,6 +65,8 @@ services:
       RUN_MIGRATIONS: "true"
     volumes:
       - public-storage:/var/www/html/storage/app/public
+      # Private files that nginx must never serve (face pictures). Back it up too.
+      - private-storage:/var/www/html/storage/app/private
     depends_on:
       mysql:
         condition: service_healthy
@@ -108,5 +110,6 @@ services:
 
 volumes:
   public-storage:
+  private-storage:
   mysql-data:
   mysql-backups:

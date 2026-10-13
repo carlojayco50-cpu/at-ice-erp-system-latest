@@ -13,21 +13,3 @@ export const isStrongPassword = (password) => PASSWORD_RULES.every((r) => r.test
 
 export const PASSWORD_RULES_MESSAGE =
   "Password needs at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.";
-
-// Password of a new employee account, made by the system (HR does not type
-// one): last name + last two digits of the mobile number + "!".
-// "Jayco" + 09171234550 -> "Jayco50!", "dela cruz" -> "DelaCruz50!".
-// Same as EmployeeController::defaultPassword on the server. Returns "" until
-// both the last name and at least two digits of the phone are filled in.
-export function defaultEmployeePassword(lastName, phone) {
-  const name = String(lastName || "")
-    .trim()
-    .split(/\s+/)
-    .map((w) => w.replace(/[^\p{L}]/gu, ""))
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join("");
-  const digits = String(phone || "").replace(/\D/g, "");
-  if (!name || digits.length < 2) return "";
-  return `${name}${digits.slice(-2)}!`;
-}

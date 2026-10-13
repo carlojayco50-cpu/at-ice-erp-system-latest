@@ -22,18 +22,20 @@ export function localDigits(stored) {
   return d;
 }
 
-// Most digits a number can have after +63.
+// Most digits a valid number can have after +63. The forms reject anything longer.
 export const PHONE_MAX_DIGITS = 10;
 
 // Cleans what the user types or pastes into the input: digits only, no leading 0,
-// no pasted 63 country code, at most 10 digits. The 0 and 63 are removed before
-// the cut, so a pasted 09171234567 or +639171234567 keeps all 10 digits. (The
-// input has no maxLength for the same reason: it would cut a paste too early.)
+// no pasted 63 country code. It never cuts digits off the end: a number that is
+// too long stays visible (up to a sanity cap of 15) and the form rejects it, so a
+// digit can never be dropped silently. (A version that cut the number to 10 digits
+// here lost the 11th digit typed without any message.) The input has no maxLength
+// for the same reason.
 export function typedDigits(input) {
   let d = String(input || "").replace(/\D/g, "");
   if (d.startsWith("0")) d = d.slice(1);
   else if (d.startsWith("63") && d.length > PHONE_MAX_DIGITS) d = d.slice(2);
-  return d.slice(0, PHONE_MAX_DIGITS);
+  return d.slice(0, 15);
 }
 
 // Value to send to the API, e.g. "9171234567" -> "+639171234567" (empty stays empty).

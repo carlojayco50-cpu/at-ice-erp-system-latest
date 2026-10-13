@@ -148,6 +148,13 @@ export default function CustomersPage() {
     .some((f) => String(form[f] || "").trim() !== "");
   const addressRequired = !form._legacy || addressInUse;
 
+  // Contact Person, Contact Number and Contact Email are required when adding a
+  // customer. When editing, a field is required only if the customer already has a
+  // value in it (so it cannot be emptied). An older customer that never had one can
+  // be saved without it. Whatever is typed into such a field must still be valid.
+  const savedCustomer = editingId ? customers.find((c) => c.id === editingId) : null;
+  const need = (field) => !savedCustomer || !!savedCustomer[field];
+
   async function submitForm(e) {
     e.preventDefault();
     setFormError("");
@@ -156,11 +163,16 @@ export default function CustomersPage() {
     // old number in an odd format stays editable. A changed number must be 9 to 10 digits.
     const savedContact = customers.find((c) => c.id === editingId)?.contact_number ?? "";
     const contactUnchanged = !!savedContact && form.contact_number === localDigits(savedContact);
-    if (!form.contact_person.trim() || !form.contact_number || !form.email.trim()) {
-      setFormError("Contact Person, Contact Number and Contact Email are required.");
+    const missingContact = [
+      ["contact_person", "Contact Person", form.contact_person.trim()],
+      ["contact_number", "Contact Number", form.contact_number],
+      ["email", "Contact Email", form.email.trim()],
+    ].filter(([field, , value]) => need(field) && !value).map(([, label]) => label);
+    if (missingContact.length) {
+      setFormError(`${missingContact.join(", ")} ${missingContact.length === 1 ? "is" : "are"} required.`);
       return;
     }
-    if (!contactUnchanged && !ANY_REGEX.test(form.contact_number)) {
+    if (form.contact_number && !contactUnchanged && !ANY_REGEX.test(form.contact_number)) {
       setFormError(ANY_MESSAGE);
       return;
     }
@@ -420,23 +432,24 @@ export default function CustomersPage() {
                     Customer Code and Branch Code are generated when you save.
                   </p>
                 )}
-                <Field label="Contact Person *" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required />
+                <Field label={need("contact_person") ? "Contact Person *" : "Contact Person"} value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required={need("contact_person")} />
                 <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Contact Number *</label>
+                  <label className="text-[11px] text-slate-500 mb-1 block">{need("contact_number") ? "Contact Number *" : "Contact Number"}</label>
                   <PhoneInput
                     value={form.contact_number}
                     onChange={(v) => setForm({ ...form, contact_number: v })}
                     placeholder="9171234567"
-                    required
+                    required={need("contact_number")}
+                    invalid={form.contact_number.length > 10}
                     className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   />
                 </div>
                 <div className="col-span-2">
                   <EmailDomainField
-                    label={editingId ? "Contact Email *" : "Contact Email * (also the portal login)"}
+                    label={editingId ? (need("email") ? "Contact Email *" : "Contact Email") : "Contact Email * (also the portal login)"}
                     value={form.email}
                     onChange={(v) => setForm({ ...form, email: v })}
-                    required
+                    required={need("email")}
                     savedEmail={editingId ? customers.find((c) => c.id === editingId)?.email || "" : ""}
                   />
                 </div>
