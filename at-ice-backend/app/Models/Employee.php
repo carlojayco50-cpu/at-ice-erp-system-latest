@@ -24,6 +24,8 @@ class Employee extends Model
         'barangay',
         'city',
         'province',
+        'region',
+        'barangay_code',
         'postal_code',
         'position',
         'department',
@@ -32,12 +34,27 @@ class Employee extends Model
         'employment_type',
         'shift',
         'vehicle_plate',
+        'license_number',
+        'license_expiry',
         'is_active',
+        'deactivated_at',
+        'deactivated_by',
+        'employment_status',
+        'regularized_at',
+        'pay_basis',
+        'monthly_rate',
+        'shift_start',
+        'shift_end',
     ];
 
     protected $casts = [
         'date_hired' => 'date',
+        'license_expiry' => 'date:Y-m-d',
         'is_active' => 'boolean',
+        'deactivated_at' => 'datetime',
+        'anonymized_at' => 'datetime',
+        'regularized_at' => 'date:Y-m-d',
+        'monthly_rate' => 'decimal:2',
         'daily_rate' => 'decimal:2',
     ];
 
@@ -48,6 +65,11 @@ class Employee extends Model
     }
 
     // Relationship - Employee has one enrolled face (Attendance Station)
+    public function deactivatedBy()
+    {
+        return $this->belongsTo(User::class, 'deactivated_by');
+    }
+
     public function faceData()
     {
         return $this->hasOne(FaceData::class);
@@ -75,7 +97,18 @@ class Employee extends Model
     public const SUFFIXES = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
 
     // Sent with every employee in API responses.
-    protected $appends = ['full_name'];
+    protected $appends = ['full_name', 'status'];
+
+    // "active" or "inactive" (deactivated; kept on file, can be reactivated)
+    public function getStatusAttribute(): string
+    {
+        return $this->is_active ? 'active' : 'inactive';
+    }
+
+    public function isProbationary(): bool
+    {
+        return $this->employment_status === 'probationary';
+    }
 
     // "Juan D. Dela Cruz Jr." (middle initial and suffix only when set)
     public static function composeName(?string $first, ?string $middleInitial, ?string $last, ?string $suffix): string

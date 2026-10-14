@@ -9,6 +9,7 @@ import AttachmentViewer from './components/AttachmentViewer'
 // -- General Pages
 import LoginPage from './pages/LoginPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ApplyPage from './pages/ApplyPage'
 import AttendanceStation from './pages/AttendanceStation'
 import KioskGate from './components/KioskGate'
 import LeaveRequestPage from './pages/LeaveRequestPage'
@@ -18,6 +19,7 @@ import LeaveRequestPage from './pages/LeaveRequestPage'
 import Dashboard from './pages/Admin/Dashboard'
 import CustomerPriceManagement from './pages/Admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
+import ProjectsPage from './pages/Admin/ProjectsPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 import CustomersPage from './pages/Admin/CustomersPage'
 import DeliveriesPage from './pages/Admin/DeliveriesPage'
@@ -44,7 +46,9 @@ import EmployeesPage from './pages/hr/EmployeesPage'
 import AttendancePage from './pages/hr/AttendancePage'
 import LeaveRequestsPage from './pages/hr/LeaveRequestsPage'
 import InterviewsPage from './pages/hr/InterviewsPage'
-import PayrollPage from './pages/hr/PayrollPage'
+import TimesheetsPage from './pages/hr/TimesheetsPage'
+import HolidaysPage from './pages/hr/HolidaysPage'
+import PayrollRecordsPage from './pages/Admin/PayrollRecordsPage'
 import KioskPinPage from './pages/hr/KioskPinPage'
 
 // -- Employee Module
@@ -76,6 +80,10 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        {/* Public job application form, opened from the QR code in HRIS > Interviews */}
+        <Route path="/apply" element={<ApplyPage />} />
+        {/* The same form from an employee's referral link (records who referred) */}
+        <Route path="/job-applications/:referrer" element={<ApplyPage />} />
 
         {/* Old per-role login links still work: they all go to the one login page. */}
         {["/admin/login", "/hr/login", "/driver/login", "/customer/login", "/checker/login", "/salesman/login", "/maintenance/login"].map((path) => (
@@ -182,6 +190,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Projects board (monday.com style): maintenance and plant jobs
+            and the supplies their stock-out requests used. */}
+        <Route
+          path="/admin/projects"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <ProjectsPage />
+            </ProtectedRoute>
+          }
+        />
         {/* View-only Employees overview for Admin: Name/Position/Role/Shift
             only, backed by GET /api/employees-summary. Full CRUD + Payroll
             live under HR at /hr/employees below. */}
@@ -238,6 +256,15 @@ function App() {
         />
         {/* Settings: account only. Profile, change password,
             sign out other devices. */}
+        {/* Payroll Records: pay, earnings, mark paid, payslips, 13th month */}
+        <Route
+          path="/admin/payroll"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <PayrollRecordsPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/settings"
           element={
@@ -296,8 +323,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Payroll: all payroll records (computed in the Employees page,
-            Sweldong Pinoy reference). Pending -> Approved -> Paid. */}
         <Route
           path="/hr/kiosk-pin"
           element={
@@ -306,11 +331,31 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* Timesheets: HR approves each pay period's attendance, which makes the
+            payroll (no pay amounts shown). Admin pays it on /admin/payroll. */}
         <Route
-          path="/hr/payroll"
+          path="/hr/timesheets"
           element={
             <ProtectedRoute allowedRoles={["hr"]}>
-              <PayrollPage />
+              <TimesheetsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/hr/payroll" element={<Navigate to="/hr/timesheets" replace />} />
+        {/* Holiday calendar: attendance, leave and payroll read holidays from it */}
+        <Route
+          path="/hr/holidays"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <HolidaysPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/holidays"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <HolidaysPage admin />
             </ProtectedRoute>
           }
         />

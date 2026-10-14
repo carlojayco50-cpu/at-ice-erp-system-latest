@@ -5,7 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Employee;
 use App\Models\User;
 use App\Services\AddressFormatter;
+use App\Services\DriverLicense;
 use App\Services\PhoneFormatter;
+use App\Support\Audit;
+use App\Support\Lateness;
+use App\Support\Rates;
+use App\Support\Settings;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,13 +37,14 @@ class EmployeeController extends Controller
         'Security', 'Production', 'Administration', 'Human Resources',
     ];
 
-    // Login email made from the name and employee code, e.g. Carlo Jade Jayco,
-    // EMP-0014 -> jayco.carlojade.0014@atice.cloud (letters only, lower case).
-    private static function employeeEmail(string $lastName, string $firstName, string $code): string
+    // Login email made from the last name and employee number, e.g. Jayco,
+    // EMP-0014 -> jayco.0014@atice.cloud (letters only, lower case). The
+    // employee number is unique, so the email is too.
+    public static function employeeEmail(string $lastName, string $code): string
     {
-        $part = fn ($v) => preg_replace('/[^a-z]/', '', strtolower(\Illuminate\Support\Str::ascii($v))) ?: 'employee';
+        $last = preg_replace('/[^a-z]/', '', strtolower(\Illuminate\Support\Str::ascii($lastName))) ?: 'employee';
 
-        return $part($lastName).'.'.$part($firstName).'.'.preg_replace('/\D/', '', $code).'@atice.cloud';
+        return $last.'.'.preg_replace('/\D/', '', $code).'@atice.cloud';
     }
 
     // Next free code: EMP-0001, EMP-0002, ... (one above the highest in use).
@@ -61,6 +67,56 @@ class EmployeeController extends Controller
         if ($request->filled('phone')) {
             $request->merge(['phone' => PhoneFormatter::normalize((string) $request->phone)]);
         }
+    }
+
+    // Driver's license number in the LTO format (N01-23-456789).
+    private function cleanLicense(Request $request): void
+    {
+        if ($request->has('license_number')) {
+            $request->merge(['license_number' => DriverLicense::normalize($request->license_number)]);
+        }
+    }
+
+    // Monthly-rated employees: the daily rate is worked out from the monthly
+    // rate (App\Support\Rates), so everything that uses daily_rate keeps working.
+    private function cleanPay(Request $request): void
+    {
+        // Older clients send only the Day/Night label: use its default hours.
+        if (! $request->filled('shift_start') && in_array($request->input('shift'), ['day', 'night'], true)) {
+            $night = $request->input('shift') === 'night';
+            $request->merge([
+                'shift_start' => Settings::get($night ? 'attendance.night_shift_start' : 'attendance.shift_start'),
+                'shift_end' => Settings::get($night ? 'attendance.night_shift_end' : 'attendance.shift_end'),
+            ]);
+        }
+        if ($request->input('pay_basis') === 'monthly' && is_numeric($request->input('monthly_rate'))) {
+            $request->merge(['daily_rate' => Rates::dailyFromMonthly((float) $request->input('monthly_rate'))]);
+        }
+        if ($request->input('pay_basis') === 'daily') {
+            $request->merge(['monthly_rate' => null]);
+        }
+    }
+
+    // Probationary or regular, daily or monthly pay, and the shift hours.
+    private function workRules(): array
+    {
+        return [
+            'employment_status' => 'sometimes|in:probationary,regular',
+            'regularized_at' => 'nullable|date',
+            'pay_basis' => 'sometimes|in:daily,monthly',
+            'monthly_rate' => 'nullable|required_if:pay_basis,monthly|numeric|min:0|max:1000000',
+            'shift_start' => 'nullable|date_format:H:i',
+            'shift_end' => 'nullable|date_format:H:i',
+        ];
+    }
+
+    // A new hire may start up to 14 days from today. Until then they are left
+    // out of attendance, the kiosk and payroll.
+    public const HIRE_DAYS_AHEAD = 14;
+
+    public static function latestHireDate(): string
+    {
+        return now('Asia/Manila')->addDays(self::HIRE_DAYS_AHEAD)->toDateString();
     }
 
     // Middle initial: letters only, upper case ("d." -> "D"). Blank values are
@@ -107,10 +163,13 @@ class EmployeeController extends Controller
         ];
     }
 
-    public function index()
+    // GET employees?status=active (default) | inactive (archived) | all
+    public function index(Request $request)
     {
-        $employees = Employee::with(['user', 'faceData:id,employee_id,photo_path,created_at,updated_at'])
-            ->where('is_active', true)
+        $status = $request->query('status', 'active');
+        $employees = Employee::with(['user', 'faceData:id,employee_id,photo_path,created_at,updated_at', 'deactivatedBy:id,name'])
+            ->when($status === 'active', fn ($q) => $q->where('is_active', true))
+            ->when($status === 'inactive', fn ($q) => $q->where('is_active', false))
             ->where(function ($q) {
                 $q->whereHas('user', function ($q) {
                     $q->where(function ($q2) {
@@ -132,10 +191,12 @@ class EmployeeController extends Controller
     {
         $this->cleanPhone($request);
         $this->cleanNameParts($request);
+        $this->cleanLicense($request);
+        $this->cleanPay($request);
 
         $noAccount = in_array($request->position, self::NO_ACCOUNT_POSITIONS, true);
 
-        $request->validate($this->nameRules() + [
+        $request->validate($this->nameRules() + $this->workRules() + [
             'first_name' => 'required|string',
             'last_name' => 'required|string',
             // The login email is made by the server (employeeEmail), never sent.
@@ -149,11 +210,16 @@ class EmployeeController extends Controller
             'block_lot' => 'nullable|string|max:255',
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
+            ...AddressFormatter::PSGC_RULES,
             'position' => ['required', Rule::in(array_keys(self::POSITION_ROLES))],
             'daily_rate' => 'required|numeric|min:0|max:100000',
             'department' => ['nullable', Rule::in(self::DEPARTMENTS)],
-            'date_hired' => 'required|date|before_or_equal:today',
-            'shift' => 'required|in:day,night',
+            // Past dates, or up to 14 days ahead (R3)
+            'date_hired' => ['required', 'date', 'before_or_equal:'.self::latestHireDate()],
+            // The old Day/Night label is worked out from the time range.
+            'shift' => 'nullable|in:day,night',
+            'shift_start' => 'required|date_format:H:i',
+            'shift_end' => 'required|date_format:H:i',
             'employment_type' => 'required|in:regular,contractual,part_time',
             // 'driver' added (v29.7) — Driver is now manageable from this
             // page, but is NOT a real sub_role; see below, it maps to its
@@ -164,9 +230,19 @@ class EmployeeController extends Controller
             // generically here — the frontend only shows/sends this field
             // when Employee Role is set to Driver.
             'vehicle_plate' => 'nullable|string|max:20',
-        ], [
+            // Required for Drivers; ignored for every other position.
+            'license_number' => [
+                (self::POSITION_ROLES[$request->position] ?? null) === 'driver' ? 'required' : 'nullable',
+                'regex:'.DriverLicense::REGEX,
+                Rule::unique('employees', 'license_number'),
+            ],
+            'license_expiry' => DriverLicense::expiryRules((self::POSITION_ROLES[$request->position] ?? null) === 'driver'),
+        ], DriverLicense::EXPIRY_MESSAGES + [
             'phone.regex' => self::PHONE_MESSAGE,
-        ] + self::NAME_MESSAGES);
+            'license_number.required' => "Enter the driver's license number.",
+            'license_number.regex' => DriverLicense::MESSAGE,
+            'license_number.unique' => 'Another employee already has this license number.',
+        ] + ['date_hired.before_or_equal' => 'The hire date can be at most '.self::HIRE_DAYS_AHEAD.' days from today.'] + self::NAME_MESSAGES);
 
         // The login role is derived from Position, so the two cannot disagree.
         // Any sub_role sent by the client is ignored.
@@ -205,7 +281,7 @@ class EmployeeController extends Controller
         if (! $noAccount) {
             $user = User::create([
                 'name' => Employee::composeName($request->first_name, $request->middle_initial, $request->last_name, $request->suffix),
-                'email' => self::employeeEmail($request->last_name, $request->first_name, $code),
+                'email' => self::employeeEmail($request->last_name, $code),
                 'password' => Hash::make($password),
                 // Driver keeps its own top-level role, not employee+sub_role —
                 // this is what keeps the role:driver routes
@@ -236,16 +312,29 @@ class EmployeeController extends Controller
             'barangay' => $request->barangay,
             'city' => $request->city,
             'province' => $request->province,
+            'region' => $request->region,
+            'barangay_code' => $request->barangay_code,
             'postal_code' => $request->postal_code,
             'position' => $request->position,
             'department' => $request->department,
             'daily_rate' => $request->daily_rate,
             'date_hired' => $request->date_hired,
             'employment_type' => $request->employment_type,
-            'shift' => $request->shift,
+            'shift' => Lateness::label($request->shift_start, $request->shift_end),
+            'shift_start' => $request->shift_start,
+            'shift_end' => $request->shift_end,
+            'pay_basis' => $request->pay_basis ?? 'daily',
+            'monthly_rate' => $request->pay_basis === 'monthly' ? $request->monthly_rate : null,
+            // New hires start probationary unless HR says otherwise.
+            'employment_status' => $request->employment_status ?? 'probationary',
+            'regularized_at' => ($request->employment_status ?? 'probationary') === 'regular'
+                ? ($request->regularized_at ?? $request->date_hired)
+                : null,
             // Only ever meaningful for Driver rows; left null for everyone
             // else regardless of what the request sends.
             'vehicle_plate' => $isDriver ? $request->vehicle_plate : null,
+            'license_number' => $isDriver ? $request->license_number : null,
+            'license_expiry' => $isDriver ? $request->license_expiry : null,
         ]);
 
         return [$user, $employee];
@@ -266,6 +355,9 @@ class EmployeeController extends Controller
 
         $this->cleanPhone($request);
         $this->cleanNameParts($request);
+        $this->cleanLicense($request);
+        $this->cleanPay($request);
+        $isDriver = $employee->user?->role === 'driver';
 
         // Old employees have only the single free-text address and can be edited
         // without the new fields. But once any new address field is filled (or the
@@ -276,7 +368,7 @@ class EmployeeController extends Controller
             ? 'required|string|max:255'
             : 'nullable|string|max:255|required_with:block_lot,street,subdivision,barangay,city,province,postal_code';
 
-        $request->validate($this->nameRules() + [
+        $request->validate($this->nameRules() + $this->workRules() + [
             'first_name' => 'sometimes|required|string',
             'last_name' => 'sometimes|required|string',
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
@@ -287,8 +379,19 @@ class EmployeeController extends Controller
             'block_lot' => 'nullable|string|max:255',
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
+            ...AddressFormatter::PSGC_RULES,
             'vehicle_plate' => 'nullable|string|max:20',
-            'date_hired' => 'sometimes|date|before_or_equal:today',
+            'license_number' => [
+                $isDriver ? 'required' : 'nullable',
+                'regex:'.DriverLicense::REGEX,
+                Rule::unique('employees', 'license_number')->ignore($employee->id),
+            ],
+            // An unchanged date is not checked again (a saved license may have
+            // expired since); a new or changed one must still be valid.
+            'license_expiry' => $request->license_expiry !== null && $request->license_expiry === $employee->license_expiry?->toDateString()
+                ? ['nullable']
+                : DriverLicense::expiryRules($isDriver),
+            'date_hired' => ['sometimes', 'date', 'before_or_equal:'.self::latestHireDate()],
             // Editable any time (promotion, rate change); payroll uses the saved rate.
             'daily_rate' => 'sometimes|required|numeric|min:0|max:100000',
             // From the list; an older free-text value is kept if left unchanged.
@@ -310,8 +413,11 @@ class EmployeeController extends Controller
                     }
                 },
             ],
-        ], [
+        ], DriverLicense::EXPIRY_MESSAGES + [
             'phone.regex' => self::PHONE_MESSAGE,
+            'license_number.required' => "Enter the driver's license number.",
+            'license_number.regex' => DriverLicense::MESSAGE,
+            'license_number.unique' => 'Another employee already has this license number.',
         ] + self::NAME_MESSAGES);
 
         $data = $request->only([
@@ -326,14 +432,27 @@ class EmployeeController extends Controller
             'barangay',
             'city',
             'province',
+            'region',
+            'barangay_code',
             'postal_code',
             'position',
             'department',
             'daily_rate',
             'shift',
             'employment_type',
+            'employment_status',
+            'regularized_at',
+            'pay_basis',
+            'monthly_rate',
+            'shift_start',
+            'shift_end',
             'vehicle_plate',
+            'license_number',
+            'license_expiry',
         ]);
+        if (! $isDriver) {
+            unset($data['license_number'], $data['license_expiry']);
+        }
 
         // Rebuild the one-line address only when the separate fields were sent.
         $composed = AddressFormatter::compose($data + $employee->only(AddressFormatter::FIELDS));
@@ -341,7 +460,20 @@ class EmployeeController extends Controller
             $data['address'] = $composed;
         }
 
+        if (isset($data['shift_start'], $data['shift_end'])) {
+            $data['shift'] = Lateness::label($data['shift_start'], $data['shift_end']);
+        }
+
+        // Made regular: leave credits count from this date (docs/REVIEW-DECISIONS.md).
+        $regularized = ($data['employment_status'] ?? null) === 'regular' && $employee->employment_status !== 'regular';
+        if ($regularized && empty($data['regularized_at'])) {
+            $data['regularized_at'] = now()->toDateString();
+        }
+
         $employee->update($data);
+        if ($regularized) {
+            Audit::log('employee.regularized', $employee, ['employment_status' => 'probationary'], ['employment_status' => 'regular', 'regularized_at' => $employee->regularized_at?->toDateString()]);
+        }
 
         // Keep the login account name in step with the employee name.
         if ($employee->user && $request->hasAny(['first_name', 'middle_initial', 'last_name', 'suffix'])) {
@@ -358,21 +490,45 @@ class EmployeeController extends Controller
     // Deactivating an employee also disables the login account and signs it
     // out everywhere, so a former employee can no longer access the system.
     // Attendance, payroll and inventory history are kept.
-    public function destroy($id)
+    // Never a hard delete: the row is kept (Archived), with who deactivated it
+    // and when, and can be reactivated for a rehire.
+    public function destroy(Request $request, $id)
     {
         $employee = Employee::with('user')->findOrFail($id);
-        $employee->update(['is_active' => false]);
+        if (! $employee->is_active) {
+            return response()->json(['message' => 'This employee is already inactive.'], 422);
+        }
+        $employee->update(['is_active' => false, 'deactivated_at' => now(), 'deactivated_by' => $request->user()?->id]);
 
         if ($employee->user) {
             $employee->user->update(['is_active' => false]);
             // Revoke all Sanctum tokens so any open session stops working immediately.
             $employee->user->tokens()->delete();
         }
+        Audit::log('employee.deactivated', $employee, ['status' => 'active'], ['status' => 'inactive']);
 
         return response()->json([
             'message' => $employee->user
                 ? 'Employee deactivated successfully! Their login account has been disabled.'
                 : 'Employee deactivated successfully!',
+        ]);
+    }
+
+    // POST employees/{id}/reactivate : a rehire keeps the same employee ID and
+    // history; their login works again with the same email and password.
+    public function reactivate($id)
+    {
+        $employee = Employee::with('user')->findOrFail($id);
+        if ($employee->is_active) {
+            return response()->json(['message' => 'This employee is already active.'], 422);
+        }
+        $employee->update(['is_active' => true, 'deactivated_at' => null, 'deactivated_by' => null]);
+        $employee->user?->update(['is_active' => true]);
+        Audit::log('employee.reactivated', $employee, ['status' => 'inactive'], ['status' => 'active']);
+
+        return response()->json([
+            'message' => "{$employee->full_name} ({$employee->employee_id}) is active again.",
+            'employee' => $employee->fresh(),
         ]);
     }
 }

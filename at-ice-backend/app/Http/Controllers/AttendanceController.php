@@ -6,7 +6,9 @@ use App\Events\AttendanceRecorded;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\FaceData;
+use App\Models\Holiday;
 use App\Models\LeaveRequest;
+use App\Support\Lateness;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -16,25 +18,69 @@ class AttendanceController extends Controller
     // is no longer matched by a new scan.
     private const MAX_SHIFT_HOURS = 16;
 
+    // GET /api/attendances?date= | ?from=&to= [&employee_id=] : newest first.
     public function index(Request $request)
+    {
+        // Each record says if its date is a holiday (shown as a Holiday badge).
+        return response()->json($this->query($request)->get()->each(function ($a) {
+            $h = Holiday::forDate($a->date->toDateString());
+            $a->setAttribute('holiday', $h ? ['name' => $h->name, 'type' => $h->type] : null);
+        }));
+    }
+
+    // GET /api/attendances/export?from=&to=[&employee_id=] : CSV of the history
+    // (for documentation and coaching, e.g. absences in a row). The PDF is the
+    // same list printed from the page.
+    public function export(Request $request)
+    {
+        $request->validate(['from' => 'required|date', 'to' => 'required|date|after_or_equal:from']);
+        $rows = $this->query($request)->get();
+        $name = 'attendance-'.$request->from.'-to-'.$request->to.'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Employee ID', 'Name', 'Position', 'Date', 'Time In', 'Time Out', 'Hours', 'Late (min)', 'Status', 'Notes']);
+            foreach ($rows as $a) {
+                fputcsv($out, [
+                    $a->employee?->employee_id ?? '',
+                    $a->employee?->full_name ?? $a->faceData?->worker_name ?? '',
+                    $a->employee?->position ?? $a->faceData?->role ?? '',
+                    $a->date?->toDateString(),
+                    $a->time_in,
+                    $a->time_out,
+                    $a->hours_worked,
+                    $a->late_minutes,
+                    $a->status,
+                    $a->notes,
+                ]);
+            }
+            fclose($out);
+        }, $name, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function query(Request $request)
     {
         $request->validate([
             'date' => 'nullable|date',
+            'from' => 'nullable|date',
+            'to' => 'nullable|date|after_or_equal:from',
+            'employee_id' => 'nullable|integer',
         ]);
 
-        $attendances = Attendance::with([
+        return Attendance::with([
             'employee',
             'recordedBy',
             'faceData:id,worker_name,role,employee_id',
         ])
-            ->when($request->filled('date'), function ($query) use ($request) {
-                $query->whereDate('date', $request->date);
+            ->when($request->filled('date'), fn ($q) => $q->whereDate('date', $request->date))
+            ->when($request->filled('from'), fn ($q) => $q->whereDate('date', '>=', $request->from))
+            ->when($request->filled('to'), fn ($q) => $q->whereDate('date', '<=', $request->to))
+            ->when($request->filled('employee_id'), function ($q) use ($request) {
+                $id = (int) $request->employee_id;
+                $q->where(fn ($w) => $w->where('employee_id', $id)->orWhereHas('faceData', fn ($f) => $f->where('employee_id', $id)));
             })
             ->orderBy('date', 'desc')
-            ->orderBy('time_in', 'asc')
-            ->get();
-
-        return response()->json($attendances);
+            ->orderBy('time_in', 'desc');
     }
 
     // GET /api/attendances/summary?employee_id=&from=&to=
@@ -75,7 +121,7 @@ class AttendanceController extends Controller
             'days_worked' => $days,
             'days_present' => $rows->count(),
             'missing_time_out' => $missingTimeOut,
-            'hours_worked' => round((float) $rows->flatten()->sum('hours_worked'), 2),
+            'hours_worked' => round((float) $rows->flatten(1)->sum('hours_worked'), 2),
         ]);
     }
 
@@ -101,6 +147,14 @@ class AttendanceController extends Controller
 
         $now = now();
         $today = $now->toDateString();
+
+        // A new hire whose start date has not come yet cannot time in.
+        if ($faceData->employee_id && Employee::whereKey($faceData->employee_id)->whereDate('date_hired', '>', $today)->exists()) {
+            $starts = Employee::whereKey($faceData->employee_id)->value('date_hired');
+
+            return $this->reject($faceData, 'not_started',
+                'Your start date is '.Carbon::parse($starts)->format('M j, Y').'. Time In opens on that day.');
+        }
 
         // Open record: today's, or yesterday's for a night shift
         $open = Attendance::where('face_data_id', $faceData->id)
@@ -142,9 +196,22 @@ class AttendanceController extends Controller
             $minutes = $openIn->diffInMinutes($now, true);
             $hours = round($minutes / 60, 2);
 
+            // Overtime: whole minutes past the shift end (overnight shifts end
+            // the next day). Paid only after HR approves it on the timesheet.
+            $ot = 0;
+            $emp = $faceData->employee_id ? Employee::find($faceData->employee_id) : null;
+            if ($emp?->shift_end) {
+                $shiftEnd = Carbon::parse($openIn->toDateString().' '.$emp->shift_end);
+                if (Lateness::label((string) $emp->shift_start, (string) $emp->shift_end) === 'night') {
+                    $shiftEnd->addDay();
+                }
+                $ot = max(0, (int) floor($shiftEnd->diffInSeconds($now, false) / 60));
+            }
+
             $open->update([
                 'time_out' => $now->format('H:i:s'),
                 'hours_worked' => $hours,
+                'ot_minutes' => $ot,
             ]);
 
             $this->notify($faceData, $open, 'time_out',
@@ -171,15 +238,22 @@ class AttendanceController extends Controller
                 'Time In and Time Out are already recorded for today.');
         }
 
+        // Late minutes from the shift start (whole minutes; 9:00:59 is on time).
+        $timeIn = $now->format('H:i:s');
+        $shiftStart = Lateness::shiftStart($faceData->employee_id ? Employee::find($faceData->employee_id) : null);
+        // On a holiday no one is late (R3).
+        $late = $shiftStart && ! Holiday::forDate($today) ? Lateness::minutes($shiftStart, $timeIn) : 0;
+
         $attendance = Attendance::create([
             'face_data_id' => $faceData->id,
             'employee_id' => $faceData->employee_id,
             'recorded_by' => null,
             'date' => $today,
-            'time_in' => $now->format('H:i:s'),
+            'time_in' => $timeIn,
             'time_out' => null,
             'hours_worked' => 0,
-            'status' => 'present',
+            'late_minutes' => $late,
+            'status' => $late > 0 ? 'late' : 'present',
             'notes' => null,
         ]);
 
@@ -228,34 +302,21 @@ class AttendanceController extends Controller
         }
     }
 
-    // PUT update attendance (HR correction)
+    // PUT update attendance: a note only. Times, hours, late minutes and status
+    // come only from the kiosk scans (no manual timekeeping edits).
     public function update(Request $request, $id)
     {
         $attendance = Attendance::findOrFail($id);
 
-        $data = $request->validate([
-            'time_out' => ['sometimes', 'nullable', 'regex:/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/'],
-            'status' => 'sometimes|in:present,absent,late,half_day,on_leave',
-            'notes' => 'sometimes|nullable|string|max:500',
-        ], [
-            'time_out.regex' => 'Time Out must be a time like 17:30.',
-        ]);
-
-        // Hours worked always come from Time In and Time Out, never typed in.
-        // A Time Out earlier than the Time In is the next morning (night shift).
-        if (array_key_exists('time_out', $data)) {
-            if ($data['time_out'] === null || ! $attendance->time_in) {
-                $data['hours_worked'] = 0;
-            } else {
-                $data['time_out'] = Carbon::parse($data['time_out'])->format('H:i:s');
-                $in = Carbon::parse($attendance->time_in);
-                $out = Carbon::parse($data['time_out']);
-                if ($out->lt($in)) {
-                    $out->addDay();
-                }
-                $data['hours_worked'] = round($in->diffInMinutes($out, true) / 60, 2);
-            }
+        if ($request->hasAny(['time_in', 'time_out', 'status', 'hours_worked', 'late_minutes', 'date'])) {
+            return response()->json([
+                'message' => 'Attendance times and status come only from the Attendance Station and cannot be edited. Add a note instead.',
+            ], 422);
         }
+
+        $data = $request->validate([
+            'notes' => 'required|nullable|string|max:500',
+        ]);
 
         $attendance->update($data);
 
@@ -273,7 +334,8 @@ class AttendanceController extends Controller
         $request->validate(['date' => 'nullable|date']);
         $date = $request->filled('date') ? Carbon::parse($request->date)->toDateString() : now()->toDateString();
 
-        $employees = Employee::where('is_active', true)->get();
+        // Active and already started (a future hire is not "not in yet")
+        $employees = Employee::where('is_active', true)->whereDate('date_hired', '<=', $date)->get();
 
         $leaves = LeaveRequest::where('status', 'approved')
             ->whereDate('start_date', '<=', $date)
@@ -286,6 +348,7 @@ class AttendanceController extends Controller
 
         $row = fn ($e) => [
             'id' => $e->id,
+            'employee_id' => $e->employee_id,
             'name' => $e->full_name,
             'position' => $e->position,
         ];
@@ -299,11 +362,14 @@ class AttendanceController extends Controller
                 'timed_in' => $timedIn->has($e->id),
             ])->values();
 
-        $notIn = $employees->filter(fn ($e) => ! $timedIn->has($e->id) && ! $leaves->has($e->id))
+        // On a holiday no one is absent or "not in yet" (R3).
+        $holiday = Holiday::forDate($date);
+        $notIn = $holiday ? collect() : $employees->filter(fn ($e) => ! $timedIn->has($e->id) && ! $leaves->has($e->id))
             ->map($row)->values();
 
         return response()->json([
             'date' => $date,
+            'holiday' => $holiday ? ['name' => $holiday->name, 'type' => $holiday->type] : null,
             'total_employees' => $employees->count(),
             'not_in' => $notIn->sortBy('name')->values(),
             'on_leave' => $onLeave->sortBy('name')->values(),

@@ -1,7 +1,7 @@
 import { COMPANY } from "./company";
 import { PRINT_BASE_CSS, printDocument } from "./printDocument";
 
-// Prints a delivery receipt (Admin > Receipts and Customer > Receipts).
+// Prints a delivery invoice (Admin > Invoices and Customer > Invoices & Balance).
 // It is a system copy for the customer, not a BIR official receipt, and says
 // so on the page. Printed from a hidden iframe like the HR payslip, so no
 // popup opens and the page itself is not affected.
@@ -38,7 +38,7 @@ export function printReceipt(receipt, customer) {
     .join("");
 
   const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Delivery Receipt ${esc(r.receipt_no)}</title>
+<html><head><meta charset="utf-8"><title>Invoice ${esc(r.receipt_no)}</title>
 <style>
   ${PRINT_BASE_CSS}
   body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
@@ -71,7 +71,7 @@ export function printReceipt(receipt, customer) {
       <div class="sub">${esc(COMPANY.address)}<br>${esc(COMPANY.hotline)} · ${esc(COMPANY.email)}</div>
     </div>
     <div class="title">
-      <h1>DELIVERY RECEIPT</h1>
+      <h1>DELIVERY INVOICE</h1>
       <div>No. <strong>${esc(r.receipt_no || "—")}</strong></div>
       <div>Date: ${esc(day(r.created_at))}</div>
       <div class="stamp ${esc(status)}">${esc(PAY_LABEL[status] || status.toUpperCase())}</div>
@@ -100,7 +100,7 @@ export function printReceipt(receipt, customer) {
   </div>
 
   <div class="notice">
-    This is a system-generated delivery receipt for the customer's records. It is not an official receipt (BIR).<br>
+    This is a system-generated delivery invoice for the customer's records. It is not an official receipt (BIR).<br>
     Printed ${esc(new Date().toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }))} · AT-ICE ERP
   </div>
 </div></body></html>`;

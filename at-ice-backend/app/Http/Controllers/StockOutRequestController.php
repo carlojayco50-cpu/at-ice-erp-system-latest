@@ -17,6 +17,7 @@ class StockOutRequestController extends Controller
         'approvedBy:id,name',
         'releasedBy:id,name',
         'product:id,name,unit,current_stock',
+        'project:id,name,status',
     ];
 
     /**
@@ -82,7 +83,10 @@ class StockOutRequestController extends Controller
             'product_id' => ['required', Rule::exists('products', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'quantity' => 'required|integer|min:1',
             'purpose' => 'required|string|max:1000',
+            // The project on Admin's board it is for (optional; only open projects).
+            'project_id' => ['nullable', Rule::exists('projects', 'id')->whereIn('status', ['planned', 'working', 'stuck'])],
         ], [
+            'project_id.exists' => 'That project is closed or no longer exists. Choose another one.',
             'product_id.required' => 'Choose the item you need.',
             'product_id.exists' => 'That item is no longer in the inventory.',
         ]);
@@ -97,6 +101,7 @@ class StockOutRequestController extends Controller
         $stockOutRequest = StockOutRequest::create([
             'requested_by' => $user->id,
             'product_id' => $product->id,
+            'project_id' => $validated['project_id'] ?? null,
             'item_name' => $product->name,
             'quantity' => $validated['quantity'],
             'purpose' => $validated['purpose'],

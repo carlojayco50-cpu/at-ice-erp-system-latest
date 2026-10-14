@@ -11,7 +11,8 @@ class Supplier extends Model
 
     protected $fillable = [
         'supplier_code', 'name', 'contact_person', 'contact_number',
-        'email', 'address', 'city', 'province', 'status', 'notes',
+        'email', 'address', 'barangay', 'barangay_code', 'city', 'province', 'region',
+        'status', 'notes',
     ];
 
     public function deliveries()

@@ -17,6 +17,9 @@ class Attendance extends Model
         'time_in',
         'time_out',
         'hours_worked',
+        'late_minutes',
+        'ot_minutes',
+        'ot_approved',
         'status',
         'notes',
     ];
@@ -24,6 +27,7 @@ class Attendance extends Model
     protected $casts = [
         'date' => 'date',
         'hours_worked' => 'decimal:2',
+        'ot_approved' => 'boolean',
     ];
 
     // Relationship - Attendance belongs to FaceData

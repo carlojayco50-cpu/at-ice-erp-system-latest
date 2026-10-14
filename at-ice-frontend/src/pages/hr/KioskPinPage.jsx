@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import HrLayout from "../../components/HrLayout";
 import PasswordInput from "../../components/PasswordInput";
+import { toast } from "../../lib/toast";
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -42,10 +43,6 @@ export default function KioskPinPage() {
   const [pinSaving, setPinSaving] = useState(false);
   const [pinMsg, setPinMsg] = useState(null); // { tone, text }
 
-  const [clearPassword, setClearPassword] = useState("");
-  const [clearing, setClearing] = useState(false);
-  const [clearMsg, setClearMsg] = useState(null);
-
   const loadStatus = useCallback(async () => {
     try {
       setStatus(await api("/api/hr/kiosk-pin"));
@@ -79,25 +76,6 @@ export default function KioskPinPage() {
     }
   }
 
-  async function clearLockout(e) {
-    e.preventDefault();
-    setClearing(true);
-    setClearMsg(null);
-    try {
-      const data = await api("/api/hr/kiosk-pin/clear-lockout", {
-        method: "POST",
-        body: JSON.stringify({ current_password: clearPassword }),
-      });
-      setClearMsg({ tone: "ok", text: data.message });
-      setClearPassword("");
-      loadStatus();
-    } catch (err) {
-      setClearMsg({ tone: "error", text: err.message });
-    } finally {
-      setClearing(false);
-    }
-  }
-
   return (
     <HrLayout pageTitle="Kiosk PIN" breadcrumb="HRIS / Kiosk PIN">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl">
@@ -127,9 +105,9 @@ export default function KioskPinPage() {
                 <dd className="mt-0.5 font-medium text-slate-800">{status.unlocked_kiosks}</dd>
               </div>
               <div className="rounded-lg bg-slate-50 border border-black/[0.06] px-3 py-2">
-                <dt className="text-slate-400">Lockout</dt>
-                <dd className={`mt-0.5 font-medium ${status.locked_out ? "text-red-600" : "text-slate-800"}`}>
-                  {status.locked_out ? "Active (too many wrong PINs)" : "None"}
+                <dt className="text-slate-400">Locked kiosks</dt>
+                <dd className={`mt-0.5 font-medium ${status.locked_kiosks?.length ? "text-red-600" : "text-slate-800"}`}>
+                  {status.locked_kiosks?.length || "None"}
                 </dd>
               </div>
             </dl>
@@ -194,36 +172,33 @@ export default function KioskPinPage() {
           </button>
         </form>
 
-        {/* Clear a lockout */}
-        <form onSubmit={clearLockout} className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3 self-start">
+        {/* Locked kiosks: only Admin can unlock them, on the kiosk itself */}
+        <div className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3 self-start">
           <div>
-            <h2 className="text-[15px] font-semibold text-slate-800">Clear lockout</h2>
+            <h2 className="text-[15px] font-semibold text-slate-800">Locked kiosks</h2>
             <p className="text-[12px] text-slate-500 mt-0.5">
-              After 5 wrong PINs a terminal is locked out for 15 minutes. Clear it here if the right person is locked out.
+              After 5 wrong PINs in a row a kiosk stays locked until an Admin types the Admin override PIN on that kiosk{status?.can_unlock ? " or unlocks it here" : ". HR cannot unlock it"}. HR and Admin are notified when a kiosk locks.
             </p>
           </div>
-
-          {clearMsg && <Notice tone={clearMsg.tone}>{clearMsg.text}</Notice>}
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-slate-500">Your account password</span>
-            <PasswordInput
-              autoComplete="current-password"
-              value={clearPassword}
-              onChange={(e) => setClearPassword(e.target.value)}
-              className={inputCls}
-              required
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={!clearPassword || clearing}
-            className="self-start px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-700 hover:bg-slate-50 text-[12px] font-medium disabled:opacity-50"
-          >
-            {clearing ? "Clearing…" : "Clear lockout"}
-          </button>
-        </form>
+          {!status?.locked_kiosks?.length ? (
+            <p className="text-[12px] text-slate-400">No kiosk is locked.</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {status.locked_kiosks.map((k) => (
+                <li key={k.kiosk + k.locked_at} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px]">
+                  <span className="font-mono font-semibold text-red-700">Kiosk {k.kiosk}</span>
+                  <span className="text-red-600">Locked {fmtDateTime(k.locked_at)}{k.ip ? ` · ${k.ip}` : ""}</span>
+                  {status.can_unlock && (
+                    <button type="button" onClick={async () => {
+                      try { toast.success((await api(`/api/kiosk-devices/${k.id}/unlock`, { method: "POST" })).message); loadStatus(); }
+                      catch (e) { toast.error(e.message); }
+                    }} className="px-2.5 py-1 rounded-md bg-white border border-red-300 text-red-700 font-semibold hover:bg-red-100 cursor-pointer">Unlock</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </HrLayout>
   );

@@ -59,6 +59,9 @@ export default function MaintenanceStockOutRequestPage() {
   const [notice, setNotice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [purpose, setPurpose] = useState("");
+  // Open projects on Admin's board (GET /api/project-options); optional
+  const [projects, setProjects] = useState([]);
+  const [projectId, setProjectId] = useState("");
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,11 +105,18 @@ export default function MaintenanceStockOutRequestPage() {
     } catch (err) {
       setItemsError(err.message || "Could not load the items.");
     }
+    try {
+      const res = await fetch("/api/project-options", { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+      const data = res.ok ? await res.json() : [];
+      setProjects(Array.isArray(data) ? data : []);
+    } catch {
+      setProjects([]);
+    }
   }, [token]);
 
   // Load on open
   // reload when a live notice for this page arrives (lib/live.js)
-  const live = useLiveTick(["stock-out", "inventory"]);
+  const live = useLiveTick(["stock-out", "inventory", "projects"]);
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests, live]);
@@ -146,6 +156,7 @@ export default function MaintenanceStockOutRequestPage() {
           product_id: Number(productId),
           quantity: Number(quantity),
           purpose: purpose.trim(),
+          project_id: projectId ? Number(projectId) : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -156,6 +167,7 @@ export default function MaintenanceStockOutRequestPage() {
       setProductId("");
       setQuantity("");
       setPurpose("");
+      setProjectId("");
       setShowForm(false);
       fetchRequests();
     } catch (err) {
@@ -243,6 +255,22 @@ export default function MaintenanceStockOutRequestPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
+              <label htmlFor="sor-project" className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+                Project (optional)
+              </label>
+              <select
+                id="sor-project"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
+              >
+                <option value="">No project</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <span className="text-[11px] text-slate-400 px-0.5">The job this is for, from Admin's project board.</span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
                 Purpose
               </label>
@@ -319,6 +347,11 @@ export default function MaintenanceStockOutRequestPage() {
               <div className="text-[12px] text-slate-500 mt-2 leading-snug">
                 {req.purpose}
               </div>
+              {req.project?.name && (
+                <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-violet-50 border border-violet-200 text-[11px] font-medium text-violet-700">
+                  Project: {req.project.name}
+                </div>
+              )}
 
               <div className="text-[11px] text-slate-400 mt-2">
                 {req.status === "pending" && "Waiting for Admin approval"}

@@ -323,7 +323,7 @@ function SubmittedProof({ delivery }) {
       {receipt && (
         <div className="border border-black/[0.08] rounded-xl overflow-hidden">
           <div className="bg-slate-50 border-b border-black/[0.08] px-3 py-2 flex items-center justify-between">
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest">Receipt</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-widest">Invoice</span>
             <span className="text-[12px] font-mono font-semibold text-slate-800">{receipt.receipt_no || "—"}</span>
           </div>
           <div className="px-3 py-2 flex flex-col gap-1.5">

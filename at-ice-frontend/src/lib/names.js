@@ -19,5 +19,13 @@ export function lastFirstName(e) {
   return [last, first].filter(Boolean).join(", ");
 }
 
+// A shift as hours: "09:00–18:00", or "21:00–06:00 (next day)" overnight.
+export function shiftLabel(e) {
+  const start = String(e?.shift_start || "").slice(0, 5);
+  const end = String(e?.shift_end || "").slice(0, 5);
+  if (!start || !end) return e?.shift === "night" ? "Night" : e?.shift ? "Day" : "—";
+  return `${start}–${end}${end <= start ? " (next day)" : ""}`;
+}
+
 // Middle initial as typed: letters only, upper case, at most two ("d." -> "D")
 export const cleanInitial = (v) => String(v || "").replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 2);

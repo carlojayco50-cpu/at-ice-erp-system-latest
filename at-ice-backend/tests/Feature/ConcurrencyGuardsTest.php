@@ -38,11 +38,11 @@ class ConcurrencyGuardsTest extends TestCase
 
     public function test_a_receipt_number_is_never_reused_after_a_gap(): void
     {
-        $prefix = 'RCP-'.now()->format('Ymd').'-';
+        $prefix = 'ALF-'.now()->format('Ymd').'-';
         // Today's receipts 001 and 003 exist (002 is missing): a count would
         // give 003 again, the next number must be 004.
         $user = User::create(['name' => 'Salesman', 'email' => 'sales@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']);
-        $customer = Customer::create(['name' => 'Alfamart Muzon', 'customer_code' => 'CUST-ALF-001', 'branch_code' => 'ALF-SJDM-001', 'is_active' => true]);
+        $customer = Customer::create(['name' => 'Alfamart Muzon', 'customer_code' => 'CUST-ALF-001', 'branch_code' => 'ALF-SJDM-001', 'invoice_code' => 'ALF', 'is_active' => true]);
         $delivery = Delivery::create([
             'delivery_no' => 'DEL-0001', 'driver_id' => $user->id, 'customer_id' => $customer->id,
             'status' => 'delivered', 'scheduled_date' => now()->toDateString(), 'prepared_by' => $user->id,
@@ -55,6 +55,6 @@ class ConcurrencyGuardsTest extends TestCase
             ]);
         }
 
-        $this->assertSame($prefix.'004', Receipt::generateReceiptNo());
+        $this->assertSame($prefix.'004', Receipt::generateReceiptNo($customer));
     }
 }

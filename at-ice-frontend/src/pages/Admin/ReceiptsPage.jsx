@@ -21,10 +21,11 @@ const EyeIcon = () => <svg width="13" height="13" fill="none" stroke="currentCol
 const CheckIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
 const BellIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
 
+// Board colors (lib/boardTones.js, monday.com style): a solid status cell.
 const STATUS_STYLE = {
-  unpaid:   { bg: "bg-amber-50",  text: "text-amber-700" },
-  overdue:  { bg: "bg-red-50",    text: "text-red-700"   },
-  paid:     { bg: "bg-green-50",  text: "text-green-700" },
+  unpaid:   { bg: "bg-[#fdab3d]", text: "text-white" },
+  overdue:  { bg: "bg-[#e2445c]", text: "text-white" },
+  paid:     { bg: "bg-[#00c875]", text: "text-white" },
 };
 
 const FILTERS = [
@@ -74,7 +75,7 @@ export default function ReceiptsPage() {
       setReceipts(Array.isArray(listData) ? listData : []);
       setSummary(summaryData);
     } catch (err) {
-      setError("Couldn't load receipts. Check that the backend is running.");
+      setError("Couldn't load invoices. Check that the backend is running.");
       console.error("fetchAll error:", err);
     } finally {
       setLoading(false);
@@ -90,7 +91,7 @@ export default function ReceiptsPage() {
   useEffect(() => {
     const channel = echo.channel("payments");
     channel.listen(".payment.overdue", (e) => {
-      setLiveNotice(e.message || `Receipt ${e.receipt_no} is overdue.`);
+      setLiveNotice(e.message || `Invoice ${e.receipt_no} is overdue.`);
       fetchAll();
     });
     return () => { echo.leaveChannel("payments"); };
@@ -106,7 +107,7 @@ export default function ReceiptsPage() {
         body: JSON.stringify({ payment_method: payMethod }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Failed to mark receipt as paid.");
+      if (!res.ok) throw new Error(data?.message || "Failed to mark invoice as paid.");
       setPayTarget(null);
       setPayMethod("cash");
       fetchAll();
@@ -127,7 +128,7 @@ export default function ReceiptsPage() {
   });
 
   return (
-    <AdminLayout pageTitle="Receipts" breadcrumb="CRM / Receipts">
+    <AdminLayout pageTitle="Invoices" breadcrumb="CRM / Invoices">
       {liveNotice && (
         <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-[12px] text-red-700">
           <BellIcon /> {liveNotice}
@@ -142,14 +143,14 @@ export default function ReceiptsPage() {
           <SummaryCard label="Total Sales (Paid)" value={peso(summary.total_sales)} color="text-slate-800" />
           <SummaryCard label="Unpaid" value={peso(summary.total_unpaid)} color="text-amber-600" />
           <SummaryCard label="Overdue" value={peso(summary.total_overdue)} color="text-red-600" />
-          <SummaryCard label="Total Receipts" value={summary.receipt_count} color="text-slate-800" />
+          <SummaryCard label="Total Invoices" value={summary.receipt_count} color="text-slate-800" />
         </div>
       )}
 
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div>
-            <h2 className="text-[15px] font-semibold text-slate-800">Receipts</h2>
+            <h2 className="text-[15px] font-semibold text-slate-800">Invoices</h2>
             <p className="text-[12px] text-slate-500 mt-0.5">
               Auto-generated when a Salesman confirms a delivery. Unpaid receipts older than 15 days are marked overdue automatically.
             </p>
@@ -160,7 +161,7 @@ export default function ReceiptsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search receipt..."
+              placeholder="Search invoice or customer code..."
               className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-44"
             />
           </div>
@@ -190,7 +191,7 @@ export default function ReceiptsPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
-                <th className="px-[18px] py-2.5 font-medium">Receipt No.</th>
+                <th className="px-[18px] py-2.5 font-medium">Invoice No.</th>
                 <th className="px-[18px] py-2.5 font-medium">Customer</th>
                 <th className="px-[18px] py-2.5 font-medium">Salesman</th>
                 <th className="px-[18px] py-2.5 font-medium">Amount</th>
@@ -204,7 +205,7 @@ export default function ReceiptsPage() {
               )}
               {!loading && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
-                  {search || filter !== "all" ? "No receipts match your filters." : "No receipts yet."}
+                  {search || filter !== "all" ? "No invoices match your filters." : "No invoices yet."}
                 </td></tr>
               )}
               {!loading && filtered.map((r) => {
@@ -216,7 +217,7 @@ export default function ReceiptsPage() {
                     <td className="px-[18px] py-2.5 text-slate-600">{r.salesman?.name || <span className="text-slate-300">—</span>}</td>
                     <td className="px-[18px] py-2.5 font-mono text-slate-700">{peso(r.total_amount)}</td>
                     <td className="px-[18px] py-2.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${style.bg} ${style.text}`}>
+                      <span className={`inline-flex items-center justify-center min-w-[88px] px-2 py-1 rounded-sm text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
                         {r.payment_status}
                       </span>
                     </td>
@@ -225,7 +226,7 @@ export default function ReceiptsPage() {
                         <button onClick={() => setViewing(r)} className="p-1.5 rounded-md border border-black/[0.09] text-slate-500 hover:bg-slate-50" title="View">
                           <EyeIcon />
                         </button>
-                        <button onClick={() => printReceipt(r)} className="p-1.5 rounded-md border border-black/[0.09] text-slate-500 hover:bg-slate-50" title="Print receipt" aria-label={`Print ${r.receipt_no}`}>
+                        <button onClick={() => printReceipt(r)} className="p-1.5 rounded-md border border-black/[0.09] text-slate-500 hover:bg-slate-50" title="Print invoice" aria-label={`Print ${r.receipt_no}`}>
                           <PrintIcon />
                         </button>
                         {r.payment_status !== "paid" && (

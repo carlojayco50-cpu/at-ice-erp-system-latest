@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\KioskSetting;
-use App\Services\KioskLockout;
 use Illuminate\Console\Command;
 
 class SetKioskPin extends Command
@@ -23,7 +22,6 @@ class SetKioskPin extends Command
         }
 
         KioskSetting::current()->setPin($pin, null);
-        KioskLockout::clearAll();
 
         $this->info('Kiosk PIN saved. Every kiosk must be unlocked again with the new PIN.');
 

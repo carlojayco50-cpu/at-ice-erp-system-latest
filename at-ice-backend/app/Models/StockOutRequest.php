@@ -9,6 +9,7 @@ class StockOutRequest extends Model
     protected $fillable = [
         'requested_by',
         'product_id',
+        'project_id',
         'item_name',
         'quantity',
         'purpose',
@@ -45,6 +46,12 @@ class StockOutRequest extends Model
     public function product()
     {
         return $this->belongsTo(Product::class)->withTrashed();
+    }
+
+    // The project on Admin's board this request is for (optional).
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
     }
 
     // The confirmed Stock Out made when the Admin released it.

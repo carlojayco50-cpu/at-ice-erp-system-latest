@@ -4,6 +4,7 @@ import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import { clearKioskToken, kioskHeaders } from "../lib/kiosk";
 import { playKioskSound, primeKioskSound } from "../lib/kioskSound";
+import { STEP_TEXT, advance, currentStep, failure, isDone, loadLivenessModels, newChallenge, readFrame } from "../lib/liveness";
 
 const ScanIcon = () => (
   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -43,6 +44,8 @@ const LogOutIcon = () => (
 
 const MATCH_THRESHOLD = 0.5;
 const DETECTION_INTERVAL_MS = 1500;
+// Frames are read this often during the liveness challenge (a blink is short).
+const LIVENESS_FRAME_MS = 120;
 // The result pop-up in the middle of the screen stays this long.
 const RESULT_DISPLAY_MS = 3500;
 
@@ -98,9 +101,15 @@ export default function AttendanceStation() {
   const [clock, setClock] = useState(new Date());
   const [mode, setMode] = useState("time_in");
   const resultTimerRef = useRef(null);
+  // The liveness challenge in progress: { label, mode, descriptor, info, c } (ref,
+  // read by the loop) and { step, index, total, name } (state, for the screen).
+  const challengeRef = useRef(null);
+  const [challenge, setChallenge] = useState(null);
 
   const changeMode = (next) => {
     modeRef.current = next; // the detection loop reads the ref, not the state
+    challengeRef.current = null; // a challenge started for the other mode is dropped
+    setChallenge(null);
     setMode(next);
     clearTimeout(resultTimerRef.current);
     setResult(null);
@@ -135,6 +144,7 @@ export default function AttendanceStation() {
           faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+          loadLivenessModels(),
         ]);
         if (cancelled) return;
         setModelsLoaded(true);
@@ -227,39 +237,91 @@ export default function AttendanceStation() {
     }
   }, []);
 
-  // Detection loop
+  // Detection loop. A recognized face is not recorded straight away: the
+  // worker first passes the liveness challenge (lib/liveness.js: blink and
+  // turn the head left and right, in a random order), so a photo or a phone
+  // screen held to the camera is refused. The face at the end must still be
+  // the same worker.
   useEffect(() => {
     if (!cameraReady || !faceMatcherRef.current) return;
+    let fastTimer = null;
+
+    const endChallenge = () => {
+      clearInterval(fastTimer);
+      fastTimer = null;
+      challengeRef.current = null;
+      setChallenge(null);
+    };
+
+    // Fast frames while a challenge runs
+    const fastTick = async () => {
+      const ch = challengeRef.current;
+      if (!ch || ch.busy || !videoRef.current) return;
+      ch.busy = true;
+      try {
+        const frame = await readFrame(videoRef.current);
+        if (challengeRef.current !== ch) return;
+        advance(ch.c, frame);
+        const failed = failure(ch.c);
+        if (failed) {
+          endChallenge();
+          showResult({ status: "liveness", name: ch.info?.name, role: ch.info?.role, detail: failed });
+          return;
+        }
+        setChallenge({ step: currentStep(ch.c), index: ch.c.index, total: ch.c.steps.length, name: ch.info?.name, hint: ch.c.hint });
+        if (!isDone(ch.c)) return;
+
+        // Passed: check it is still the same face, then record.
+        const last = await faceapi.detectSingleFace(videoRef.current).withFaceLandmarks().withFaceDescriptor();
+        endChallenge();
+        if (!last || faceapi.euclideanDistance(last.descriptor, ch.descriptor) > MATCH_THRESHOLD
+            || faceMatcherRef.current.findBestMatch(last.descriptor).label !== ch.label) {
+          showResult({ status: "liveness", name: ch.info?.name, detail: "The face changed during the check. Try again." });
+          return;
+        }
+        const { type, hours, at } = await recordAttendance(ch.label, ch.mode);
+        if (type !== "error") recentlyMarkedRef.current.set(`${ch.label}:${ch.mode}`, Date.now());
+        showResult({ status: type, name: ch.info?.name, role: ch.info?.role, hours, at });
+      } catch (err) {
+        console.error("Liveness tick error:", err);
+      } finally {
+        ch.busy = false;
+      }
+    };
 
     const tick = async () => {
-      if (busyRef.current || !videoRef.current) return;
+      if (busyRef.current || challengeRef.current || !videoRef.current) return;
       busyRef.current = true;
       try {
         const detection = await faceapi.detectSingleFace(videoRef.current).withFaceLandmarks().withFaceDescriptor();
-        if (!detection) { busyRef.current = false; return; }
+        if (!detection) return;
 
         const bestMatch = faceMatcherRef.current.findBestMatch(detection.descriptor);
 
         if (bestMatch.label === "unknown") {
           showResult({ status: "no-match" });
-        } else {
-          const faceDataId = bestMatch.label;
-          const currentMode = modeRef.current;
-          const cooldownKey = `${faceDataId}:${currentMode}`;
-          const lastMarked = recentlyMarkedRef.current.get(cooldownKey);
-          const now = Date.now();
-          const info = window.__faceLookup?.[faceDataId];
-
-          if (lastMarked && now - lastMarked < SAME_WORKER_COOLDOWN_MS) {
-            // Same worker, same mode, still in front of the camera: do not post again
-            busyRef.current = false;
-            return;
-          }
-
-          const { type, hours, at } = await recordAttendance(faceDataId, currentMode);
-          if (type !== "error") recentlyMarkedRef.current.set(cooldownKey, now);
-          showResult({ status: type, name: info?.name, role: info?.role, hours, at });
+          return;
         }
+        const faceDataId = bestMatch.label;
+        const currentMode = modeRef.current;
+        const lastMarked = recentlyMarkedRef.current.get(`${faceDataId}:${currentMode}`);
+        if (lastMarked && Date.now() - lastMarked < SAME_WORKER_COOLDOWN_MS) {
+          // Same worker, same mode, still in front of the camera: do not post again
+          return;
+        }
+
+        clearTimeout(resultTimerRef.current);
+        setResult(null);
+        challengeRef.current = {
+          label: faceDataId,
+          mode: currentMode,
+          descriptor: detection.descriptor,
+          info: window.__faceLookup?.[faceDataId],
+          c: newChallenge(),
+          busy: false,
+        };
+        setChallenge({ step: currentStep(challengeRef.current.c), index: 0, total: challengeRef.current.c.steps.length, name: challengeRef.current.info?.name });
+        fastTimer = setInterval(fastTick, LIVENESS_FRAME_MS);
       } catch (err) {
         console.error("Detection tick error:", err);
       } finally {
@@ -268,7 +330,11 @@ export default function AttendanceStation() {
     };
 
     intervalRef.current = setInterval(tick, DETECTION_INTERVAL_MS);
-    return () => clearInterval(intervalRef.current);
+    return () => {
+      clearInterval(intervalRef.current);
+      clearInterval(fastTimer);
+      challengeRef.current = null;
+    };
   }, [cameraReady, recordAttendance, showResult]);
 
   const statusConfig = {
@@ -279,6 +345,7 @@ export default function AttendanceStation() {
     completed:        { label: "Done for Today",      sub: "Time In and Time Out are already recorded", bg: "bg-amber-600/90", tone: "#d97706", icon: <ClockIcon /> },
     inactive:         { label: "Not Active",          sub: "This employee is no longer active. Please inform HR.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
     "no-match":       { label: "Face Not Recognized", sub: "Not enrolled in the system. Please see HR.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
+    liveness:         { label: "Live Check Not Passed", sub: "Nothing was recorded. Face the camera and follow the steps.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
     error:            { label: "Could Not Record",    sub: "Please try again or inform HR", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
   };
   const active = result ? statusConfig[result.status] || statusConfig.error : null;
@@ -311,7 +378,7 @@ export default function AttendanceStation() {
           <div className="px-8 pt-7 pb-5 border-b border-[rgba(163,177,198,0.4)] flex items-center justify-between">
             <div>
               <h2 className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">Face Recognition Check-In</h2>
-              <p className="text-[13px] text-[var(--neu-faint)] mt-1">Choose Time In or Time Out below, then face the camera.</p>
+              <p className="text-[13px] text-[var(--neu-faint)] mt-1">Choose Time In or Time Out below, face the camera, then blink and turn your head when asked.</p>
             </div>
             <div className="text-right flex-shrink-0">
               <div className="text-[15px] font-semibold text-slate-800 font-mono">
@@ -325,7 +392,32 @@ export default function AttendanceStation() {
 
           <div className="px-8 py-6">
             <div className={`relative w-full aspect-video bg-slate-900 rounded-2xl overflow-hidden shadow-[var(--neu-inset)] ring-4 ${m.ring} transition-shadow`}>
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+              {/* Shown like a mirror, so "turn left" matches what the worker sees */}
+              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover -scale-x-100" />
+
+              {/* Liveness challenge: oval guide, the step to do, and progress */}
+              {challenge && (
+                <div className="absolute inset-0 flex flex-col items-center justify-between py-4 pointer-events-none" aria-live="polite">
+                  <div className="px-3.5 py-1.5 rounded-full bg-black/55 text-white text-[12px] font-medium backdrop-blur-sm">
+                    {challenge.name ? `Hi ${challenge.name.split(" ")[0]}! ` : ""}Quick live check
+                  </div>
+                  <div className="w-[34%] aspect-[3/4] rounded-[50%] border-[3px] border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]" />
+                  <div className="flex flex-col items-center gap-2 px-4 py-2.5 rounded-2xl bg-black/60 backdrop-blur-sm text-center">
+                    <div className="flex items-center gap-2 text-white text-[18px] font-semibold">
+                      {challenge.step === "left" && <span aria-hidden="true">←</span>}
+                      {STEP_TEXT[challenge.step]?.title}
+                      {challenge.step === "right" && <span aria-hidden="true">→</span>}
+                    </div>
+                    <div className="text-white/75 text-[12px]">{STEP_TEXT[challenge.step]?.sub}</div>
+                    {challenge.hint && <div className="text-amber-300 text-[12px] font-medium">{challenge.hint}</div>}
+                    <div className="flex gap-1.5" aria-label={`Step ${challenge.index + 1} of ${challenge.total}`}>
+                      {Array.from({ length: challenge.total }, (_, i) => (
+                        <span key={i} className={`h-1.5 w-8 rounded-full ${i < challenge.index ? "bg-emerald-400" : i === challenge.index ? "bg-white" : "bg-white/30"}`} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {(!modelsLoaded || !descriptorsLoaded || !cameraReady) && !loadError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-[13px] gap-2.5 flex-col">
@@ -340,7 +432,7 @@ export default function AttendanceStation() {
                 </div>
               )}
 
-              {!result && cameraReady && !loadError && (
+              {!result && !challenge && cameraReady && !loadError && (
                 <div className={`absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 backdrop-blur-sm rounded-full ${m.pill}`}>
                   <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${m.dot}`} />
                   <span className="text-[11px] font-medium tracking-wide">Scanning for {m.label}</span>
@@ -420,7 +512,7 @@ export default function AttendanceStation() {
                 {result.status === "time_out" && result.hours != null && (
                   <div className="text-[12px] text-slate-700 mt-1">Hours worked: <b>{result.hours}</b></div>
                 )}
-                <div className="text-[11px] text-[var(--neu-faint)] mt-1.5">{active.sub}</div>
+                <div className="text-[11px] text-[var(--neu-faint)] mt-1.5">{result.detail || active.sub}</div>
               </div>
             </div>
             <div className="h-[3px] bg-black/5">

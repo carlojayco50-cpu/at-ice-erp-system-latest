@@ -39,6 +39,16 @@ return [
     // still works in production after "php artisan config:cache".
     'groq' => [
         'key' => env('GROQ_API_KEY'),
+        // Reads addresses from uploaded resumes and IDs (DocumentScanController).
+        'vision_model' => env('GROQ_VISION_MODEL', 'qwen/qwen3.8-27b'),
+        // Reads the text of a PDF or Word resume (same model unless set).
+        'text_model' => env('GROQ_TEXT_MODEL', env('GROQ_VISION_MODEL', 'qwen/qwen3.8-27b')),
+    ],
+
+    // Bi-weekly payroll: periods of 14 days counted from this Monday
+    // (App\Support\PayrollCalendar).
+    'payroll' => [
+        'anchor' => env('PAYROLL_ANCHOR', '2026-01-05'),
     ],
 
     // Customer email check (App\Services\EmailVerifier). Optional: without a

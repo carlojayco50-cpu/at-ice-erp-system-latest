@@ -141,7 +141,7 @@ class DeliveryProofController extends Controller
                         ]);
 
                         $receipt = Receipt::create([
-                            'receipt_no' => Receipt::generateReceiptNo(),
+                            'receipt_no' => Receipt::generateReceiptNo($locked->customer),
                             'delivery_id' => $locked->id,
                             'delivery_proof_id' => $proof->id,
                             'customer_id' => $locked->customer_id,

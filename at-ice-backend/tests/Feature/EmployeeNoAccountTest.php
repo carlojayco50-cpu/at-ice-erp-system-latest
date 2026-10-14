@@ -89,8 +89,8 @@ class EmployeeNoAccountTest extends TestCase
         ]))->assertCreated();
 
         $this->assertSame('DelaCruz50!', $res->json('password'));
-        $this->assertSame('delacruz.juan.0001@atice.cloud', $res->json('email'));
-        $user = User::where('email', 'delacruz.juan.0001@atice.cloud')->first();
+        $this->assertSame('delacruz.0001@atice.cloud', $res->json('email'));
+        $user = User::where('email', 'delacruz.0001@atice.cloud')->first();
         $this->assertSame('checker', $user->sub_role);
         $this->assertTrue($user->must_change_password);
         $this->assertNull(User::where('email', 'ignored@atice.cloud')->first());
@@ -103,6 +103,7 @@ class EmployeeNoAccountTest extends TestCase
         $a = $this->postJson('/api/employees', $this->payload(['position' => 'Guard']))->json('employee.employee_id');
         $b = $this->postJson('/api/employees', $this->payload([
             'position' => 'Driver', 'email' => 'd@atice.cloud', 'phone' => '09171234551',
+            'license_number' => 'N01-23-456789', 'license_expiry' => now()->addYears(3)->toDateString(),
         ]))->json('employee.employee_id');
 
         $this->assertNotSame($a, $b);

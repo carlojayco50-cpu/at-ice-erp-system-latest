@@ -37,8 +37,32 @@ class CustomerController extends Controller
     // Fields Admin can set. Codes, user_id and is_active are never taken from the request.
     private const INPUT_FIELDS = [
         'name', 'block_lot', 'street', 'subdivision', 'barangay', 'city', 'province',
-        'postal_code', 'contact_person', 'contact_number', 'email', 'mop', 'notes',
+        'postal_code', 'region', 'barangay_code', 'contact_person', 'contact_number', 'email', 'mop', 'notes',
+        'invoice_code',
     ];
+
+    private const INVOICE_CODE_MESSAGES = [
+        'invoice_code.required' => 'Enter the invoice code, e.g. PG.',
+        'invoice_code.regex' => 'The invoice code is 2 to 5 letters, e.g. PG.',
+        'invoice_code.unique' => 'Another customer already uses this invoice code.',
+    ];
+
+    // Invoice code as capital letters only ("pg" -> "PG"); blank -> null.
+    private function cleanInvoiceCode(Request $request): void
+    {
+        if ($request->has('invoice_code')) {
+            $code = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) $request->invoice_code));
+            $request->merge(['invoice_code' => $code === '' ? null : $code]);
+        }
+    }
+
+    // GET /api/customers/invoice-code?name=...: the code a new customer would get.
+    public function suggestInvoiceCode(Request $request)
+    {
+        $request->validate(['name' => 'required|string|max:255']);
+
+        return response()->json(['invoice_code' => Customer::invoiceCodeFor($request->name)]);
+    }
 
     public function index()
     {
@@ -50,6 +74,7 @@ class CustomerController extends Controller
     public function store(Request $request)
     {
         $this->cleanContactNumber($request);
+        $this->cleanInvoiceCode($request);
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -65,17 +90,21 @@ class CustomerController extends Controller
             'block_lot' => 'nullable|string|max:255',
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
+            ...AddressFormatter::PSGC_RULES,
             'contact_person' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude',
+            // Made from the name when left blank.
+            'invoice_code' => ['nullable', 'regex:'.Customer::INVOICE_CODE_REGEX, Rule::unique('customers', 'invoice_code')],
         ], [
             'contact_number.regex' => self::CONTACT_MESSAGE,
             'email.unique' => 'That email already has a login account. Use a different contact email.',
             'postal_code.regex' => 'Postal code must be 4 digits.',
-        ]);
+        ] + self::INVOICE_CODE_MESSAGES);
 
         $data = $request->only(self::INPUT_FIELDS);
+        $data['invoice_code'] ??= Customer::invoiceCodeFor($data['name']);
         $data['address'] = AddressFormatter::compose($data);
         $data['is_active'] = true;
 
@@ -145,6 +174,7 @@ class CustomerController extends Controller
         $customer = Customer::findOrFail($id);
 
         $this->cleanContactNumber($request);
+        $this->cleanInvoiceCode($request);
 
         // Old customers have only the single free-text address and can be edited
         // without the new fields. But once any new address field is filled (or the
@@ -173,6 +203,7 @@ class CustomerController extends Controller
             'block_lot' => 'nullable|string|max:255',
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],
+            ...AddressFormatter::PSGC_RULES,
             'contact_person' => 'required|string|max:255',
             'notes' => 'nullable|string',
             'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
@@ -187,12 +218,14 @@ class CustomerController extends Controller
                     }
                 },
             ],
+            // A changed code is used from the next invoice on; older invoices keep theirs.
+            'invoice_code' => ['sometimes', 'required', 'regex:'.Customer::INVOICE_CODE_REGEX, Rule::unique('customers', 'invoice_code')->ignore($customer->id)],
         ], [
             'postal_code.regex' => 'Postal code must be 4 digits.',
             'email.unique' => 'Another customer or login already uses this email.',
-        ]);
+        ] + self::INVOICE_CODE_MESSAGES);
 
-        // Codes are fixed at creation, and never change when the name is edited.
+        // Customer and branch codes are fixed at creation, and never change when the name is edited.
         $data = $request->only(self::INPUT_FIELDS);
 
         $composed = AddressFormatter::compose($data + $customer->only(AddressFormatter::FIELDS));
@@ -200,9 +233,15 @@ class CustomerController extends Controller
             $data['address'] = $composed;
         }
 
+        // The address dropdowns rewrite names to the official ones ("SJDM" ->
+        // "San Jose Del Monte"), which is not a move, so names are compared
+        // loosely, and City and Province only count for an older record with
+        // no barangay: picking another city always clears the barangay.
+        $same = fn ($v) => preg_replace('/\b(city of|city|barangay|brgy)\b|[^a-z0-9]/', '', mb_strtolower((string) $v));
+        $fields = $customer->barangay ? ['street', 'subdivision', 'barangay'] : ['street', 'subdivision', 'barangay', 'city', 'province'];
         $addressChanged = false;
-        foreach (['street', 'subdivision', 'barangay', 'city', 'province'] as $field) {
-            if (array_key_exists($field, $data) && ($data[$field] ?? '') !== ($customer->$field ?? '')) {
+        foreach ($fields as $field) {
+            if (array_key_exists($field, $data) && $same($data[$field] ?? '') !== $same($customer->$field ?? '')) {
                 $addressChanged = true;
             }
         }
@@ -303,9 +342,17 @@ class CustomerController extends Controller
         return $stem.str_pad($highest + 1, 3, '0', STR_PAD_LEFT);
     }
 
+    // Fields a customer must have before Create Login (the same ones Add Customer
+    // requires). The frontend disables the button until they are filled.
+    public const LOGIN_REQUIRED = [
+        'email' => 'email', 'contact_person' => 'contact person', 'contact_number' => 'contact number',
+        'street' => 'street', 'barangay' => 'barangay', 'city' => 'city', 'province' => 'province',
+    ];
+
     // Creates a Customer Portal login for an OLD customer that has none. New
-    // customers get their login when they are created. Uses the customer's
-    // contact email when it is free, otherwise name_customerid@atice.com.
+    // customers get their login when they are created. The login is the
+    // customer's own contact email, which must be an existing account
+    // (ExistingMailbox) and not used by another login, the same as Add Customer.
     public function createAccount($id)
     {
         $customer = Customer::findOrFail($id);
@@ -314,14 +361,22 @@ class CustomerController extends Controller
             return response()->json(['message' => 'This customer already has a login account.'], 422);
         }
 
-        $loginEmail = $customer->email;
-        if (! $loginEmail || User::where('email', $loginEmail)->exists()) {
-            // customers.id is unique, so no collision loop is needed.
-            $loginEmail = Str::slug($customer->name, '')
-                .'_'.str_pad($customer->id, 3, '0', STR_PAD_LEFT)
-                .'@atice.com';
+        $missing = array_values(array_filter(self::LOGIN_REQUIRED, fn ($label, $field) => trim((string) $customer->$field) === '', ARRAY_FILTER_USE_BOTH));
+        if ($missing) {
+            return response()->json([
+                'message' => 'Fill in the '.implode(', ', $missing).' on Edit Customer first.',
+                'errors' => ['customer' => $missing],
+            ], 422);
         }
 
+        validator(['email' => $customer->email], [
+            'email' => ['bail', 'required', 'email:rfc,filter,dns', 'max:255', 'unique:users,email', new ExistingMailbox],
+        ], [
+            'email.unique' => 'That email already has a login account. Change the contact email on Edit Customer.',
+            'email.email' => 'The contact email is not a valid email. Change it on Edit Customer.',
+        ])->validate();
+
+        $loginEmail = $customer->email;
         $plainPassword = Str::random(10);
 
         $user = User::create([
@@ -334,8 +389,7 @@ class CustomerController extends Controller
 
         $customer->update(['user_id' => $user->id]);
 
-        // A made-up @atice.com address has no mailbox, so only a real contact email is sent to.
-        $emailed = $loginEmail === $customer->email ? $this->sendCredentials($customer->name, $loginEmail, $plainPassword) : 'no_mailbox';
+        $emailed = $this->sendCredentials($customer->name, $loginEmail, $plainPassword);
 
         return response()->json([
             'message' => 'Login account created.',

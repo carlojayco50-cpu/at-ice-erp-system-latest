@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
-import { fullName } from "../../lib/names";
+import { fullName, shiftLabel } from "../../lib/names";
 import { useLiveTick } from "../../lib/live";
 
 const API_BASE = "/api";
@@ -127,7 +127,7 @@ export default function EmployeesOverviewPage() {
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-slate-600 capitalize">{emp.shift}</td>
+                    <td className="px-5 py-3 text-slate-600 whitespace-nowrap font-mono text-[12px]">{shiftLabel(emp)}</td>
                   </tr>
                 ))
               )}

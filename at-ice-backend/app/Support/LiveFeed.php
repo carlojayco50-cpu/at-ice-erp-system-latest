@@ -38,6 +38,7 @@ class LiveFeed
         Models\Supplier::class => null,
         Models\Customer::class => null,
         Models\Expense::class => null,
+        Models\Project::class => ['name', 'status', 'due_date'],
     ];
 
     public static function models(): array
@@ -135,6 +136,9 @@ class LiveFeed
                 return ['face', $a === 'deleted' ? "Face enrollment of {$name} removed{$by}" : "Face enrolled for {$name}{$by}", ['hr']];
 
             case Models\Applicant::class:
+                if ($a === 'created' && $m->source === 'qr') {
+                    return ['applicants', "New application (QR): {$m->name} for {$m->position_applied}", ['hr']];
+                }
                 if ($a === 'updated') {
                     return ['applicants', "Applicant {$m->name}: ".self::label($m->status), ['hr']];
                 }
@@ -160,6 +164,12 @@ class LiveFeed
                 }
 
                 return ['stock-out', "Stock-out request ({$what}) removed", [], [$m->requested_by]];
+
+            case Models\Project::class:
+                // Maintenance picks open projects in the stock-out form.
+                return ['projects', $a === 'updated'
+                    ? "Project {$m->name}: ".self::label($m->status).$by
+                    : "Project {$m->name} {$verb}{$by}", ['employee:maintenance']];
 
             case Models\Delivery::class:
                 $no = $m->delivery_no ?: "#{$m->id}";
@@ -189,13 +199,13 @@ class LiveFeed
             case Models\Receipt::class:
                 $cust = $m->customer?->user_id;
                 if ($a === 'created') {
-                    return ['receipts', "Receipt {$m->receipt_no} generated", [], [$cust, $m->salesman_id]];
+                    return ['receipts', "Invoice {$m->receipt_no} generated", [], [$cust, $m->salesman_id]];
                 }
                 if ($a === 'updated') {
-                    return ['receipts', "Receipt {$m->receipt_no}: ".self::label($m->payment_status), [], [$cust]];
+                    return ['receipts', "Invoice {$m->receipt_no}: ".self::label($m->payment_status), [], [$cust]];
                 }
 
-                return ['receipts', "Receipt {$m->receipt_no} removed", [], [$cust]];
+                return ['receipts', "Invoice {$m->receipt_no} removed", [], [$cust]];
 
             case Models\IceLoading::class:
                 if ($a !== 'created') {
