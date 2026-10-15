@@ -19,6 +19,8 @@ import Snowfall from "./Snowfall";
 //   line    progress line filled in step with the splash time
 //   exit    the stage fades out, revealing the page
 //
+// The video only plays for Admin and HR on screens 768px and wider (and on the
+// login page on wide screens); otherwise only the static logo is used.
 // The logo picture shows first (and stays, if the video cannot play or the
 // user prefers reduced motion), and the video fades in over it once ready.
 // Only transform and opacity are animated, so it stays smooth on phones.
@@ -50,6 +52,22 @@ function isDark() {
   }
 }
 
+// The video is for Admin and HR on screens 768px and wider, and for the login
+// page (role not known yet) on wide screens. Everyone else gets the static logo,
+// and then no video element is rendered, so the file is never downloaded.
+const VIDEO_MIN_WIDTH = 768;
+const VIDEO_ROLES = ["admin", "hr"];
+function wantsVideo() {
+  try {
+    if (!window.matchMedia(`(min-width: ${VIDEO_MIN_WIDTH}px)`).matches) return false;
+    const role = localStorage.getItem("token") ? localStorage.getItem("role") : null;
+    if (!role) return true;
+    return VIDEO_ROLES.includes(role);
+  } catch {
+    return false;
+  }
+}
+
 export default function SplashScreen() {
   const reduceMotion = useReducedMotion();
   const [visible, setVisible] = useState(true);
@@ -60,6 +78,7 @@ export default function SplashScreen() {
   // replay below) keep the solid stage.
   const [overApp, setOverApp] = useState(overModule);
   const [videoReady, setVideoReady] = useState(false);
+  const [useVideo, setUseVideo] = useState(wantsVideo);
   // Bumped on every replay so the intro restarts from the beginning.
   const [run, setRun] = useState(0);
 
@@ -67,6 +86,7 @@ export default function SplashScreen() {
   useEffect(() => {
     const replay = () => {
       setDark(isDark());
+      setUseVideo(wantsVideo());
       setOverApp(false);
       setVideoReady(false);
       setRun((n) => n + 1);
@@ -146,7 +166,7 @@ export default function SplashScreen() {
               style={{ filter: dark ? "drop-shadow(0 12px 30px rgba(34,211,238,0.25))" : "drop-shadow(0 14px 28px rgba(30,41,59,0.25))" }}
               draggable="false"
             />
-            {!reduceMotion && (
+            {!reduceMotion && useVideo && (
               <KeyedVideo
                 key={`video-${run}`}
                 src="/splash/intro.mp4"
