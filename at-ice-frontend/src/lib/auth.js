@@ -2,6 +2,8 @@
 // The same five keys are written for every role, so nothing from a previous
 // user's session can leak into the next one.
 
+import { clearAllDrafts } from "./useDraft";
+
 export const LOGIN_PATH = "/login";
 
 const SESSION_KEYS = ["token", "role", "sub_role", "user", "must_change_password"];
@@ -21,6 +23,8 @@ export function saveSession(data) {
 
 export function clearSession() {
   SESSION_KEYS.forEach((k) => localStorage.removeItem(k));
+  // Unsaved form drafts (lib/useDraft.js) never outlive the session.
+  clearAllDrafts();
 }
 
 const HOME_PATH_BY_ROLE = {

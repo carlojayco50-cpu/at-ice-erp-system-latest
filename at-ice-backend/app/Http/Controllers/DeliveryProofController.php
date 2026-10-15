@@ -222,7 +222,7 @@ class DeliveryProofController extends Controller
     public function myDeliveries()
     {
         // Open deliveries still waiting for a confirmation...
-        $open = Delivery::with(['customer', 'items.product'])
+        $open = Delivery::with(['customer', 'items.product', 'driver:id,name'])
             ->whereIn('status', ['pending', 'in_transit'])
             ->whereDoesntHave('proofs')
             ->orderBy('created_at', 'desc')
@@ -232,7 +232,7 @@ class DeliveryProofController extends Controller
         // so they show under the Salesman's Delivered tab.
         $salesmanId = request()->user()->id;
         $confirmed = Delivery::with([
-            'customer', 'items.product',
+            'customer', 'items.product', 'driver:id,name',
             'proofs' => fn ($q) => $q->where('salesman_id', $salesmanId)->with('receipt.items'),
         ])
             ->where('status', 'delivered')

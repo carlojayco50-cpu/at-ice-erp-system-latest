@@ -27,6 +27,7 @@ class LiveFeed
         Models\StockOutRequest::class => ['status'],
         Models\Delivery::class => ['status', 'driver_id'],
         Models\Receipt::class => ['payment_status'],
+        Models\PaymentProof::class => ['status'],
         Models\Attendance::class => ['time_out'],
         Models\Applicant::class => ['status', 'interview_date'],
         Models\Payroll::class => ['status'],
@@ -206,6 +207,19 @@ class LiveFeed
                 }
 
                 return ['receipts', "Invoice {$m->receipt_no} removed", [], [$cust]];
+
+            case Models\PaymentProof::class:
+                // Admin (always notified) reviews a new proof. On approval the
+                // invoice's own "Paid" notice reaches the customer.
+                $no = $m->receipt?->receipt_no ?? "#{$m->receipt_id}";
+                if ($a === 'created') {
+                    return ['receipts', "Payment proof for Invoice {$no} sent by ".($m->customer?->name ?? 'a customer'), []];
+                }
+                if ($a === 'updated' && $m->status === 'rejected') {
+                    return ['receipts', "Your payment proof for Invoice {$no} was rejected: {$m->reject_reason}", [], [$m->customer?->user_id]];
+                }
+
+                return null;
 
             case Models\IceLoading::class:
                 if ($a !== 'created') {

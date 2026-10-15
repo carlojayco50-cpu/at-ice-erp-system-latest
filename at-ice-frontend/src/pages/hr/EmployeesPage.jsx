@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import HrLayout from "../../components/HrLayout";
 import FaceCapture from "../../components/FaceCapture";
 import PhoneInput from "../../components/PhoneInput";
+import TimeSelect from "../../components/TimeSelect";
 import LoginEmailChip from "../../components/LoginEmailChip";
 import { toast } from "../../lib/toast";
 import { defaultEmployeePassword } from "../../lib/password";
@@ -13,8 +14,11 @@ import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import AddressFields from "../../components/AddressFields";
 import ScanDropZone from "../../components/ScanDropZone";
+import DraftHint from "../../components/DraftHint";
+import { useDraft } from "../../lib/useDraft";
 import { filledFrom } from "../../lib/scanDocument";
 import { formatLicense, licenseError, expiryError, tomorrowStr } from "../../lib/license";
+import { formatDateTime } from "../../lib/time";
 
 const API_BASE = "/api";
 
@@ -113,9 +117,10 @@ export default function EmployeesPage() {
   const [createdAccount, setCreatedAccount] = useState(null);
   const [search, setSearch]       = useState("");
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm]           = useState(emptyForm);
+  // Add/Edit modal: kept as a draft while open, so a refresh reopens it as it was.
+  const formDraft = useDraft("employees:form", { modalOpen: false, editingId: null, form: emptyForm, fromApplicant: null }, { when: (v) => v.modalOpen });
+  const { modalOpen, editingId, form, fromApplicant } = formDraft.values;
+  const { modalOpen: setModalOpen, editingId: setEditingId, form: setForm, fromApplicant: setFromApplicant } = formDraft.set;
   const [formErrors, setFormErrors] = useState({});
   const [saving, setSaving]       = useState(false);
 
@@ -188,7 +193,6 @@ export default function EmployeesPage() {
   // reload does not open it again.
   const location = useLocation();
   const navigate = useNavigate();
-  const [fromApplicant, setFromApplicant] = useState(null);
   useEffect(() => {
     const a = location.state?.fromApplicant;
     if (!a) return;
@@ -213,7 +217,7 @@ export default function EmployeesPage() {
     setFromApplicant(a);
     setModalOpen(true);
     navigate(location.pathname, { replace: true, state: null });
-  }, [location.state, location.pathname, navigate]);
+  }, [location.state, location.pathname, navigate, setEditingId, setForm, setFromApplicant, setModalOpen]);
 
   const openEdit = (emp) => {
     setEditingId(emp.id);
@@ -261,7 +265,7 @@ export default function EmployeesPage() {
 
   const handleChange = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
-  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), []);
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
   // Name, mobile number and address read from a PDF or Word resume
   const handleScan = (result) => setForm((f) => ({
     ...f,
@@ -663,6 +667,7 @@ export default function EmployeesPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="px-5 py-4 flex flex-col gap-3.5">
+              <DraftHint draft={formDraft} onDiscard={() => setFormErrors({})} />
               <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number and address" />
               {fromApplicant && !editingId && (
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] rounded-lg px-3 py-2">
@@ -892,11 +897,11 @@ export default function EmployeesPage() {
                 </Field>
                 <div aria-hidden="true" />
                 <Field label="Shift Start" required error={formErrors.shift_start}>
-                  <input type="time" data-native required value={form.shift_start} onChange={handleChange("shift_start")} className={inputCls} />
+                  <TimeSelect required value={form.shift_start} onChange={handleChange("shift_start")} selectClassName={timeSelectCls} />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">Late is counted from this time, to the minute.</span>
                 </Field>
                 <Field label="Shift End" required error={formErrors.shift_end}>
-                  <input type="time" data-native required value={form.shift_end} onChange={handleChange("shift_end")} className={inputCls} />
+                  <TimeSelect required value={form.shift_end} onChange={handleChange("shift_end")} selectClassName={timeSelectCls} />
                   {form.shift_start && form.shift_end && form.shift_end <= form.shift_start && (
                     <span className="text-[10px] text-cyan-600 mt-0.5 block">Overnight: ends the next day.</span>
                   )}
@@ -1006,6 +1011,7 @@ export default function EmployeesPage() {
   );
 }
 
+const timeSelectCls = "px-2 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
 const inputCls = "w-full px-3 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
 
 function Field({ label, error, required, children }) {
@@ -1028,7 +1034,7 @@ function Field({ label, error, required, children }) {
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 const storageUrl = (p) => (p ? `${BACKEND_URL}/storage/${String(p).replace(/^\/+/, "")}` : null);
 const fmtDateTime = (d) =>
-  d ? new Date(d).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—";
+  d ? formatDateTime(d) : "—";
 
 function FaceModal({ employee, authHeaders, onClose, onSaved }) {
   const [descriptor, setDescriptor] = useState(null);

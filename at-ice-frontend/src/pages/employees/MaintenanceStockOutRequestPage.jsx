@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import { ScopeStatusRow } from "../../components/NightMode";
 import EmptyState from "../../components/EmptyState";
+import { formatDateTime } from "../../lib/time";
 
 const ChevronLeftIcon = () => (
   <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -48,20 +51,25 @@ export default function MaintenanceStockOutRequestPage() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  const [showForm, setShowForm] = useState(false);
+  // The request form is kept as a draft while open, so a refresh keeps it.
+  const draft = useDraft("stock-out:new", {
+    showForm: false, productId: "", quantity: "", purpose: "", autoPurpose: "", projectId: "",
+  }, { when: (v) => v.showForm });
+  const { showForm, productId, quantity, purpose, autoPurpose, projectId } = draft.values;
+  const {
+    showForm: setShowForm, productId: setProductId, quantity: setQuantity, purpose: setPurpose,
+    autoPurpose: setAutoPurpose, projectId: setProjectId,
+  } = draft.set;
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
   // The inventory items that can be requested (GET /api/stock-out-items)
   const [items, setItems] = useState([]);
   const [itemsError, setItemsError] = useState("");
-  const [productId, setProductId] = useState("");
   const [notice, setNotice] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [purpose, setPurpose] = useState("");
+  // autoPurpose (in the draft): Purpose text that was filled from the chosen project's description
   // Open projects on Admin's board (GET /api/project-options); optional
   const [projects, setProjects] = useState([]);
-  const [projectId, setProjectId] = useState("");
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -126,12 +134,28 @@ export default function MaintenanceStockOutRequestPage() {
 
   const selectedItem = items.find((i) => String(i.id) === String(productId));
 
+  // Choosing a project fills Purpose from its description (still editable).
+  // Text the user typed is kept; text filled from a project is replaced, and
+  // cleared again on "No project" so it is typed by hand.
+  function chooseProject(id) {
+    setProjectId(id);
+    const desc = (projects.find((p) => String(p.id) === String(id))?.description || "").trim();
+    const userTyped = purpose.trim() && purpose !== autoPurpose;
+    if (userTyped) return;
+    setPurpose(desc);
+    setAutoPurpose(desc);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError("");
 
-    if (!productId || !quantity || !purpose.trim()) {
+    if (!productId || !quantity) {
       setFormError("Please fill in all fields.");
+      return;
+    }
+    if (!purpose.trim()) {
+      setFormError("Enter the purpose. Choosing a project fills it from the project description.");
       return;
     }
     if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
@@ -164,11 +188,7 @@ export default function MaintenanceStockOutRequestPage() {
 
       toast.success("Stock-out request was submitted.");
       setNotice("Request submitted. Waiting for Admin approval.");
-      setProductId("");
-      setQuantity("");
-      setPurpose("");
-      setProjectId("");
-      setShowForm(false);
+      draft.clear();
       fetchRequests();
     } catch (err) {
       setFormError(err.message || "Request failed. Try again.");
@@ -213,6 +233,7 @@ export default function MaintenanceStockOutRequestPage() {
       {showForm && (
         <div className="bg-white border-b border-black/[0.08] px-4 py-4 flex-shrink-0">
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <DraftHint draft={draft} />
 
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
@@ -261,7 +282,7 @@ export default function MaintenanceStockOutRequestPage() {
               <select
                 id="sor-project"
                 value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                onChange={(e) => chooseProject(e.target.value)}
                 className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
               >
                 <option value="">No project</option>
@@ -271,13 +292,15 @@ export default function MaintenanceStockOutRequestPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                Purpose
+              <label htmlFor="sor-purpose" className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+                Purpose <span className="text-red-500">*</span>
               </label>
               <textarea
+                id="sor-purpose"
+                required
                 placeholder="e.g. Delivery truck DEL-002 needs brake pad replacement"
                 value={purpose}
-                onChange={(e) => setPurpose(e.target.value)}
+                onChange={(e) => { setPurpose(e.target.value); setAutoPurpose(""); }}
                 rows={3}
                 className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all resize-none"
               />
@@ -367,13 +390,7 @@ export default function MaintenanceStockOutRequestPage() {
 
               <div className="flex items-center gap-1 text-[10px] text-slate-300 mt-3">
                 <ClockIcon />
-                {new Date(req.created_at).toLocaleDateString("en-PH", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
+                {formatDateTime(req.created_at)}
               </div>
             </div>
           );

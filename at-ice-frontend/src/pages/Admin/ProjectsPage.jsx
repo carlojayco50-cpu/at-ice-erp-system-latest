@@ -5,6 +5,8 @@ import { SkeletonList } from "../../components/Skeleton";
 import { TONES } from "../../lib/boardTones";
 import { useLiveTick } from "../../lib/live";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { initialsOf } from "../../lib/initials";
 
 // Admin > Projects: a monday.com-style board of maintenance and plant jobs.
@@ -90,8 +92,10 @@ export default function ProjectsPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(() => new Set());
-  const [editing, setEditing] = useState(null); // null closed, {} new, project edit
-  const [form, setForm] = useState(EMPTY);
+  // Kept as a draft while the modal is open, so a refresh reopens it as it was.
+  const formDraft = useDraft("projects:form", { editing: null, form: EMPTY }, { when: (v) => !!v.editing });
+  const { editing, form } = formDraft.values; // editing: null closed, {} new, project edit
+  const { editing: setEditing, form: setForm } = formDraft.set;
   const [formErrors, setFormErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
@@ -205,11 +209,6 @@ export default function ProjectsPage() {
     <AdminLayout
       pageTitle="Projects"
       breadcrumb="Inventory / Projects"
-      headerActions={
-        <button onClick={openNew} className="px-3.5 py-1.5 bg-[#0073ea] hover:bg-[#0060c2] text-white rounded-md text-xs font-semibold cursor-pointer">
-          + New project
-        </button>
-      }
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -231,13 +230,24 @@ export default function ProjectsPage() {
             <div className="text-[13px] font-semibold text-slate-800">Project board</div>
             <div className="text-[11px] text-slate-400">Change a status or priority right on the board. Click a project to see the supplies it used.</div>
           </div>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search project or owner…"
-            className="px-3 py-1.5 border border-black/[0.09] rounded-md text-xs w-full sm:w-56 outline-none focus:border-cyan-400"
-          />
+          {/* + New project sits right beside the search (owner, 2026-10-16) */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search project or owner…"
+              aria-label="Search project or owner"
+              className="px-3 py-2 border border-black/[0.09] rounded-md text-xs flex-1 min-w-0 sm:flex-none sm:w-56 outline-none focus:border-cyan-400"
+            />
+            <button
+              type="button"
+              onClick={openNew}
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            >
+              + New project
+            </button>
+          </div>
         </div>
 
         {error && <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-[12px] text-red-600">{error}</div>}
@@ -259,7 +269,7 @@ export default function ProjectsPage() {
                           {p.name}
                         </div>
                         {p.description && <div className="text-[11px] font-normal text-slate-400 truncate max-w-[260px]">{p.description}</div>}
-                        {p.location && <div className="text-[11px] font-normal text-slate-500 truncate max-w-[260px]" title={p.location}>📍 {p.location}</div>}
+                        {p.location && <div className="text-[11px] font-normal text-slate-500 truncate max-w-[260px]" title={p.location}><svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true" className="inline -mt-0.5 mr-0.5"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></svg>{p.location}</div>}
                       </div>,
                       p.owner ? (
                         <span key="o" title={p.owner} className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#0073ea] text-white text-[10px] font-semibold">{initialsOf(p.owner, "?")}</span>
@@ -317,6 +327,7 @@ export default function ProjectsPage() {
           <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-5 py-3.5 border-b border-black/[0.09] text-[14px] font-semibold text-slate-800">{editing.id ? "Edit project" : "New project"}</div>
             <div className="p-5 grid grid-cols-2 gap-3">
+              <DraftHint draft={formDraft} className="col-span-2" />
               {formErrors._general && <div className="col-span-2 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-[12px] text-red-600">{formErrors._general[0]}</div>}
               {[
                 ["name", "Project name *", "text", "e.g. Ice plant compressor repair", true],
@@ -352,7 +363,7 @@ export default function ProjectsPage() {
             </div>
             <div className="px-5 py-3 border-t border-black/[0.09] flex justify-end gap-2">
               <button type="button" onClick={() => setEditing(null)} disabled={saving} className="px-3.5 py-2 rounded-md border border-black/[0.09] text-xs text-slate-600 cursor-pointer">Cancel</button>
-              <button type="submit" disabled={saving} className="px-3.5 py-2 rounded-md bg-[#0073ea] hover:bg-[#0060c2] text-white text-xs font-semibold cursor-pointer disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+              <button type="submit" disabled={saving} className="px-3.5 py-2 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold cursor-pointer disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
             </div>
           </form>
         </div>

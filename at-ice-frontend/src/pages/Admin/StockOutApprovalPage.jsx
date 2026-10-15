@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { SkeletonList } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
+import { formatDateTime } from "../../lib/time";
+import { useDraft } from "../../lib/useDraft";
 
 const STATUS_STYLES = {
   pending: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
@@ -24,11 +27,14 @@ function StatusBadge({ status }) {
 }
 
 export default function StockOutApprovalPage() {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pending');
-  const [rejectingId, setRejectingId] = useState(null);
-  const [rejectionReason, setRejectionReason] = useState('');
+  // A rejection being typed survives a refresh.
+  const rejectDraft = useDraft('stock-out:reject', { rejectingId: null, rejectionReason: '' }, { when: (v) => v.rejectingId != null });
+  const { rejectingId, rejectionReason } = rejectDraft.values;
+  const { rejectingId: setRejectingId, rejectionReason: setRejectionReason } = rejectDraft.set;
   const [releasingId, setReleasingId] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState('');
@@ -151,23 +157,42 @@ export default function StockOutApprovalPage() {
     : requests.filter((r) => r.status === activeTab);
 
   return (
-    <AdminLayout pageTitle="Maintenance Stock-Out Approvals" breadcrumb="Admin / Stock-Out Approvals">
-      <div className="w-full max-w-3xl mx-auto">
-        <div className="flex flex-wrap justify-center gap-2 mb-5 border-b border-black/[0.09] pb-3">
+    <AdminLayout
+      pageTitle="Stock-Out Approvals"
+      breadcrumb="Inventory / Stock-Out Approvals"
+    >
+      <div className="bg-white border border-black/[0.09] rounded-xl">
+        <div className="px-[18px] py-4 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
+          <div className="min-w-0 mr-auto">
+            <h2 className="text-[14px] font-semibold text-slate-800">Stock-out requests</h2>
+            <p className="text-[12px] text-slate-500">Filed by Maintenance. Approve, then release the items to take them out of stock.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/admin/stock-limits')}
+            className="px-3.5 py-1.5 border border-black/[0.12] text-slate-700 hover:text-slate-900 rounded-md text-xs font-semibold cursor-pointer"
+          >
+            Stock limits
+          </button>
+        </div>
+        <div className="px-[18px] py-3 flex flex-wrap gap-2">
           {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)} aria-pressed={activeTab === tab}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+              className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
                 activeTab === tab
                   ? 'bg-cyan-500 text-white'
-                  : 'text-slate-500 hover:bg-black/[0.04]'
+                  : 'bg-slate-50 text-slate-600'
               }`}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="w-full">
 
         {error && (
           <div className="mb-4 px-4 py-2.5 rounded-lg bg-red-50 text-red-700 text-sm">
@@ -215,23 +240,23 @@ export default function StockOutApprovalPage() {
 
                   <p className="text-xs text-slate-400 mt-2">
                     Requested by {req.requested_by?.name || 'Unknown'} ·{' '}
-                    {new Date(req.created_at).toLocaleString()}
+                    {formatDateTime(req.created_at)}
                   </p>
 
                   {req.status === 'approved' && req.approved_by && (
                     <p className="text-xs text-slate-400 mt-1">
                       Approved by {req.approved_by.name}
-                      {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
+                      {req.approved_at ? ` · ${formatDateTime(req.approved_at)}` : ''}
                     </p>
                   )}
 
                   {req.status === 'released' && (
                     <p className="text-xs text-slate-400 mt-1">
                       Approved by {req.approved_by?.name || 'Unknown'}
-                      {req.approved_at ? ` · ${new Date(req.approved_at).toLocaleString()}` : ''}
+                      {req.approved_at ? ` · ${formatDateTime(req.approved_at)}` : ''}
                       {' | '}
                       Released by {req.released_by?.name || 'Unknown'}
-                      {req.released_at ? ` · ${new Date(req.released_at).toLocaleString()}` : ''}
+                      {req.released_at ? ` · ${formatDateTime(req.released_at)}` : ''}
                     </p>
                   )}
 

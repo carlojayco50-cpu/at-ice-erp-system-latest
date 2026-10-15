@@ -5,6 +5,8 @@ import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
 import LeaveRequestButton from "../../components/LeaveRequestButton";
 import HeaderAvatar from "../../components/HeaderAvatar";
 import { ScopeStatusRow } from "../../components/NightMode";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 import { initialsOf } from "../../lib/initials";
 
 // Functional UI icons only: navigation + actions, not decoration
@@ -15,13 +17,8 @@ const ChevronRightIcon = () => (
 );
 
 // Stock-out release is not listed here: the Admin approves and releases
-// Maintenance stock-out requests.
+// Maintenance stock-out requests. The Pickup Log card was removed (owner).
 const MODULES = [
-  {
-    title: "Pickup Log",
-    description: "Log Alexandra and J-Maxine pickups at the plant.",
-    route: "/checker/pickup-log",
-  },
   {
     title: "Ice Loading Count",
     description: "Count sacks loaded per delivery truck.",
@@ -46,6 +43,7 @@ const MODULES = [
 
 export default function CheckerDashboard() {
   const navigate = useNavigate();
+  const timedIn = useTimedIn();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const handleLogout = () => {
@@ -79,6 +77,7 @@ export default function CheckerDashboard() {
         </div>
 
         <ScopeStatusRow />
+        <TimeInNotice timedIn={timedIn} className="mt-3" />
         <div className="mt-3">
           <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">Checker Dashboard</div>
           <div className="text-[12px] text-slate-400 mt-0.5">

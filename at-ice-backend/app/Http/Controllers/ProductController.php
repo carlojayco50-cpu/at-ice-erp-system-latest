@@ -34,8 +34,41 @@ class ProductController extends Controller
         return $code;
     }
 
+    // Minimum and maximum stock are set by Admin only (owner, 2026-10-16).
+    // Everyone else sees them read-only: a Checker's new item gets the
+    // defaults, and an edit may only send the values unchanged.
+    private function stockLimitsLocked(Request $request, ?Product $product = null)
+    {
+        if ($request->user()?->role === 'admin') {
+            return null;
+        }
+
+        foreach (['minimum_stock', 'maximum_stock'] as $field) {
+            if (! $request->has($field)) {
+                continue;
+            }
+            $sent = $request->input($field);
+            $current = $product?->{$field};
+            $changed = $product
+                ? ($sent === null || $sent === '' ? $current !== null : (string) (int) $sent !== (string) $current)
+                : ($sent !== null && $sent !== '');
+            if ($changed) {
+                return response()->json([
+                    'message' => 'Only the Admin can set the minimum and maximum stock.',
+                    'errors' => [$field => ['Only the Admin can set the minimum and maximum stock.']],
+                ], 403);
+            }
+        }
+
+        return null;
+    }
+
     public function store(Request $request)
     {
+        if ($locked = $this->stockLimitsLocked($request)) {
+            return $locked;
+        }
+
         $validated = $request->validate([
             'product_code' => 'nullable|string|max:50|unique:products,product_code',
             'name' => 'required|string|max:255|unique:products,name',
@@ -61,6 +94,13 @@ class ProductController extends Controller
             $validated['product_code'] = $this->nextProductCode();
         }
 
+        // Blank limits (and every limit sent by a non-Admin) use the defaults.
+        foreach (['minimum_stock', 'maximum_stock'] as $field) {
+            if (($validated[$field] ?? null) === null || $request->user()?->role !== 'admin') {
+                unset($validated[$field]);
+            }
+        }
+
         // Stock always starts at zero; it is added through a confirmed Stock In.
         $validated['current_stock'] = 0;
 
@@ -82,6 +122,10 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
 
+        if ($locked = $this->stockLimitsLocked($request, $product)) {
+            return $locked;
+        }
+
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255', Rule::unique('products', 'name')->ignore($product->id)],
             'category' => 'nullable|string|max:100',
@@ -93,6 +137,12 @@ class ProductController extends Controller
         ], [
             'name.unique' => 'An item with this name already exists.',
         ]);
+
+        foreach (['minimum_stock', 'maximum_stock'] as $field) {
+            if (array_key_exists($field, $validated) && ($validated[$field] === null || $request->user()?->role !== 'admin')) {
+                unset($validated[$field]);
+            }
+        }
 
         $min = array_key_exists('minimum_stock', $validated) ? $validated['minimum_stock'] : $product->minimum_stock;
         $max = array_key_exists('maximum_stock', $validated) ? $validated['maximum_stock'] : $product->maximum_stock;

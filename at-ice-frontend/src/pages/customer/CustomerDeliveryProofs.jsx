@@ -7,6 +7,7 @@ import CustomerLayout from "../../components/CustomerLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
+import { formatDateTime } from "../../lib/time";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -17,7 +18,7 @@ const fmtDateTime = (v) => {
   if (!v) return "Not set";
   const d = new Date(v);
   if (isNaN(d)) return String(v);
-  return d.toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return formatDateTime(d);
 };
 
 // Photos are stored on Laravel's "public" disk (delivery_proofs/xxx.jpg),

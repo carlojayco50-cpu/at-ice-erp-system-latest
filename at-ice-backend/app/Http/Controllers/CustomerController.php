@@ -38,7 +38,7 @@ class CustomerController extends Controller
     private const INPUT_FIELDS = [
         'name', 'block_lot', 'street', 'subdivision', 'barangay', 'city', 'province',
         'postal_code', 'region', 'barangay_code', 'contact_person', 'contact_number', 'email', 'mop', 'notes',
-        'invoice_code',
+        'invoice_code', 'customer_type', 'chain',
     ];
 
     private const INVOICE_CODE_MESSAGES = [
@@ -54,6 +54,34 @@ class CustomerController extends Controller
             $code = strtoupper(preg_replace('/[^A-Za-z]/', '', (string) $request->invoice_code));
             $request->merge(['invoice_code' => $code === '' ? null : $code]);
         }
+    }
+
+    // Customer type and chain/group (filters on Admin > Customers). Both optional.
+    private static function groupRules(): array
+    {
+        return [
+            'customer_type' => ['nullable', Rule::in(array_keys(Customer::TYPES))],
+            'chain' => 'nullable|string|max:100',
+        ];
+    }
+
+    // Chain spelled like one already saved ("alfamart" -> "Alfamart"); blank -> null.
+    // An unused mop (no longer on the form) is not sent to the database as null.
+    private function cleanGroup(array $data): array
+    {
+        if (array_key_exists('chain', $data)) {
+            $chain = trim(preg_replace('/\s+/', ' ', (string) $data['chain']));
+            $data['chain'] = $chain === '' ? null
+                : (Customer::whereRaw('LOWER(chain) = ?', [mb_strtolower($chain)])->value('chain') ?? $chain);
+        }
+        if (array_key_exists('customer_type', $data) && $data['customer_type'] === '') {
+            $data['customer_type'] = null;
+        }
+        if (array_key_exists('mop', $data) && $data['mop'] === null) {
+            unset($data['mop']);
+        }
+
+        return $data;
     }
 
     // GET /api/customers/invoice-code?name=...: the code a new customer would get.
@@ -81,7 +109,9 @@ class CustomerController extends Controller
             // The contact email is also the portal login, so it must be free.
             // The account itself must exist (ExistingMailbox), not just the domain.
             'email' => ['bail', 'required', 'email:rfc,filter,dns', 'max:255', 'unique:users,email', new ExistingMailbox],
-            'mop' => 'required|in:cash,gcash,check,bank_transfer',
+            // No longer on the form (customers send a payment proof per invoice); kept for older data.
+            'mop' => 'nullable|in:cash,gcash,check,bank_transfer',
+            ...self::groupRules(),
             'contact_number' => ['required', 'regex:'.self::CONTACT_REGEX],
             'street' => 'required|string|max:255',
             'barangay' => 'required|string|max:255',
@@ -103,7 +133,7 @@ class CustomerController extends Controller
             'postal_code.regex' => 'Postal code must be 4 digits.',
         ] + self::INVOICE_CODE_MESSAGES);
 
-        $data = $request->only(self::INPUT_FIELDS);
+        $data = $this->cleanGroup($request->only(self::INPUT_FIELDS));
         $data['invoice_code'] ??= Customer::invoiceCodeFor($data['name']);
         $data['address'] = AddressFormatter::compose($data);
         $data['is_active'] = true;
@@ -196,6 +226,7 @@ class CustomerController extends Controller
                 Rule::unique('users', 'email')->ignore($customer->user_id)],
                 mb_strtolower(trim((string) $request->email)) !== mb_strtolower((string) $customer->email) ? [new ExistingMailbox] : []),
             'mop' => 'sometimes|in:cash,gcash,check,bank_transfer',
+            ...self::groupRules(),
             'street' => $addressRule,
             'barangay' => $addressRule,
             'city' => $addressRule,
@@ -226,7 +257,7 @@ class CustomerController extends Controller
         ] + self::INVOICE_CODE_MESSAGES);
 
         // Customer and branch codes are fixed at creation, and never change when the name is edited.
-        $data = $request->only(self::INPUT_FIELDS);
+        $data = $this->cleanGroup($request->only(self::INPUT_FIELDS));
 
         $composed = AddressFormatter::compose($data + $customer->only(AddressFormatter::FIELDS));
         if ($request->hasAny(['street', 'barangay', 'subdivision', 'block_lot']) && $composed !== null) {

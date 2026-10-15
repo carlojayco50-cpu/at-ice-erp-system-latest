@@ -80,4 +80,35 @@ class InterviewScheduleTest extends TestCase
         ], ['Accept' => 'application/json'])->assertCreated();
         $this->assertSame('cv.docx', Applicant::first()->resume_name);
     }
+
+    public function test_hr_removes_or_replaces_a_saved_resume(): void
+    {
+        Storage::fake('local');
+
+        $id = $this->post('/api/applicants', [
+            'name' => 'Ana Reyes', 'position_applied' => 'Checker',
+            'resume' => UploadedFile::fake()->create('old.pdf', 10, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated()->json('applicant.id');
+        $old = Applicant::find($id)->resume_path;
+        Storage::disk('local')->assertExists($old);
+
+        // A new file replaces the old one, even when remove_resume is sent too.
+        $this->post("/api/applicants/{$id}", [
+            '_method' => 'PUT', 'remove_resume' => '1',
+            'resume' => UploadedFile::fake()->create('new.docx', 10),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $applicant = Applicant::find($id);
+        $this->assertSame('new.docx', $applicant->resume_name);
+        Storage::disk('local')->assertMissing($old);
+        Storage::disk('local')->assertExists($applicant->resume_path);
+
+        $this->putJson("/api/applicants/{$id}", ['remove_resume' => 'maybe'])->assertStatus(422);
+
+        $this->putJson("/api/applicants/{$id}", ['remove_resume' => true])->assertOk();
+        $this->assertNull(Applicant::find($id)->resume_name);
+        $this->assertNull(Applicant::find($id)->resume_path);
+        Storage::disk('local')->assertMissing($applicant->resume_path);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'applicant.resume_removed', 'subject_id' => $id]);
+        $this->getJson("/api/applicants/{$id}/resume")->assertNotFound();
+    }
 }

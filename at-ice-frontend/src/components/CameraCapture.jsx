@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { formatTime } from "../lib/time";
 
 // Take-a-photo only (no upload from the gallery or files), so a delivery photo
 // cannot be an old or borrowed picture. Opens the back camera with
 // getUserMedia, and "Take Photo" grabs the current frame. The date, time and
 // `stamp` text (e.g. the delivery number) are printed on the picture itself.
-// onCapture(file, previewUrl) receives a JPEG File; onCapture(null) on Retake.
+// onCapture(file, previewUrl) receives a JPEG File; onCapture(null) on Retake
+// or ✕ Remove (Remove drops the photo without opening the camera again).
 export default function CameraCapture({ stamp = "", onCapture, disabled = false }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -60,7 +62,7 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
     const now = new Date();
     const text = [
       now.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }),
-      now.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", second: "2-digit" }),
+      formatTime(now, { seconds: true }),
       stamp,
     ].filter(Boolean).join("  ·  ");
     const size = Math.max(16, Math.round(canvas.width / 40));
@@ -84,6 +86,13 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
     }, "image/jpeg", 0.88);
   };
 
+  const remove = () => {
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+    setState("idle");
+    onCapture(null, null);
+  };
+
   const retake = () => {
     if (preview) URL.revokeObjectURL(preview);
     setPreview(null);
@@ -95,14 +104,25 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
     return (
       <div className="relative">
         <img src={preview} alt="Delivery photo" className="w-full h-56 object-cover rounded-xl border border-black/[0.08]" />
-        <button
-          type="button"
-          onClick={retake}
-          disabled={disabled}
-          className="absolute bottom-2 right-2 text-[12px] font-medium bg-white px-3 py-1.5 rounded-lg border border-black/[0.08] cursor-pointer"
-        >
-          Retake
-        </button>
+        <div className="absolute bottom-2 right-2 flex gap-2">
+          <button
+            type="button"
+            onClick={remove}
+            disabled={disabled}
+            aria-label="Remove the photo"
+            className="text-[12px] font-medium text-red-600 bg-white px-3 py-1.5 rounded-lg border border-black/[0.08] cursor-pointer"
+          >
+            ✕ Remove
+          </button>
+          <button
+            type="button"
+            onClick={retake}
+            disabled={disabled}
+            className="text-[12px] font-medium bg-white px-3 py-1.5 rounded-lg border border-black/[0.08] cursor-pointer"
+          >
+            Retake
+          </button>
+        </div>
       </div>
     );
   }

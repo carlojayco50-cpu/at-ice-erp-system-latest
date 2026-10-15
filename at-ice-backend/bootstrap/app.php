@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'password.changed' => \App\Http\Middleware\EnsurePasswordChanged::class,
             'kiosk' => \App\Http\Middleware\EnsureKioskToken::class,
+            'timed.in' => \App\Http\Middleware\EnsureTimedIn::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

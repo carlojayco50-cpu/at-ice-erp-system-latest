@@ -9,6 +9,8 @@ import { useLiveTick } from "../../lib/live";
 import PinPickerMap from "../../components/PinPickerMap";
 import AddressFields from "../../components/AddressFields";
 import LoginEmailChip from "../../components/LoginEmailChip";
+import DraftHint from "../../components/DraftHint";
+import { useDraft } from "../../lib/useDraft";
 
 const API_BASE = "/api";
 
@@ -22,7 +24,11 @@ const CopyIcon = () => <svg width="13" height="13" fill="none" stroke="currentCo
 const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const CheckIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
 
-const MOP_LABELS = { cash: "Cash", gcash: "GCash", check: "Cheque", bank_transfer: "Bank Transfer" };
+// Customer type and chain/group (filters on the list). Keys match Customer::TYPES.
+const CUSTOMER_TYPES = { supermarket: "Supermarket / Mall", convenience_store: "Convenience Store", restaurant: "Restaurant / Food", dealer: "Dealer / Reseller", other: "Other" };
+// Offered under Chain / Group next to the chains already saved.
+const CHAIN_SUGGESTIONS = ["SM", "Puregold", "WalterMart", "Robinsons", "Alfamart", "7-Eleven", "Ministop", "Independent"];
+const NOT_SET = "__none";
 
 // Create Login needs what Add Customer requires (CustomerController::LOGIN_REQUIRED).
 // The login is the customer's own email, checked on the server to be an existing account.
@@ -36,7 +42,8 @@ const POSTAL_REGEX = /^\d{4}$/;
 const EMPTY_FORM = {
   name: "", block_lot: "", street: "", subdivision: "", barangay: "",
   city: "", province: "", region: "", barangay_code: "", postal_code: "", contact_person: "",
-  contact_number: "", email: "", mop: "cash", notes: "",
+  contact_number: "", email: "", notes: "",
+  customer_type: "", chain: "",
   invoice_code: "", // starts every invoice number, e.g. PG-20261013-001 (blank: made from the name)
   latitude: "", longitude: "",
   _customerCode: "", _branchCode: "", _legacy: false, _legacyAddress: "", _mapLink: "",
@@ -82,13 +89,16 @@ export default function CustomersPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   const [search, setSearch]       = useState("");
+  const [typeFilter, setTypeFilter]   = useState("");
+  const [chainFilter, setChainFilter] = useState("");
 
-  const [showForm, setShowForm]   = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm]           = useState(EMPTY_FORM);
+  // Add/Edit modal: kept as a draft while open, so a refresh reopens it as it was.
+  const formDraft = useDraft("customers:form", { showForm: false, editingId: null, form: EMPTY_FORM }, { when: (v) => v.showForm });
+  const { showForm, editingId, form } = formDraft.values;
+  const { showForm: setShowForm, editingId: setEditingId, form: setForm } = formDraft.set;
   const [saving, setSaving]       = useState(false);
   const [formError, setFormError] = useState("");
-  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), []);
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
 
   const [deactivateTarget, setDeactivateTarget] = useState(null);
 
@@ -146,7 +156,8 @@ export default function CustomersPage() {
       contact_person: customer.contact_person || "",
       contact_number: localDigits(customer.contact_number),
       email: customer.email || "",
-      mop: customer.mop || "cash",
+      customer_type: customer.customer_type || "",
+      chain: customer.chain || "",
       notes: customer.notes || "",
       latitude: customer.latitude ?? "",
       longitude: customer.longitude ?? "",
@@ -279,12 +290,20 @@ export default function CustomersPage() {
     navigator.clipboard?.writeText(text).catch(() => {});
   }
 
+  // Chains already saved, for the filter and the Chain / Group suggestions.
+  const savedChains = [...new Set(customers.map((c) => c.chain).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const chainOptions = [...new Set([...savedChains, ...CHAIN_SUGGESTIONS])].sort((a, b) => a.localeCompare(b));
+
   const filtered = customers.filter((c) => {
+    if (typeFilter && (typeFilter === NOT_SET ? !!c.customer_type : c.customer_type !== typeFilter)) return false;
+    if (chainFilter && (chainFilter === NOT_SET ? !!c.chain : c.chain !== chainFilter)) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""}`.toLowerCase();
+    const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""} ${c.chain ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });
+  const filtering = !!(search || typeFilter || chainFilter);
+  const filterCls = "bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500";
 
   return (
     <AdminLayout pageTitle="Customers" breadcrumb="CRM / Customers">
@@ -296,7 +315,17 @@ export default function CustomersPage() {
               Store branches and their contract details. A portal login is created automatically when you add a customer.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
+              <option value="">All types</option>
+              {Object.entries(CUSTOMER_TYPES).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+              <option value={NOT_SET}>Type not set</option>
+            </select>
+            <select value={chainFilter} onChange={(e) => setChainFilter(e.target.value)} className={filterCls} aria-label="Filter by chain or group">
+              <option value="">All chains</option>
+              {savedChains.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
+              <option value={NOT_SET}>Chain not set</option>
+            </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
               <input
@@ -329,7 +358,7 @@ export default function CustomersPage() {
                 <th className="px-[18px] py-2.5 font-medium">Customer</th>
                 <th className="px-[18px] py-2.5 font-medium">Location</th>
                 <th className="px-[18px] py-2.5 font-medium">Contact</th>
-                <th className="px-[18px] py-2.5 font-medium">MOP</th>
+                <th className="px-[18px] py-2.5 font-medium">Type / Chain</th>
                 <th className="px-[18px] py-2.5 font-medium">Portal Login</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
@@ -340,7 +369,7 @@ export default function CustomersPage() {
               )}
               {!loading && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
-                  {search ? "No customers match your search." : "No customers found."}
+                  {filtering ? "No customers match your search or filters." : "No customers found."}
                 </td></tr>
               )}
               {!loading && filtered.map((c) => (
@@ -363,7 +392,14 @@ export default function CustomersPage() {
                       </>
                     ) : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-[18px] py-2.5 text-slate-600">{MOP_LABELS[c.mop] || c.mop}</td>
+                  <td className="px-[18px] py-2.5 text-slate-600">
+                    {c.customer_type || c.chain ? (
+                      <>
+                        <div>{CUSTOMER_TYPES[c.customer_type] || <span className="text-slate-300">—</span>}</div>
+                        {c.chain && <div className="text-[11px] text-slate-400">{c.chain}</div>}
+                      </>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td className="px-[18px] py-2.5">
                     {c.user ? (
                       <LoginEmailChip userId={c.user.id} email={c.user.email} onSaved={fetchCustomers} />
@@ -380,9 +416,7 @@ export default function CustomersPage() {
                             <KeyIcon />
                             {creatingAccountFor === c.id ? "Creating…" : "Create Login"}
                           </button>
-                          {missing.length > 0 && (
-                            <div className="mt-1 text-[11px] text-amber-600">Needs {missing.includes("email") ? "email" : missing[0]}{missing.length > 1 ? ` +${missing.length - 1} more` : ""}</div>
-                          )}
+                          {missing.length > 0 && <MissingBadge missing={missing} />}
                         </div>
                       );
                     })()}
@@ -415,8 +449,9 @@ export default function CustomersPage() {
       {/* Add / Edit Customer modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
+          {/* Header and buttons stay put; only the fields scroll. */}
+          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="shrink-0 px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">
                 {editingId ? "Edit Customer" : "Add Customer"}
               </h3>
@@ -424,7 +459,9 @@ export default function CustomersPage() {
                 <XIcon />
               </button>
             </div>
-            <form onSubmit={submitForm} className="p-5 flex flex-col gap-3">
+            <form onSubmit={submitForm} className="flex flex-col min-h-0 flex-1">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 flex flex-col gap-3">
+              <DraftHint draft={formDraft} />
               {formError && (
                 <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">
                   {formError}
@@ -432,11 +469,37 @@ export default function CustomersPage() {
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <Field label="Branch / Business Name *" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="e.g. Alfamart Muzon" required />
+                  <Field label="Branch / Business Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="e.g. Alfamart Muzon" required />
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
+                  <select
+                    value={form.customer_type}
+                    onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value }))}
+                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                  >
+                    <option value="">Not set</option>
+                    {Object.entries(CUSTOMER_TYPES).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-slate-500 mb-1 block">Chain / Group</label>
+                  <input
+                    type="text"
+                    list="customer-chains"
+                    value={form.chain}
+                    onChange={(e) => setForm((f) => ({ ...f, chain: e.target.value }))}
+                    placeholder="e.g. SM, Alfamart, Independent"
+                    maxLength={100}
+                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                  />
+                  <datalist id="customer-chains">
+                    {chainOptions.map((ch) => <option key={ch} value={ch} />)}
+                  </datalist>
                 </div>
                 <div className="col-span-2">
                   <Field
-                    label={`Invoice Code${editingId ? " *" : ""}`}
+                    label="Invoice Code"
                     value={form.invoice_code}
                     onChange={(v) => setForm((f) => ({ ...f, invoice_code: v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5) }))}
                     placeholder={editingId ? "e.g. PG" : "Leave blank to make it from the name"}
@@ -456,9 +519,9 @@ export default function CustomersPage() {
                     Customer Code and Branch Code are generated when you save.
                   </p>
                 )}
-                <Field label="Contact Person *" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required />
+                <Field label="Contact Person" value={form.contact_person} onChange={(v) => setForm({ ...form, contact_person: v })} placeholder="e.g. Juan Dela Cruz" required />
                 <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Contact Number *</label>
+                  <label className="text-[11px] text-slate-500 mb-1 block">Contact Number<Req /></label>
                   <PhoneInput
                     value={form.contact_number}
                     onChange={(v) => setForm({ ...form, contact_number: v })}
@@ -469,7 +532,7 @@ export default function CustomersPage() {
                 </div>
                 <div className="col-span-2">
                   <EmailDomainField
-                    label={editingId ? "Contact Email *" : "Contact Email * (also the portal login)"}
+                    label={editingId ? "Contact Email" : "Contact Email (also the portal login)"}
                     value={form.email}
                     onChange={(v) => setForm({ ...form, email: v })}
                     required
@@ -493,6 +556,7 @@ export default function CustomersPage() {
                       latitude: String(p.latitude),
                       longitude: String(p.longitude),
                     }))}
+                    onName={(name) => setForm((f) => ({ ...f, name }))}
                   />
                 </div>
                 <div className="col-span-2">
@@ -516,23 +580,13 @@ export default function CustomersPage() {
                   required={addressRequired}
                   inputClassName="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
                 />
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Mode of Payment *</label>
-                  <select
-                    value={form.mop}
-                    onChange={(e) => setForm({ ...form, mop: e.target.value })}
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  >
-                    {Object.entries(MOP_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>{label}</option>
-                    ))}
-                  </select>
-                </div>
                 <div className="col-span-2">
                   <Field label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 mt-2">
+              </div>
+              <div className="shrink-0 px-5 py-3 border-t border-black/[0.09] bg-white flex items-center justify-end gap-2">
+                <span className="mr-auto text-[11px] text-slate-400"><span className="text-red-500">*</span> Required</span>
                 <button type="button" onClick={() => setShowForm(false)} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
                   Cancel
                 </button>
@@ -628,7 +682,7 @@ export default function CustomersPage() {
 function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text" }) {
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">{label}</label>
+      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
       <input
         type={type}
         value={value}
@@ -643,26 +697,42 @@ function Field({ label, value, onChange, required, disabled, placeholder, inputM
   );
 }
 
+// "(14.7772, 121.0750)", "14.7772,121.0750" or "14.7772 121.0750" as a pin.
+const parseCoords = (text) => {
+  const m = text.match(/^\(?\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*\)?$/);
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]);
+  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 ? { lat, lng } : null;
+};
+
 // Map Link: paste a Google Maps link (e.g. https://maps.app.goo.gl/...) and
-// GET /api/places/from-link reads its pin, place name and address; onPlace
-// moves the map pin and fills the form. Only typing or pasting here looks the
-// link up; the link the map writes back after a drag is not looked up again.
-function MapLinkField({ value, onChange, onPlace }) {
+// GET /api/places/from-link reads its pin, place name and address; or paste
+// plain coordinates and GET /api/places/reverse reads the address and the
+// nearest store's name there. onPlace moves the map pin and fills the form;
+// when other stores are at the pin, clicking one sets it as the name (onName).
+// Only typing or pasting here looks it up; the link the map writes back after
+// a drag is not looked up again.
+function MapLinkField({ value, onChange, onPlace, onName }) {
   const [status, setStatus] = useState({ kind: "", text: "" });
+  const [nearby, setNearby] = useState([]);
   const timer = useRef(null);
   const seq = useRef(0);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const resolve = async (url) => {
+  const resolve = async (url, coords) => {
     const id = ++seq.current;
-    setStatus({ kind: "loading", text: "Reading the link…" });
+    setNearby([]);
+    setStatus({ kind: "loading", text: coords ? "Reading the coordinates…" : "Reading the link…" });
     try {
-      const res = await fetch(`${API_BASE}/places/from-link?url=${encodeURIComponent(url)}`, { headers: authHeaders() });
-      const data = await res.json().catch(() => null);
+      const query = coords ? `reverse?lat=${coords.lat}&lng=${coords.lng}&with_name=1` : `from-link?url=${encodeURIComponent(url)}`;
+      const res = await fetch(`${API_BASE}/places/${query}`, { headers: authHeaders() });
+      let data = await res.json().catch(() => null);
       if (id !== seq.current) return;
       if (!res.ok) { setStatus({ kind: "error", text: data?.message || "Couldn't read that link." }); return; }
+      if (coords) data = { ...data, latitude: coords.lat, longitude: coords.lng };
       onPlace(data);
+      setNearby(data.nearby?.length > 1 ? data.nearby : []);
       setStatus({ kind: "ok", text: `Pin set${data.name ? `: ${data.name}` : data.label ? `: ${data.label}` : ""}` });
     } catch {
       if (id === seq.current) setStatus({ kind: "error", text: "Couldn't read that link. Check the connection." });
@@ -673,25 +743,42 @@ function MapLinkField({ value, onChange, onPlace }) {
     onChange(v);
     clearTimeout(timer.current);
     const url = v.trim();
+    setNearby([]);
     if (!url) { seq.current++; setStatus({ kind: "", text: "" }); return; }
-    if (!/goo\.gl|google\./i.test(url)) { setStatus({ kind: "error", text: "Paste a Google Maps link, e.g. https://maps.app.goo.gl/..." }); return; }
-    timer.current = setTimeout(() => resolve(url), 500);
+    const coords = parseCoords(url);
+    if (!coords && !/goo\.gl|google\./i.test(url)) { setStatus({ kind: "error", text: "Paste a Google Maps link or coordinates, e.g. 14.7772, 121.0750" }); return; }
+    timer.current = setTimeout(() => resolve(url, coords), 500);
   };
 
   return (
     <div>
       <label className="text-[11px] text-slate-500 mb-1 block">Map Link</label>
       <input
-        type="url"
+        type="text"
         value={value}
         onChange={(e) => typed(e.target.value)}
-        placeholder="Paste the Google Maps link, e.g. https://maps.app.goo.gl/..."
+        placeholder="Paste the Google Maps link or coordinates, e.g. 14.7772, 121.0750"
         autoComplete="off"
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
       />
       <div className={`mt-1 text-[11px] ${status.kind === "error" ? "text-red-600" : status.kind === "ok" ? "text-emerald-600" : "text-slate-400"}`}>
-        {status.text || "In Google Maps, open the store, click Share, then copy the link here."}
+        {status.text || "In Google Maps, open the store, click Share, then copy the link here. Or paste the coordinates (right-click the spot in Google Maps)."}
       </div>
+      {nearby.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+          <span>Not this store? Also at this pin:</span>
+          {nearby.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => { onName(n); setStatus({ kind: "ok", text: `Pin set: ${n}` }); }}
+              className="px-2 py-0.5 rounded-full border border-black/[0.09] bg-white hover:border-cyan-500 hover:text-cyan-700"
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -729,7 +816,7 @@ function EmailDomainField({ label, value, onChange, required, savedEmail = "" })
 
   return (
     <div>
-      <label className="text-[11px] text-slate-500 mb-1 block">{label}</label>
+      <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
       <input
         type="email"
         value={value}
@@ -767,6 +854,29 @@ function CredentialRow({ label, value, onCopy }) {
       <button onClick={() => onCopy(value)} className="text-slate-400 hover:text-cyan-600 p-1">
         <CopyIcon />
       </button>
+    </div>
+  );
+}
+
+// Red asterisk on every required field.
+function Req() {
+  return <span className="text-red-500"> *</span>;
+}
+
+// "Needs email +2 more" under Create Login; hovering (or focusing) it lists
+// every field still missing.
+function MissingBadge({ missing }) {
+  return (
+    <div className="relative mt-1 inline-block group">
+      <span tabIndex={0} className="text-[11px] text-amber-600 underline decoration-dotted underline-offset-2 cursor-help outline-none">
+        Needs {missing.includes("email") ? "email" : missing[0]}{missing.length > 1 ? ` +${missing.length - 1} more` : ""}
+      </span>
+      <div role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-max max-w-[220px] rounded-md border border-black/[0.09] bg-white px-2.5 py-2 text-[11px] text-slate-600 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity">
+        <div className="font-medium text-slate-700 mb-1">Fill in on Edit before Create Login:</div>
+        <ul className="list-disc pl-4 space-y-0.5">
+          {missing.map((m) => <li key={m} className="capitalize">{m}</li>)}
+        </ul>
+      </div>
     </div>
   );
 }

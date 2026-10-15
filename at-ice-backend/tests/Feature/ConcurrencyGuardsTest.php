@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attendance;
 use App\Models\Customer;
 use App\Models\Delivery;
 use App\Models\DeliveryProof;
+use App\Models\Employee;
 use App\Models\Product;
 use App\Models\Receipt;
 use App\Models\StockMovement;
@@ -26,6 +28,10 @@ class ConcurrencyGuardsTest extends TestCase
             'product_id' => $product->id, 'type' => 'stock_in', 'quantity' => 5,
             'stock_before' => 10, 'stock_after' => 10, 'status' => 'pending', 'entered_by' => $checker->id,
         ]);
+
+        // A Checker saves only after timing in at the kiosk.
+        $emp = Employee::create(['user_id' => $other->id, 'employee_id' => 'EMP-0002', 'first_name' => 'Checker', 'last_name' => 'Two', 'position' => 'Checker', 'daily_rate' => 600, 'date_hired' => '2026-01-05', 'is_active' => true]);
+        Attendance::create(['employee_id' => $emp->id, 'date' => now()->toDateString(), 'time_in' => now()->subMinutes(5)->format('H:i:s'), 'status' => 'present']);
 
         Sanctum::actingAs($other);
         $this->putJson("/api/stock-movements/{$movement->id}/confirm")->assertOk();

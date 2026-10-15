@@ -28,6 +28,12 @@ class AttendanceController extends Controller
         }));
     }
 
+    // "09:03:10" -> "9:03:10 AM" for the CSV people read (seconds kept: late is counted from them)
+    private static function clock(?string $t): string
+    {
+        return $t ? Carbon::parse($t)->format('g:i:s A') : '';
+    }
+
     // GET /api/attendances/export?from=&to=[&employee_id=] : CSV of the history
     // (for documentation and coaching, e.g. absences in a row). The PDF is the
     // same list printed from the page.
@@ -46,8 +52,8 @@ class AttendanceController extends Controller
                     $a->employee?->full_name ?? $a->faceData?->worker_name ?? '',
                     $a->employee?->position ?? $a->faceData?->role ?? '',
                     $a->date?->toDateString(),
-                    $a->time_in,
-                    $a->time_out,
+                    self::clock($a->time_in),
+                    self::clock($a->time_out),
                     $a->hours_worked,
                     $a->late_minutes,
                     $a->status,

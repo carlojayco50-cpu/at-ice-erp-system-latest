@@ -8,7 +8,7 @@
 //   VL  vacation leave, starting at least 14 days from today
 //   Probationary staff cannot file leave. Leave is paid from credits (0.5 day
 //   per pay period once regular); without credits EL and VL are unpaid.
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { SkeletonList } from "../components/Skeleton";
 import { toast } from "../lib/toast";
@@ -17,6 +17,9 @@ import EmptyState from "../components/EmptyState";
 import { ScopeStatusRow } from "../components/NightMode";
 import MessageBubble from "../components/MessageBubble";
 import { openProtectedFile } from "../lib/openFile";
+import { useDraft } from "../lib/useDraft";
+import DraftHint from "../components/DraftHint";
+import FileField from "../components/FileField";
 
 const TYPE_LABEL = {
   sick: "Sick Leave (SL)",
@@ -48,12 +51,20 @@ export default function LeaveRequestPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  const [leaveType, setLeaveType] = useState("vacation");
-  const [halfDay, setHalfDay] = useState(false);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [hours, setHours] = useState("");
-  const [reason, setReason] = useState("");
+  // The form is kept as a draft once the employee changes something, so a
+  // refresh keeps it (the attachment has to be chosen again).
+  const draft = useDraft("leave:new", {
+    dirty: false, leaveType: "vacation", halfDay: false, startDate: "", endDate: "", hours: "", reason: "",
+  }, { when: (v) => v.dirty });
+  const { leaveType, halfDay, startDate, endDate, hours, reason } = draft.values;
+  const raw = draft.set;
+  const touched = (set) => (v) => { raw.dirty(true); set(v); };
+  const setLeaveType = touched(raw.leaveType);
+  const setHalfDay = touched(raw.halfDay);
+  const setStartDate = touched(raw.startDate);
+  const setEndDate = touched(raw.endDate);
+  const setHours = touched(raw.hours);
+  const setReason = touched(raw.reason);
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -92,14 +103,20 @@ export default function LeaveRequestPage() {
     emergency: { min: addDays(today, -slWindow), max: undefined },
   }[leaveType];
 
-  // Start on a valid date whenever the type changes
+  // Start on a valid date whenever the type changes. A date already there for
+  // the same type (a restored draft, or the credits just loaded) is kept while
+  // it still fits.
+  const lastType = useRef(null);
   useEffect(() => {
     const first = leaveType === "sick" ? addDays(todayStr(), -1) : leaveType === "vacation" ? addDays(todayStr(), vlNotice) : todayStr();
-    setStartDate(first);
-    setEndDate(first);
-    setHalfDay(false);
+    const sameType = lastType.current === null || lastType.current === leaveType;
+    lastType.current = leaveType;
+    if (sameType && startDate && (leaveType !== "vacation" || startDate >= first)) return;
+    raw.startDate(first);
+    raw.endDate(first);
+    raw.halfDay(false);
     setFormError("");
-  }, [leaveType, vlNotice]);
+  }, [leaveType, vlNotice, startDate, raw]);
 
   const length = leaveType === "emergency"
     ? (Number(hours) || 0) / hoursPerDay
@@ -108,18 +125,6 @@ export default function LeaveRequestPage() {
   const paidHint = length <= 0 ? "" : available >= length
     ? "Paid from your leave credits once HR approves it."
     : leaveType === "sick" ? "Not enough leave credits: sick leave cannot be filed." : `Only ${num(available)} day(s) of credits: the rest will be unpaid.`;
-
-  const onFile = (e) => {
-    const f = e.target.files?.[0] || null;
-    setFormError("");
-    if (f && f.size > 5 * 1024 * 1024) {
-      setFormError("File is too large. Maximum is 5MB.");
-      e.target.value = "";
-      setFile(null);
-      return;
-    }
-    setFile(f);
-  };
 
   const submit = async () => {
     setFormError("");
@@ -147,9 +152,8 @@ export default function LeaveRequestPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.errors ? Object.values(data.errors)[0][0] : data.message || `Could not submit (${res.status})`);
       toast.success(data.message || "Leave request was sent.");
-      setReason("");
+      draft.clear();
       setFile(null);
-      setHours("");
       await load();
     } catch (e) {
       setFormError(e.message);
@@ -207,6 +211,7 @@ export default function LeaveRequestPage() {
         ) : (
           <div className="bg-white border border-black/[0.09] rounded-2xl p-4 flex flex-col gap-3">
             <p className="text-[14px] font-bold text-slate-800">New Leave Application</p>
+            <DraftHint draft={draft} onDiscard={() => { setFile(null); setFormError(""); }} />
 
             <div>
               <label htmlFor="lv-type" className="block text-[12px] font-semibold text-slate-600 mb-1">Leave Type</label>
@@ -268,14 +273,13 @@ export default function LeaveRequestPage() {
               <label htmlFor="lv-file" className="block text-[12px] font-semibold text-slate-600 mb-1">
                 {leaveType === "sick" ? "Medical certificate (required, PNG, JPG or PDF, max 5MB)" : "Supporting document (optional, PNG, JPG or PDF, max 5MB)"}
               </label>
-              <input id="lv-file" type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={onFile}
-                className="block w-full text-[12px] text-slate-600 file:mr-3 file:px-3 file:py-2 file:text-[12px] file:font-semibold file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700" />
-              {file && <p className="text-[11px] text-slate-500 mt-1">Selected: {file.name}</p>}
+              <FileField id="lv-file" file={file} onChange={setFile} accept=".png,.jpg,.jpeg,.pdf" maxBytes={5 * 1024 * 1024}
+                onError={setFormError} label="Choose a file" hint="PNG, JPG or PDF, up to 5MB" />
             </div>
 
             {formError && <div role="alert" className="px-3 py-2 text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg">{formError}</div>}
 
-            <button onClick={submit} disabled={submitting} className="w-full py-3 text-[13px] font-bold uppercase tracking-wide text-white bg-cyan-500 rounded-xl hover:bg-cyan-600 disabled:opacity-60">
+            <button onClick={submit} disabled={submitting} className="w-full py-3 text-[13px] font-semibold text-white bg-cyan-500 rounded-xl hover:bg-cyan-600 disabled:opacity-60">
               {submitting ? "Submitting..." : "Submit Leave Request"}
             </button>
           </div>

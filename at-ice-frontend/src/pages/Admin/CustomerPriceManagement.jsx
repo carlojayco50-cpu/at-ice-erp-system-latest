@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
+import { useDraft } from "../../lib/useDraft";
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -54,8 +55,10 @@ export default function CustomerPriceManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [draft, setDraft] = useState({ bags: "", small_sack: "", big_sack: "" });
+  // The row being edited and its typed prices survive a refresh.
+  const priceDraft = useDraft("prices:edit", { editingId: null, draft: { bags: "", small_sack: "", big_sack: "" } }, { when: (v) => v.editingId != null });
+  const { editingId, draft } = priceDraft.values;
+  const { editingId: setEditingId, draft: setDraft } = priceDraft.set;
   const [saving, setSaving] = useState(false);
 
   // ?customer=ID (sent after Admin adds a customer): open that customer's
@@ -70,6 +73,15 @@ export default function CustomerPriceManagement() {
     fetchPrices();
   }, [live]);
 
+  const startEdit = useCallback((row) => {
+    setEditingId(row.customer_id);
+    setDraft({
+      bags: row.prices.bags ?? "",
+      small_sack: row.prices.small_sack ?? "",
+      big_sack: row.prices.big_sack ?? "",
+    });
+  }, [setEditingId, setDraft]);
+
   useEffect(() => {
     if (!focusId || loading) return;
     const row = rows.find((r) => r.customer_id === focusId);
@@ -78,7 +90,7 @@ export default function CustomerPriceManagement() {
       requestAnimationFrame(() => focusRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
     setSearchParams({}, { replace: true });
-  }, [focusId, loading, rows, setSearchParams]);
+  }, [focusId, loading, rows, setSearchParams, startEdit]);
 
   async function fetchPrices() {
     setLoading(true);
@@ -95,15 +107,6 @@ export default function CustomerPriceManagement() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function startEdit(row) {
-    setEditingId(row.customer_id);
-    setDraft({
-      bags: row.prices.bags ?? "",
-      small_sack: row.prices.small_sack ?? "",
-      big_sack: row.prices.big_sack ?? "",
-    });
   }
 
   function cancelEdit() {

@@ -4,6 +4,8 @@ import MessageBubble from "../../components/MessageBubble";
 import { COMPANY, CYAN_BUTTON, ICE_CARD, ICE_INSET, SUPPORT_TOPICS } from "../../lib/company";
 import { toList } from "../../lib/list";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 
 const authHeaders = (extra = {}) => ({
@@ -23,8 +25,11 @@ const fieldCls =
 
 
 export default function CustomerSupport() {
-  const [topic, setTopic] = useState(SUPPORT_TOPICS[0].key);
-  const [message, setMessage] = useState("");
+  // An unsent message survives a refresh.
+  const draft = useDraft("support:new", { topic: SUPPORT_TOPICS[0].key, message: "" });
+  const { topic, message } = draft.values;
+  const { topic: setTopic } = draft.set;
+  const setMessage = draft.set.message;
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState("");
@@ -70,7 +75,7 @@ export default function CustomerSupport() {
         const firstFieldError = data.errors ? Object.values(data.errors)[0]?.[0] : null;
         throw new Error(firstFieldError || data.message || "Your message could not be sent.");
       }
-      setMessage("");
+      draft.clear();
       toast.success("Your message was sent.");
       setSent("Sent to the dispatch room. The supervisor on duty will get back to you.");
       loadHistory();
@@ -87,6 +92,7 @@ export default function CustomerSupport() {
         <div className="flex flex-col gap-5 min-w-0">
           {/* Message form */}
           <form onSubmit={submit} className={`${ICE_CARD} p-6 sm:p-7 flex flex-col gap-5`}>
+            <DraftHint draft={draft} />
             <div>
               <h2 className="text-[17px] font-bold text-slate-800">Send Direct Message to Dispatch Room</h2>
               <p className="text-[12px] text-slate-500 mt-1">
