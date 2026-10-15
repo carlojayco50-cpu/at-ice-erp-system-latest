@@ -7,6 +7,13 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
+import AddressFields from "../../components/AddressFields";
+import ScanDropZone from "../../components/ScanDropZone";
+import { filledFrom } from "../../lib/scanDocument";
+import { fullName } from "../../lib/names";
+import { APPLICANT_POSITIONS, applyUrl, isLocalTesting } from "../../lib/positions";
+import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
+import QRCode from "qrcode";
 
 const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 const SearchIcon  = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
@@ -18,11 +25,11 @@ const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
   const res = await fetch(url, {
     ...options,
+    // A FormData body (resume upload) sets its own multipart Content-Type.
     headers: {
       Accept: "application/json",
-      "Content-Type": "application/json",
+      ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       Authorization: `Bearer ${token()}`,
-      ...(options.headers || {}),
     },
   });
   let data = null;
@@ -36,8 +43,8 @@ async function api(url, options = {}) {
 
 const toList = (d) => (Array.isArray(d) ? d : Array.isArray(d?.data) ? d.data : []);
 
-// Positions at Bella Erin (free text is still allowed)
-const POSITIONS = ["Checker", "Salesman", "Maintenance", "Driver", "Guard", "Bagger", "Admin Staff"];
+// Positions at Bella Erin (an older free-text value is still shown)
+const POSITIONS = APPLICANT_POSITIONS;
 
 const STATUS_LABEL = { pending: "Pending", interviewed: "Interviewed", hired: "Hired", rejected: "Rejected" };
 const STATUS_CLASS = {
@@ -102,7 +109,32 @@ const scheduleHint = (a) => {
   return null;
 };
 
-const EMPTY_FORM = { name: "", email: "", phone: "", position_applied: "", interview_date: "", notes: "" };
+const ADDRESS_KEYS = ["block_lot", "street", "subdivision", "barangay", "barangay_code", "city", "province", "region", "postal_code"];
+const EMPTY_ADDRESS = Object.fromEntries(ADDRESS_KEYS.map((k) => [k, ""]));
+const EMPTY_FORM = { name: "", email: "", phone: "", position_applied: "", interview_date: "", interview_minutes: "30", notes: "", resumeFile: null, ...EMPTY_ADDRESS };
+
+// Interviews take 30 or 45 minutes and may not overlap (the server checks
+// too: ApplicantController@assertFreeSlot). The pending interview that
+// overlaps [start, start + minutes), or null.
+const INTERVIEW_MINUTES = [30, 45];
+const RESUME_FILE = /.(pdf|docx?)$/i;
+function interviewClash(applicants, startValue, minutes, exceptId) {
+  const start = parseLocal(startValue);
+  if (!start) return null;
+  const end = new Date(start.getTime() + minutes * 60000);
+  return applicants.find((a) => {
+    if (a.id === exceptId || a.status !== "pending") return false;
+    const s = parseLocal(a.interview_date);
+    if (!s) return false;
+    const e = new Date(s.getTime() + (a.interview_minutes || 30) * 60000);
+    return s < end && e > start;
+  }) || null;
+}
+const fmtTime = (d) => d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+
+// "Blk 5 Lot 12, Rizal St, Brgy. Muzon, San Jose Del Monte, Bulacan"
+const addressLine = (a) =>
+  [a.block_lot, a.street, a.subdivision, a.barangay && `Brgy. ${a.barangay}`, a.city, a.province, a.postal_code].filter(Boolean).join(", ");
 
 function Modal({ title, onClose, children, width = "max-w-lg" }) {
   return (
@@ -116,6 +148,105 @@ function Modal({ title, onClose, children, width = "max-w-lg" }) {
       </div>
     </div>
   );
+}
+
+// QR code of the public application form (/apply). People scan it with their
+// phone, fill in the form, and the application shows up here as Pending ("QR").
+function ApplyQrModal({ onClose }) {
+  // Blank: the general form. An employee ID: that employee's referral link.
+  const [referrer, setReferrer] = useState("");
+  const code = /^EMP-\d{4,}$/i.test(referrer.trim()) ? referrer.trim().toUpperCase() : "";
+  const url = applyUrl(code);
+  const [qr, setQr] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    QRCode.toDataURL(url, { width: 640, margin: 2, errorCorrectionLevel: "M", color: { dark: "#0f172a", light: "#ffffff" } })
+      .then(setQr)
+      .catch(() => setQr(""));
+  }, [url]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy. Select the link and copy it.");
+    }
+  };
+
+  const print = () => printDocument(`<!doctype html><html><head><title>Apply at Bella Erin</title><style>${PRINT_BASE_CSS}
+    body { font-family: Arial, sans-serif; color: #0f172a; text-align: center; }
+    .sheet { padding-top: 22mm; }
+    h1 { font-size: 34px; margin: 0 0 6px; letter-spacing: 1px; }
+    h2 { font-size: 18px; font-weight: normal; margin: 0 0 18px; color: #334155; }
+    img { width: 110mm; max-width: 80%; height: auto; }
+    .steps { font-size: 15px; margin: 16px auto 0; max-width: 140mm; line-height: 1.6; }
+    .url { font-family: monospace; font-size: 14px; margin-top: 10px; color: #0e7490; }
+  </style></head><body><div class="sheet">
+    <h1>WE'RE HIRING</h1><h2>Bella Erin · AT-ICE Purified Ice</h2>
+    <img src="${qr}" alt="QR code" />
+    <div class="steps">Scan with your phone camera, fill in the form and send.<br/>HR will contact you to set your interview.</div>
+    <div class="url">${url}</div>
+  </div></body></html>`);
+
+  return (
+    <Modal title="Application QR Code" onClose={onClose} width="max-w-sm">
+      <div className="p-5 flex flex-col items-center gap-3 text-center">
+        <p className="text-[12px] text-slate-500">
+          Applicants scan this with their phone to fill in the job application form. Each one shows up here as <b>Pending</b>, marked <b>QR</b>.
+        </p>
+        <label className="w-full flex flex-col gap-1 text-left">
+          <span className="text-[11px] text-slate-500">Referral QR for an employee (optional)</span>
+          <input value={referrer} onChange={(e) => setReferrer(e.target.value)} placeholder="Employee ID, e.g. EMP-0001"
+            className="px-2.5 py-1.5 border border-black/[0.09] rounded-md text-xs font-mono" />
+          <span className="text-[10px] text-slate-400">{code ? `Applicants who use this QR are recorded as referred by ${code}. Any referral bonus is added by Admin in payroll.` : "Leave blank for the general application QR."}</span>
+        </label>
+        <div className="w-60 h-60 rounded-lg border border-black/[0.09] bg-white flex items-center justify-center overflow-hidden">
+          {qr ? <img src={qr} alt={`QR code for ${url}`} className="w-full h-full" /> : <span className="text-[11px] text-slate-400">Making the QR code…</span>}
+        </div>
+        <div className="w-full flex items-center gap-2 px-2.5 py-1.5 border border-black/[0.09] rounded-md bg-slate-50">
+          <span className="flex-1 min-w-0 truncate text-[11px] font-mono text-slate-600" title={url}>{url}</span>
+          <button type="button" onClick={copy} className="text-[11px] font-semibold text-cyan-600 hover:text-cyan-700 cursor-pointer">{copied ? "Copied" : "Copy link"}</button>
+        </div>
+        {isLocalTesting() && (
+          <p className="w-full text-left text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+            Testing on this computer: the phone must be on the same Wi-Fi/network as this computer. Once the system is online, the QR uses the website's address.
+          </p>
+        )}
+        <div className="w-full grid grid-cols-2 gap-2">
+          <a href={url} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-md border border-black/[0.09] text-xs font-medium text-slate-600 hover:border-cyan-400 hover:text-cyan-600 text-center">Open form</a>
+          <button type="button" onClick={print} disabled={!qr} className="px-3 py-2 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold cursor-pointer disabled:opacity-50">Print poster</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Opens the resume or CV an applicant attached (GET applicants/{id}/resume,
+// HR only): a PDF or picture in a new tab, a Word file is downloaded.
+async function openResume(applicant) {
+  const tab = window.open("", "_blank"); // opened now, so the pop-up blocker allows it
+  try {
+    const res = await fetch(`/api/applicants/${applicant.id}/resume`, { headers: { Authorization: `Bearer ${token()}` } });
+    if (!res.ok) throw new Error(res.status === 404 ? "This resume file is missing." : "The resume could not be opened.");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    if (tab && /^(application\/pdf|image\/)/.test(blob.type)) {
+      tab.location.href = url;
+    } else {
+      tab?.close();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = applicant.resume_name || "resume";
+      a.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (err) {
+    tab?.close();
+    toast.error(err.message);
+  }
 }
 
 function Field({ label, children }) {
@@ -136,12 +267,22 @@ export default function InterviewsPage() {
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [notice, setNotice] = useState("");
+  const [showQr, setShowQr] = useState(false);
 
   // Add / edit
   const [editing, setEditing] = useState(null); // null = closed, {} = new, applicant = edit
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), []);
+  // Name, mobile number, email and address read from a PDF or Word resume.
+  // The resume itself is attached to the applicant when it is saved.
+  const handleScan = (result, file) => setForm((f) => ({
+    ...f,
+    resumeFile: file && RESUME_FILE.test(file.name) ? file : f.resumeFile,
+    ...filledFrom(result, { phone: "phone", email: "email" }),
+    ...(result.person?.last_name ? { name: fullName(result.person) } : {}),
+  }));
 
   // Status change, view, delete
   const [statusAction, setStatusAction] = useState(null); // { applicant, status }
@@ -208,7 +349,10 @@ export default function InterviewsPage() {
       phone: localDigits(a.phone),
       position_applied: a.position_applied || "",
       interview_date: toInputValue(a.interview_date),
+      interview_minutes: String(a.interview_minutes || 30),
       notes: a.notes || "",
+      resumeFile: null,
+      ...Object.fromEntries(ADDRESS_KEYS.map((k) => [k, a[k] || ""])),
     });
     setFormError("");
     setEditing(a);
@@ -216,7 +360,11 @@ export default function InterviewsPage() {
   const isNew = editing && !editing.id;
   // Schedule can be set or changed only while the applicant is still pending
   const canEditSchedule = isNew || editing?.status === "pending";
-  const scheduleChanged = !isNew && editing && form.interview_date !== toInputValue(editing.interview_date);
+  const scheduleChanged = !isNew && editing && (form.interview_date !== toInputValue(editing.interview_date) || Number(form.interview_minutes) !== (editing.interview_minutes || 30));
+  const clash = editing && canEditSchedule && (isNew || scheduleChanged)
+    ? interviewClash(applicants, form.interview_date, Number(form.interview_minutes), editing.id)
+    : null;
+  const interviewEnds = parseLocal(form.interview_date) && new Date(parseLocal(form.interview_date).getTime() + Number(form.interview_minutes) * 60000);
 
   const submitForm = async (e) => {
     e.preventDefault();
@@ -227,6 +375,10 @@ export default function InterviewsPage() {
     if ((isNew || scheduleChanged) && form.interview_date && form.interview_date <= nowInputValue()) {
       return setFormError("The interview date and time must be in the future.");
     }
+    if (clash) {
+      const s = parseLocal(clash.interview_date);
+      return setFormError(`This overlaps ${clash.name}'s interview (${fmtTime(s)}–${fmtTime(new Date(s.getTime() + (clash.interview_minutes || 30) * 60000))}). Pick another time.`);
+    }
 
     const payload = {
       name: form.name.trim(),
@@ -234,18 +386,32 @@ export default function InterviewsPage() {
       phone: toStoredPhone(form.phone) || null,
       position_applied: form.position_applied.trim(),
       notes: form.notes.trim() || null,
+      ...Object.fromEntries(ADDRESS_KEYS.map((k) => [k, String(form[k] || "").trim() || null])),
     };
     // Send the schedule only when it is editable, so a non-pending record is never rescheduled
-    if (canEditSchedule) payload.interview_date = form.interview_date || null;
+    if (canEditSchedule) {
+      payload.interview_date = form.interview_date || null;
+      payload.interview_minutes = Number(form.interview_minutes) || 30;
+    }
+
+    // With a resume attached the form goes as multipart (PUT is sent as POST + _method).
+    const send = (url, method) => {
+      if (!form.resumeFile) return api(url, { method, body: JSON.stringify(payload) });
+      const body = new FormData();
+      for (const [k, v] of Object.entries(payload)) if (v !== null && v !== undefined) body.append(k, v);
+      body.append("resume", form.resumeFile);
+      if (method !== "POST") body.append("_method", method);
+      return api(url, { method: "POST", body });
+    };
 
     setSaving(true);
     try {
       if (isNew) {
-        await api("/api/applicants", { method: "POST", body: JSON.stringify(payload) });
+        await send("/api/applicants", "POST");
         setNotice(form.interview_date ? "Applicant added and interview scheduled." : "Applicant added.");
         toast.success("Applicant was added.");
       } else {
-        await api(`/api/applicants/${editing.id}`, { method: "PUT", body: JSON.stringify(payload) });
+        await send(`/api/applicants/${editing.id}`, "PUT");
         setNotice("Applicant updated.");
       }
       setEditing(null);
@@ -350,6 +516,13 @@ export default function InterviewsPage() {
             />
           </div>
           <button
+            onClick={() => setShowQr(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 border border-cyan-500/50 text-cyan-700 hover:bg-cyan-50 text-xs font-semibold rounded-md cursor-pointer transition-colors"
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M21 14v.01M14 21h7M21 17v4" strokeLinecap="round" /></svg>
+            Application QR
+          </button>
+          <button
             onClick={openNew}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold rounded-md cursor-pointer transition-colors"
           >
@@ -398,7 +571,17 @@ export default function InterviewsPage() {
                     return (
                       <tr key={a.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                         <td className="px-[18px] py-2.5">
-                          <div className="text-slate-800 font-medium whitespace-nowrap">{a.name}</div>
+                          <div className="text-slate-800 font-medium whitespace-nowrap">
+                            {a.name}
+                            {a.resume_name && (
+                              <button type="button" onClick={() => openResume(a)} title={`Open resume: ${a.resume_name}`} className="ml-1.5 align-middle px-1.5 py-px rounded bg-violet-50 border border-violet-200 text-[9px] font-bold text-violet-700 cursor-pointer hover:bg-violet-100">CV</button>
+                            )}
+                            {(a.possible_duplicates || []).length > 0 && (
+                              <button type="button" onClick={() => setViewing(a)} title="Same name and address as another application with a different email"
+                                className="ml-1.5 align-middle px-1.5 py-px rounded bg-red-50 border border-red-200 text-[9px] font-bold text-red-700 cursor-pointer">POSSIBLE DUPLICATE</button>
+                            )}
+                            {a.source === "qr" && <span title="Applied through the QR code form" className="ml-1.5 align-middle px-1.5 py-px rounded bg-cyan-50 border border-cyan-200 text-[9px] font-bold text-cyan-700">QR</span>}
+                          </div>
                           <div className="text-[10px] text-slate-400">{[a.phone, a.email].filter(Boolean).join(" · ") || "No contact details"}</div>
                         </td>
                         <td className="px-[18px] py-2.5 text-slate-600 whitespace-nowrap">{a.position_applied}</td>
@@ -450,6 +633,10 @@ export default function InterviewsPage() {
       {editing && (
         <Modal title={isNew ? "Add Applicant" : "Edit Applicant"} onClose={() => !saving && setEditing(null)}>
           <form onSubmit={submitForm} className="p-5 flex flex-col gap-3.5">
+            <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, email and address. The resume is attached to the applicant" />
+            {form.resumeFile && (
+              <div className="text-[11px] text-slate-500 -mt-1">Resume to attach: <span className="font-medium text-slate-700">{form.resumeFile.name}</span> <button type="button" onClick={() => setForm((f) => ({ ...f, resumeFile: null }))} className="ml-1 text-red-600 hover:underline cursor-pointer">Remove</button></div>
+            )}
             <Field label="Full Name">
               <input type="text" maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
             </Field>
@@ -471,6 +658,16 @@ export default function InterviewsPage() {
               </Field>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 text-[12px] font-semibold text-slate-700">Address (optional)</div>
+              <AddressFields
+                value={form}
+                onChange={handleAddress}
+                inputClassName={`w-full min-w-0 ${inputClass} disabled:opacity-60`}
+                labelClassName="text-[11px] font-medium text-slate-500"
+              />
+            </div>
+
             <Field label="Position Applied">
               {/* Pick only: no typing, so every applicant uses the same position names */}
               <select
@@ -488,14 +685,33 @@ export default function InterviewsPage() {
             </Field>
 
             <Field label="Interview Date and Time (optional, Philippine time)">
-              <input
-                type="datetime-local"
-                value={form.interview_date}
-                min={canEditSchedule ? nowInputValue() : undefined}
-                disabled={!canEditSchedule}
-                onChange={(e) => setForm({ ...form, interview_date: e.target.value })}
-                className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
-              />
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  type="datetime-local"
+                  value={form.interview_date}
+                  min={canEditSchedule ? nowInputValue() : undefined}
+                  disabled={!canEditSchedule}
+                  onChange={(e) => setForm({ ...form, interview_date: e.target.value })}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+                />
+                <select
+                  aria-label="Interview length"
+                  value={form.interview_minutes}
+                  disabled={!canEditSchedule}
+                  onChange={(e) => setForm({ ...form, interview_minutes: e.target.value })}
+                  className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+                >
+                  {INTERVIEW_MINUTES.map((m) => <option key={m} value={m}>{m} min</option>)}
+                </select>
+              </div>
+              {canEditSchedule && interviewEnds && !clash && (
+                <span className="text-[10px] text-slate-400">Ends about {fmtTime(interviewEnds)}. Interviews may not overlap.</span>
+              )}
+              {clash && (
+                <span className="text-[10px] text-red-600">
+                  Overlaps {clash.name}'s interview ({fmtTime(parseLocal(clash.interview_date))}–{fmtTime(new Date(parseLocal(clash.interview_date).getTime() + (clash.interview_minutes || 30) * 60000))}). Pick another time.
+                </span>
+              )}
               {!canEditSchedule && (
                 <span className="text-[10px] text-slate-400">The schedule is locked because this applicant is already {STATUS_LABEL[editing.status] || editing.status}.</span>
               )}
@@ -585,6 +801,8 @@ export default function InterviewsPage() {
         </Modal>
       )}
 
+      {showQr && <ApplyQrModal onClose={() => setShowQr(false)} />}
+
       {/* DETAIL MODAL */}
       {viewing && (
         <Modal title="Applicant Details" onClose={() => setViewing(null)}>
@@ -594,6 +812,23 @@ export default function InterviewsPage() {
               ["Position Applied", viewing.position_applied],
               ["Phone", viewing.phone || "—"],
               ["Email", viewing.email || "—"],
+              ["Applied Through", viewing.source === "qr" ? "QR code form (filled in by the applicant)" : "Added by HR"],
+              ["Submitted", fmtDateTime(viewing.created_at)],
+              ["Referred By", viewing.referred_by ? `${viewing.referred_by.employee_id} · ${[viewing.referred_by.first_name, viewing.referred_by.last_name].filter(Boolean).join(" ")}` : "—"],
+              ["Possible Duplicate", (viewing.possible_duplicates || []).length === 0 ? "—" : (
+                <span className="flex flex-col gap-1">
+                  {viewing.possible_duplicates.map((d) => (
+                    <button key={d.id} type="button" onClick={() => setViewing(applicants.find((x) => x.id === d.id) || viewing)} className="text-left text-red-700 hover:underline cursor-pointer">
+                      {d.name} · {d.email || "no email"} · sent {fmtDateTime(d.created_at)} ({d.status})
+                    </button>
+                  ))}
+                  <span className="text-[10px] text-slate-400">Same name and address with a different email. Decide which application is valid.</span>
+                </span>
+              )],
+              ["Resume / CV", viewing.resume_name
+                ? <button type="button" onClick={() => openResume(viewing)} className="text-cyan-600 hover:underline font-medium cursor-pointer text-left break-all">{viewing.resume_name}</button>
+                : "—"],
+              ["Address", addressLine(viewing) || "—"],
               ["Interview", fmtInterview(viewing.interview_date)],
               ["Status", STATUS_LABEL[viewing.status] || viewing.status],
               ["HR Notes", viewing.notes || "—"],

@@ -76,7 +76,7 @@ export default function CustomerReceipts() {
         if (!res.ok) throw new Error(`Could not load receipts (${res.status})`);
         setReceipts(toList(await res.json()));
       } catch (err) {
-        setError(err.message || "Could not load your receipts.");
+        setError(err.message || "Could not load your invoices.");
       } finally {
         setLoading(false);
       }
@@ -107,7 +107,7 @@ export default function CustomerReceipts() {
   const visible = receipts.filter((r) => filter === "all" || r.payment_status === filter);
 
   return (
-    <CustomerLayout pageTitle="Receipts & Balance" breadcrumb="Billing">
+    <CustomerLayout pageTitle="Invoices & Balance" breadcrumb="Billing">
       {loading ? (
         <SkeletonList card />
       ) : error ? (
@@ -118,7 +118,7 @@ export default function CustomerReceipts() {
             <StatCard
               label="Balance Due"
               value={peso(summary.balance)}
-              sub={summary.balance > 0 ? "Unpaid and overdue receipts" : "No balance"}
+              sub={summary.balance > 0 ? "Unpaid and overdue invoices" : "No balance"}
             />
             <StatCard
               label="Overdue"
@@ -163,14 +163,14 @@ export default function CustomerReceipts() {
           <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
             {visible.length === 0 ? (
               <div className="px-5 py-10 text-center text-xs text-slate-400">
-                {receipts.length === 0 ? "No receipts yet." : "No receipts match your filter."}
+                {receipts.length === 0 ? "No invoices yet." : "No invoices match your filter."}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-left text-slate-400 border-b border-black/[0.09]">
-                      <th className="px-5 py-3 font-medium">Receipt No.</th>
+                      <th className="px-5 py-3 font-medium">Invoice No.</th>
                       <th className="px-3 py-3 font-medium hidden sm:table-cell">Date</th>
                       <th className="px-3 py-3 font-medium text-right">Amount</th>
                       <th className="px-3 py-3 font-medium">Status</th>

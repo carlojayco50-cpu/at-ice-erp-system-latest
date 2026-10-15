@@ -7,6 +7,7 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
+import AddressFields from "../../components/AddressFields";
 import { ScopeStatusRow } from "../../components/NightMode";
 
 const ChevronLeftIcon = () => (
@@ -29,8 +30,11 @@ const emptyForm = {
   contact_number: "",
   email: "",
   address: "",
+  barangay: "",
+  barangay_code: "",
   city: "",
   province: "",
+  region: "",
   notes: "",
 };
 
@@ -49,6 +53,7 @@ export default function CheckerSupplierManagementPage() {
   const [deletingId, setDeletingId] = useState(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [notice, setNotice] = useState("");
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), []);
 
   useEffect(() => {
     if (!notice) return;
@@ -96,8 +101,11 @@ export default function CheckerSupplierManagementPage() {
       contact_number: localDigits(s.contact_number),
       email: s.email || "",
       address: s.address || "",
+      barangay: s.barangay || "",
+      barangay_code: s.barangay_code || "",
       city: s.city || "",
       province: s.province || "",
+      region: s.region || "",
       notes: s.notes || "",
     });
     setShowForm(true);
@@ -243,21 +251,16 @@ export default function CheckerSupplierManagementPage() {
             <input
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="Address"
+              placeholder="House no., street, subdivision"
+              aria-label="Street address"
               className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
             />
-            <div className="flex gap-2.5">
-              <input
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                placeholder="City"
-                className="flex-1 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
-              />
-              <input
-                value={form.province}
-                onChange={(e) => setForm({ ...form, province: e.target.value })}
-                placeholder="Province"
-                className="flex-1 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
+            <div className="grid grid-cols-2 gap-2.5">
+              <AddressFields
+                value={form}
+                onChange={handleAddress}
+                details={false}
+                inputClassName="w-full min-w-0 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400 disabled:opacity-60"
               />
             </div>
             <textarea
@@ -320,9 +323,9 @@ export default function CheckerSupplierManagementPage() {
                     {s.contact_number && <span>{s.contact_number}</span>}
                     {s.email && <span>{s.email}</span>}
                   </div>
-                  {(s.address || s.city || s.province) && (
+                  {(s.address || s.barangay || s.city || s.province) && (
                     <div className="text-[12px] text-slate-400 mt-1">
-                      {[s.address, s.city, s.province].filter(Boolean).join(", ")}
+                      {[s.address, s.barangay && `Brgy. ${s.barangay}`, s.city, s.province].filter(Boolean).join(", ")}
                     </div>
                   )}
                   {s.notes && <div className="text-[12px] text-slate-400 mt-1 italic">{s.notes}</div>}

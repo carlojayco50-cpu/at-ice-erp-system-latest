@@ -208,7 +208,7 @@ export default function CustomerDashboard() {
             Recent Receipts
           </div>
           {recentReceipts.length === 0 ? (
-            <EmptyState icon="receipt" compact>No receipts yet.</EmptyState>
+            <EmptyState icon="receipt" compact>No invoices yet.</EmptyState>
           ) : (
             <div className="divide-y divide-black/[0.06]">
               {recentReceipts.map((r) => (

@@ -5,6 +5,7 @@ import echo from "../../echo";
 import AdminLayout from "../../components/AdminLayout";
 import EmptyState from "../../components/EmptyState";
 import { useLiveTick } from "../../lib/live";
+import { BoardGroup, BoardRow, StatusCell } from "../../components/Board";
 
 const DollarIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const AlertIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
@@ -16,6 +17,12 @@ const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="curren
 // HELPERS
 const fmt  = (n) => "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const token = () => localStorage.getItem("token") || "";
+// "07:58:00" -> "7:58 AM"
+const clock = (t) => {
+  const [h, m] = String(t || "").split(":").map(Number);
+  if (!Number.isFinite(h)) return "—";
+  return `${((h + 11) % 12) + 1}:${String(m || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+};
 
 // Chart axis: ₱0, ₱200, ₱1.2K, ₱15K (previously every value under ₱2,000 showed as ₱1K)
 const compactPeso = (v) =>
@@ -270,6 +277,14 @@ export default function Dashboard() {
   const inventory = biData?.inventory || {};
   const attendance= biData?.attendance|| {};
   const overdue   = biData?.overdue   || {};
+  const forecast  = biData?.forecast  || {};
+  const nextMonth = forecast.next_month || {};
+  const productLabels = forecast.product_labels || {};
+  const forecastHistory = forecast.history || [];
+  const historyMax = Math.max(1, ...forecastHistory.map((h) => Number(h.revenue) || 0), Number(nextMonth.revenue) || 0);
+  const driversToday = biData?.drivers_today || [];
+  const stores = biData?.stores || [];
+  const storesTotal = stores.reduce((sum, s) => sum + Number(s.revenue || 0), 0);
 
   const salesMomUp  = (sales.mom_change_pct ?? 0) >= 0;
   const delMomUp    = (deliveries.mom_change_pct ?? 0) >= 0;
@@ -328,7 +343,7 @@ export default function Dashboard() {
         {/* PRIMARY METRIC: Total Sales (opens Receipts) */}
         <div
           onClick={() => navigate("/admin/receipts")}
-          title="Open Receipts"
+          title="Open Invoices"
           className="col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150"
         >
           <span className="text-[11px] font-medium tracking-[0.02em] text-slate-400">Total Sales (This Month)</span>
@@ -468,8 +483,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-5 border-t border-black/[0.09]">
               {[
                 ["Total Sales",      fmt(sales.this_month_total),  false],
-                ["Total Receipts",    String(sales.total_orders||0), false],
-                ["Avg Receipt Value", fmt(sales.avg_order_value),   false],
+                ["Total Invoices",    String(sales.total_orders||0), false],
+                ["Avg Invoice Value", fmt(sales.avg_order_value),   false],
                 ["Paid",             fmt(sales.paid_this_month),   false],
                 ["Unpaid",           fmt(sales.unpaid_this_month), true ],
               ].map(([label,val,danger],i) => (
@@ -479,6 +494,65 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* MRR and next month's estimate (GET /api/bi/summary -> forecast) */}
+          <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
+            <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-[13px] font-semibold text-slate-800">Forecast · {nextMonth.label || "Next month"}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {nextMonth.method === "trend" ? "From the trend of the last 6 months of invoices"
+                    : nextMonth.method === "this_month" ? "From this month's sales so far (no complete month yet)"
+                    : "From the average month so far (less than 3 months of sales)"}
+                </div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#579bfc]/10 text-[#3a7fe0] font-semibold">Estimate</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1.6fr] divide-x divide-black/[0.06]">
+              <div className="px-[18px] py-3.5">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">MRR</div>
+                <div className="text-[22px] font-semibold text-slate-800 font-mono">{noFigures ? "—" : fmt(forecast.mrr)}</div>
+                <div className="text-[10px] text-slate-400">
+                  {nextMonth.method === "this_month" ? "This month's pace" : `${forecast.regular_customers || 0} regular store${forecast.regular_customers === 1 ? "" : "s"} · avg of last 3 months`}
+                </div>
+              </div>
+              <div className="px-[18px] py-3.5">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Revenue next month</div>
+                <div className="text-[22px] font-semibold text-slate-800 font-mono">{noFigures ? "—" : fmt(nextMonth.revenue)}</div>
+                {nextMonth.change_pct != null && (
+                  <div className={`flex items-center gap-1 text-[10px] font-medium ${nextMonth.change_pct >= 0 ? "text-green-600" : "text-red-500"}`}>
+                    {nextMonth.change_pct >= 0 ? <ArrowUp /> : <ArrowDown />}{Math.abs(nextMonth.change_pct)}% vs last month
+                  </div>
+                )}
+              </div>
+              <div className="col-span-2 md:col-span-1 px-[18px] py-3.5 border-t md:border-t-0 border-black/[0.06]">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">Ice to prepare next month</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {Object.entries(nextMonth.quantity || {}).map(([k, q]) => (
+                    <div key={k} className="rounded-md overflow-hidden border border-black/[0.06]">
+                      <StatusCell tone="info">{q.toLocaleString("en-PH")}</StatusCell>
+                      <div className="text-[10px] text-center text-slate-500 py-1 px-1 truncate">{productLabels[k] || k}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {forecastHistory.length > 0 && (
+              <div className="px-[18px] py-3 border-t border-black/[0.06]">
+                <div className="flex items-end gap-1.5 h-16" aria-label="Invoice totals of the last 6 months">
+                  {[...forecastHistory, { label: `${nextMonth.label || "Next"} (est.)`, revenue: nextMonth.revenue, estimate: true }].map((h) => (
+                    <div key={h.label} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${h.label}: ${fmt(h.revenue)}`}>
+                      <div
+                        className={`w-full rounded-t ${h.estimate ? "bg-[#579bfc]/40 border border-dashed border-[#579bfc]" : "bg-[#579bfc]"}`}
+                        style={{ height: `${Math.max(3, (Number(h.revenue) / historyMax) * 48)}px` }}
+                      />
+                      <span className="text-[9px] text-slate-400 truncate w-full text-center">{h.label.split(" ")[0]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Inventory + Delivery */}
@@ -516,6 +590,28 @@ export default function Dashboard() {
                 <div className="text-[10px] tracking-widest uppercase text-slate-400 mb-2">Critical Stock Items</div>
                 {(inventory.critical_items||[]).length === 0 && (
                   <div className="text-[11px] text-slate-400 py-1">No critical items</div>
+                )}
+                {(inventory.projects||[]).length > 0 && (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] tracking-widest uppercase text-slate-400">Projects</span>
+                      <button onClick={() => navigate("/admin/projects")} className={linkClass}>Board →</button>
+                    </div>
+                    {inventory.projects.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => navigate("/admin/projects")}
+                        className="w-full grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-1.5 text-xs text-left border-b border-black/[0.06] last:border-b-0 cursor-pointer hover:bg-slate-50"
+                      >
+                        <span className="truncate text-slate-800">{p.name}{p.overdue && <span className="ml-1 text-[10px] text-[#d83a52] font-semibold">overdue</span>}</span>
+                        <span className="text-[10px] font-mono text-slate-500">{fmt(p.materials_cost)}</span>
+                        <StatusCell tone={{ working: "working", stuck: "stuck", planned: "info" }[p.status] || "idle"} className="min-h-[20px] rounded px-1.5 text-[10px]">
+                          {{ working: "Working", stuck: "Stuck", planned: "Planned" }[p.status] || p.status}
+                        </StatusCell>
+                      </button>
+                    ))}
+                  </div>
                 )}
                 {(inventory.critical_items||[]).map((item, i, arr) => (
                   <div key={item.id} className={`flex justify-between items-center py-1.5 text-xs ${i < arr.length-1 ? "border-b border-black/[0.09]" : ""}`}>
@@ -587,6 +683,79 @@ export default function Dashboard() {
               <span className="text-[11px] text-slate-400">Attendance Rate</span>
               <span className="text-[13px] font-semibold text-slate-800 font-mono">{attendance.attendance_rate||0}% ({attendance.total_in||0} / {attendance.total_employees||0})</span>
             </div>
+            {/* Drivers: time in / out from the Attendance Station, and today's deliveries */}
+            <div className="px-[18px] pt-3 pb-4 border-t border-black/[0.06]">
+              <BoardGroup
+                title="Drivers today"
+                tone="info"
+                count={driversToday.length}
+                empty="No active drivers."
+                columns={[{ label: "Driver" }, { label: "Time in" }, { label: "Time out" }, { label: "Delivered" }, { label: "On the road" }, { label: "Pending" }]}
+              >
+                {driversToday.map((d) => (
+                  <BoardRow
+                    key={d.employee_id}
+                    tone={d.time_in ? (d.time_out ? "idle" : "done") : "stuck"}
+                    onClick={() => navigate("/admin/deliveries")}
+                    title="Open deliveries"
+                    cells={[
+                      <span key="n">{d.name}{d.vehicle_plate && <span className="ml-1.5 text-[10px] font-mono text-slate-400">{d.vehicle_plate}</span>}</span>,
+                      d.time_in ? <StatusCell tone="done">{clock(d.time_in)}</StatusCell> : <StatusCell tone="stuck">Not in</StatusCell>,
+                      d.time_out ? <StatusCell tone="idle">{clock(d.time_out)}</StatusCell> : <StatusCell tone={d.time_in ? "working" : "idle"}>{d.time_in ? "Working" : "—"}</StatusCell>,
+                      <span key="dl" className="font-semibold text-slate-800">{d.delivered}</span>,
+                      d.in_transit ? <StatusCell tone="working">{d.in_transit}</StatusCell> : "0",
+                      d.pending ? <StatusCell tone="info">{d.pending}</StatusCell> : "0",
+                    ]}
+                  />
+                ))}
+              </BoardGroup>
+            </div>
+          </div>
+
+          {/* Store performance this month */}
+          <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
+            <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
+              <div>
+                <div className="text-[13px] font-semibold text-slate-800">Store Performance</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{sales.current_month || "This month"} · deliveries received and invoiced, best first</div>
+              </div>
+              <button onClick={() => navigate("/admin/customers")} className={linkClass}>Customers →</button>
+            </div>
+            <div className="p-[18px]">
+              <BoardGroup
+                title="Top stores"
+                tone="purple"
+                count={stores.length}
+                empty="No invoices yet this month."
+                columns={[{ label: "Store" }, { label: "Deliveries" }, { label: "Ice qty" }, { label: "Sales" }, { label: "Unpaid" }, { label: "Share" }]}
+              >
+                {stores.map((s) => {
+                  const share = storesTotal ? Math.round((s.revenue / storesTotal) * 100) : 0;
+                  return (
+                    <BoardRow
+                      key={s.customer_id}
+                      tone="purple"
+                      onClick={() => navigate("/admin/receipts")}
+                      title="Open invoices"
+                      cells={[
+                        <span key="n">
+                          {s.invoice_code && <span className="mr-1.5 px-1.5 py-px rounded bg-violet-50 border border-violet-200 text-[10px] font-semibold text-violet-700">{s.invoice_code}</span>}
+                          {s.name}
+                        </span>,
+                        s.deliveries,
+                        s.quantity,
+                        <span key="r" className="font-mono font-semibold text-slate-800">{fmt(s.revenue)}</span>,
+                        s.unpaid > 0 ? <StatusCell tone="stuck">{fmt(s.unpaid)}</StatusCell> : <StatusCell tone="done">Paid</StatusCell>,
+                        <div key="sh" className="flex items-center gap-1.5 min-w-[90px]">
+                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-[#a25ddc]" style={{ width: `${share}%` }} /></div>
+                          <span className="text-[10px] text-slate-500 w-7 text-right">{share}%</span>
+                        </div>,
+                      ]}
+                    />
+                  );
+                })}
+              </BoardGroup>
+            </div>
           </div>
         </div>
 
@@ -653,7 +822,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Overdue Receivables (opens Receipts) */}
+          {/* Overdue Receivables (opens Receipts): shown only when something is overdue */}
+          {(overdue.receipts || []).length > 0 && (
           <div className="bg-white border border-red-200 rounded-xl overflow-hidden">
             <div className="px-[18px] py-3.5 border-b border-red-100 bg-red-50/40 flex items-center justify-between">
               <div>
@@ -662,9 +832,6 @@ export default function Dashboard() {
               </div>
               <button onClick={() => navigate("/admin/receipts")} className={linkClass}>View all</button>
             </div>
-            {(overdue.receipts||[]).length === 0 && (
-              <div className="px-[18px] py-4 text-[11px] text-slate-400">No overdue receivables</div>
-            )}
             <div className="max-h-[240px] overflow-y-auto">
               {(overdue.receipts||[]).map((r) => (
                 <div
@@ -684,6 +851,7 @@ export default function Dashboard() {
               <span className="text-sm font-bold text-red-500 font-mono">{fmt(overdue.total_overdue_amount)}</span>
             </div>
           </div>
+          )}
         </div>
       </div>
     </AdminLayout>

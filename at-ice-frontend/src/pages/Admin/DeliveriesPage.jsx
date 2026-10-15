@@ -35,11 +35,12 @@ const TrashIcon = () => <svg width="13" height="13" fill="none" stroke="currentC
 const EyeIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
 const BanIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>;
 
+// Board colors (lib/boardTones.js, monday.com style): a solid status cell.
 const STATUS_STYLE = {
-  pending:    { bg: "bg-amber-50",  text: "text-amber-700"  },
-  in_transit: { bg: "bg-blue-50",   text: "text-blue-700"   },
-  delivered:  { bg: "bg-green-50",  text: "text-green-700"  },
-  cancelled:  { bg: "bg-slate-100", text: "text-slate-500"  },
+  pending:    { bg: "bg-[#579bfc]", text: "text-white" },
+  in_transit: { bg: "bg-[#fdab3d]", text: "text-white" },
+  delivered:  { bg: "bg-[#00c875]", text: "text-white" },
+  cancelled:  { bg: "bg-[#c4c4c4]", text: "text-white" },
 };
 
 // Ice products delivered to customers. These are NOT inventory items
@@ -273,7 +274,7 @@ export default function DeliveriesPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search delivery, customer, salesman, receipt..."
+                placeholder="Search delivery, customer, salesman, invoice..."
                 className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-56"
               />
             </div>
@@ -341,7 +342,7 @@ export default function DeliveriesPage() {
                       {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                     </td>
                     <td className="px-[18px] py-2.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${style.bg} ${style.text}`}>
+                      <span className={`inline-flex items-center justify-center min-w-[88px] px-2 py-1 rounded-sm text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
                         {d.status?.replace("_", " ")}
                       </span>
                     </td>
@@ -614,7 +615,7 @@ function ProofSection({ proof }) {
       {receipt && (
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[12px] font-semibold text-slate-700">Receipt <span className="font-mono">{receipt.receipt_no}</span></span>
+            <span className="text-[12px] font-semibold text-slate-700">Invoice <span className="font-mono">{receipt.receipt_no}</span></span>
             {receipt.payment_status && (
               <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${PAYMENT_BADGE[receipt.payment_status] || "bg-slate-100 text-slate-600"}`}>{receipt.payment_status}</span>
             )}

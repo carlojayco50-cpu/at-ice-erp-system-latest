@@ -56,7 +56,7 @@ mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --trig
 These dumps live on the same server. To survive losing the server, add an S3
 destination in the hosting panel and a storage backup of the `mysql-backups`,
 `public-storage` (delivery photos) and `private-storage` (face pictures of
-workers, never served by nginx) volumes.
+workers and applicants' resumes, never served by nginx) volumes.
 
 **Restore** (mysql container terminal; overwrites current data):
 

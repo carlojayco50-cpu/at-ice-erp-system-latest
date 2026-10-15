@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Applicant;
+use App\Services\AddressFormatter;
 use App\Services\PhoneFormatter;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ApplicantController extends Controller
@@ -37,6 +40,38 @@ class ApplicantController extends Controller
         if ($request->filled('phone')) {
             $request->merge(['phone' => PhoneFormatter::normalize((string) $request->phone)]);
         }
+    }
+
+    // Interviews take 30 or 45 minutes and may not overlap. The message names
+    // the interview in the way and the first free time after it.
+    private function assertFreeSlot(string $start, int $minutes, ?int $exceptId = null): void
+    {
+        $clash = Applicant::overlapping($start, $minutes, $exceptId);
+        if (! $clash) {
+            return;
+        }
+        $from = Carbon::parse($clash->getRawOriginal('interview_date'));
+        $until = $from->copy()->addMinutes($clash->interview_minutes ?: 30);
+        $free = Carbon::parse(Applicant::nextFreeSlot($start, $minutes, $exceptId));
+
+        throw ValidationException::withMessages([
+            'interview_date' => ["This overlaps {$clash->name}'s interview ({$from->format('g:i')}–{$until->format('g:i A')}). The next free time is {$free->format('M j, g:i A')}."],
+        ]);
+    }
+
+    // A resume or CV HR attaches (PDF or Word), kept on the private disk like the
+    // ones applicants send from /apply. Returns the columns to save.
+    private function storeResume(Request $request): array
+    {
+        $file = $request->file('resume');
+        if (! $file) {
+            return [];
+        }
+
+        return [
+            'resume_path' => $file->store('resumes', 'local'),
+            'resume_name' => mb_substr(preg_replace('/[^\pL\pN ._()-]/u', '_', $file->getClientOriginalName()), 0, 255),
+        ];
     }
 
     private function assertTransition(Applicant $applicant, string $newStatus): void
@@ -110,10 +145,23 @@ class ApplicantController extends Controller
         }
 
         $applicants = $query
+            ->with('referredBy:id,employee_id,first_name,middle_initial,last_name,suffix')
             ->orderByRaw('interview_date IS NULL')   // scheduled first
             ->orderBy('interview_date', 'asc')
             ->orderBy('created_at', 'desc')
             ->get();
+
+        // Possible duplicates: same name and address, different email. HR sees
+        // when each was sent and decides which one is valid.
+        $byKey = Applicant::all()->groupBy(fn (Applicant $a) => $a->duplicateKey() ?? "solo-{$a->id}");
+        foreach ($applicants as $a) {
+            $key = $a->duplicateKey();
+            $a->setAttribute('possible_duplicates', $key === null ? [] : $byKey->get($key, collect())
+                ->where('id', '!=', $a->id)
+                ->filter(fn ($o) => $o->email !== $a->email || $o->email === null)
+                ->map(fn ($o) => ['id' => $o->id, 'name' => $o->name, 'email' => $o->email, 'status' => $o->status, 'created_at' => $o->created_at])
+                ->values());
+        }
 
         return response()->json($applicants);
     }
@@ -131,17 +179,23 @@ class ApplicantController extends Controller
     public function store(Request $request)
     {
         $this->cleanPhone($request);
+        $request->merge(['email' => Applicant::normalizeEmail($request->input('email'))]);
 
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email:rfc,filter,dns|max:255',
+            'email' => ['bail', 'nullable', Rule::unique('applicants', 'email')->ignore($id ?? null), 'email:rfc,filter,dns', 'max:255'],
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'position_applied' => 'required|string|max:255',
             'interview_date' => 'nullable|date',
+            'interview_minutes' => ['nullable', 'integer', 'in:'.implode(',', Applicant::INTERVIEW_MINUTES)],
             'notes' => 'nullable|string|max:1000',
-        ], [
+            'resume' => Applicant::RESUME_RULE,
+        ] + AddressFormatter::OPTIONAL_RULES, [
             'phone.regex' => self::PHONE_MESSAGE,
-        ]);
+            'email.unique' => Applicant::EMAIL_TAKEN,
+            'postal_code.regex' => 'Postal code must be 4 digits.',
+            'interview_minutes.in' => 'An interview takes 30 or 45 minutes.',
+        ] + Applicant::RESUME_MESSAGES);
 
         $interviewDate = $this->normalizeDate($request->interview_date);
 
@@ -150,6 +204,10 @@ class ApplicantController extends Controller
                 'interview_date' => ['The interview date and time must be in the future.'],
             ]);
         }
+        $minutes = (int) ($request->interview_minutes ?: 30);
+        if ($interviewDate) {
+            $this->assertFreeSlot($interviewDate, $minutes);
+        }
 
         $applicant = Applicant::create([
             'name' => $request->name,
@@ -157,9 +215,10 @@ class ApplicantController extends Controller
             'phone' => $request->phone,
             'position_applied' => $request->position_applied,
             'interview_date' => $interviewDate,
+            'interview_minutes' => $minutes,
             'status' => 'pending',
             'notes' => $request->notes,
-        ]);
+        ] + $this->storeResume($request) + $request->only(array_keys(AddressFormatter::OPTIONAL_RULES)));
 
         return response()->json([
             'message' => 'Applicant added successfully!',
@@ -179,23 +238,36 @@ class ApplicantController extends Controller
         }
 
         $this->cleanPhone($request);
+        $request->merge(['email' => Applicant::normalizeEmail($request->input('email'))]);
 
         $request->validate([
             'name' => 'sometimes|required|string|max:255',
-            'email' => 'nullable|email:rfc,filter,dns|max:255',
+            'email' => ['bail', 'nullable', Rule::unique('applicants', 'email')->ignore($id ?? null), 'email:rfc,filter,dns', 'max:255'],
             'phone' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'position_applied' => 'sometimes|required|string|max:255',
             'interview_date' => 'nullable|date',
+            'interview_minutes' => ['nullable', 'integer', 'in:'.implode(',', Applicant::INTERVIEW_MINUTES)],
             'notes' => 'nullable|string|max:1000',
-        ], [
+            'resume' => Applicant::RESUME_RULE,
+        ] + AddressFormatter::OPTIONAL_RULES, [
             'phone.regex' => self::PHONE_MESSAGE,
-        ]);
+            'email.unique' => Applicant::EMAIL_TAKEN,
+            'postal_code.regex' => 'Postal code must be 4 digits.',
+            'interview_minutes.in' => 'An interview takes 30 or 45 minutes.',
+        ] + Applicant::RESUME_MESSAGES);
 
-        $data = $request->only(['name', 'email', 'phone', 'position_applied', 'notes']);
+        $data = $request->only(['name', 'email', 'phone', 'position_applied', 'notes', ...array_keys(AddressFormatter::OPTIONAL_RULES)]);
 
         if ($request->exists('interview_date')) {
             $newDate = $this->normalizeDate($request->interview_date);
             $currentDate = $this->normalizeDate($applicant->getRawOriginal('interview_date'));
+
+            $minutes = (int) ($request->interview_minutes ?: $applicant->interview_minutes ?: 30);
+            $data['interview_minutes'] = $minutes;
+            $moved = $newDate !== $currentDate || $minutes !== (int) $applicant->interview_minutes;
+            if ($moved && $newDate && $applicant->status === 'pending') {
+                $this->assertFreeSlot($newDate, $minutes, $applicant->id);
+            }
 
             if ($newDate !== $currentDate) {
                 if ($applicant->status !== 'pending') {
@@ -214,7 +286,13 @@ class ApplicantController extends Controller
             }
         }
 
-        $applicant->update($data);
+        // A new resume replaces the old file.
+        $resume = $this->storeResume($request);
+        if ($resume && $applicant->resume_path) {
+            Storage::disk('local')->delete($applicant->resume_path);
+        }
+
+        $applicant->update($data + $resume);
 
         return response()->json([
             'message' => 'Applicant updated successfully!',
@@ -251,6 +329,21 @@ class ApplicantController extends Controller
         $applicant->delete();
 
         return response()->json(['message' => 'Applicant deleted successfully.']);
+    }
+
+    // GET the resume or CV the applicant attached on the public form (HR only).
+    // Shown in the browser (PDF, pictures) or downloaded (Word files).
+    public function resume($id)
+    {
+        $applicant = Applicant::findOrFail($id);
+        if (! $applicant->resume_path || ! Storage::disk('local')->exists($applicant->resume_path)) {
+            return response()->json(['message' => 'This applicant has no resume attached.'], 404);
+        }
+
+        return Storage::disk('local')->response($applicant->resume_path, $applicant->resume_name ?: 'resume', [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
     }
 
     // GET upcoming interviews (HR Dashboard)

@@ -20,7 +20,7 @@ class DeliveryConfirmationTest extends TestCase
     {
         $admin = User::create(['name' => 'Admin', 'email' => 'admin@atice.cloud', 'password' => 'secret-password', 'role' => 'admin']);
         $driver = User::create(['name' => 'Driver', 'email' => 'driver@atice.cloud', 'password' => 'secret-password', 'role' => 'driver']);
-        $customer = Customer::create(['name' => 'Alfamart Muzon', 'customer_code' => 'CUST-ALF-001', 'branch_code' => 'ALF-SJDM-001', 'is_active' => true]);
+        $customer = Customer::create(['name' => 'Alfamart Muzon', 'customer_code' => 'CUST-ALF-001', 'branch_code' => 'ALF-SJDM-001', 'invoice_code' => 'PG', 'is_active' => true]);
         CustomerPrice::create(['customer_id' => $customer->id, 'product_type' => 'bags', 'unit_price' => 50]);
 
         return Delivery::create([
@@ -78,7 +78,8 @@ class DeliveryConfirmationTest extends TestCase
         $row = collect($this->getJson('/api/my-deliveries')->assertOk()->json())->firstWhere('id', $delivery->id);
         $this->assertNotNull($row);
         $this->assertSame('delivered', $row['status']);
-        $this->assertNotEmpty($row['proofs'][0]['receipt']['receipt_no']);
+        // Invoice number: the customer's invoice code, today's date, then 001.
+        $this->assertSame('PG-'.now()->format('Ymd').'-001', $row['proofs'][0]['receipt']['receipt_no']);
         $this->assertSame(2, (int) $row['proofs'][0]['receipt']['items'][0]['quantity']);
 
         // another Salesman does not see it

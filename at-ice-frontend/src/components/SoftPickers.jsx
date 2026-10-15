@@ -41,15 +41,28 @@ function parseValue(v) {
 
 // ---- Dropdown list ----------------------------------------------------------
 
+// Long lists (e.g. barangays) get a search box at the top.
+const SEARCH_FROM = 15;
+const fold = (s) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
 function SelectList({ el, close }) {
-  const [options] = useState(() =>
-    [...el.options].map((o) => ({ value: o.value, label: o.text, disabled: o.disabled }))
+  const [all] = useState(() =>
+    [...el.options].map((o, i) => ({ value: o.value, label: o.text, disabled: o.disabled, i }))
   );
+  const searchable = all.length > SEARCH_FROM;
+  const [query, setQuery] = useState("");
+  const options = query.trim()
+    ? all.filter((o) => !o.disabled && fold(o.label).includes(fold(query.trim())))
+    : all;
   const [active, setActive] = useState(() => Math.max(0, el.selectedIndex));
   const listRef = useRef(null);
+  const searchRef = useRef(null);
 
+  // The popup is hidden until it is placed, and a hidden field cannot take
+  // focus, so focus waits a frame.
   useEffect(() => {
-    listRef.current?.focus({ preventScroll: true });
+    const f = requestAnimationFrame(() => (searchRef.current || listRef.current)?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(f);
   }, []);
   useEffect(() => {
     listRef.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
@@ -68,10 +81,11 @@ function SelectList({ el, close }) {
   const onKeyDown = (e) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => step(a, 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => step(a, -1)); }
-    else if (e.key === "Home") { e.preventDefault(); setActive(step(-1, 1)); }
-    else if (e.key === "End") { e.preventDefault(); setActive(step(options.length, -1)); }
-    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(active); }
+    else if (e.key === "Home" && !searchable) { e.preventDefault(); setActive(step(-1, 1)); }
+    else if (e.key === "End" && !searchable) { e.preventDefault(); setActive(step(options.length, -1)); }
+    else if (e.key === "Enter" || (e.key === " " && !searchable)) { e.preventDefault(); pick(active); }
     else if (e.key === "Tab") close(false);
+    else if (searchable) return; // typing goes to the search box
     else if (e.key.length === 1) {
       // Type-ahead: jump to the next option starting with the typed letter
       const k = e.key.toLowerCase();
@@ -83,33 +97,51 @@ function SelectList({ el, close }) {
     }
   };
 
-  return (
+  const list = (
     <div
       ref={listRef}
       role="listbox"
       tabIndex={-1}
       aria-activedescendant={`soft-opt-${active}`}
-      onKeyDown={onKeyDown}
+      onKeyDown={searchable ? undefined : onKeyDown}
       className="soft-list"
     >
       {options.map((o, i) => (
         <div
-          key={i}
+          key={o.i}
           id={`soft-opt-${i}`}
           data-i={i}
           role="option"
-          aria-selected={el.selectedIndex === i}
+          aria-selected={el.selectedIndex === o.i}
           aria-disabled={o.disabled || undefined}
           onMouseEnter={() => !o.disabled && setActive(i)}
           onClick={() => pick(i)}
-          className={`soft-opt ${i === active ? "is-active" : ""} ${el.selectedIndex === i ? "is-selected" : ""} ${o.disabled ? "is-disabled" : ""}`}
+          className={`soft-opt ${i === active ? "is-active" : ""} ${el.selectedIndex === o.i ? "is-selected" : ""} ${o.disabled ? "is-disabled" : ""}`}
         >
           <span className="truncate">{o.label || " "}</span>
-          {el.selectedIndex === i && (
+          {el.selectedIndex === o.i && (
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
           )}
         </div>
       ))}
+      {options.length === 0 && <div className="soft-opt is-disabled">No match</div>}
+    </div>
+  );
+
+  if (!searchable) return list;
+  return (
+    <div onKeyDown={onKeyDown} className="soft-searchable">
+      <input
+        ref={searchRef}
+        type="search"
+        data-native
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setActive(0); }}
+        placeholder="Type to search…"
+        aria-label="Search the list"
+        className="soft-search"
+      />
+      {list}
     </div>
   );
 }
