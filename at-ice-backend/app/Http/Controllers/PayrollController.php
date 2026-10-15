@@ -4,233 +4,139 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Models\Payroll;
-use Carbon\Carbon;
+use App\Models\PayrollAdjustment;
+use App\Support\Audit;
+use App\Support\PayPeriod;
+use App\Support\PayrollCalculator;
+use App\Support\PayrollCalendar;
+use App\Support\Settings;
+use App\Support\ThirteenthMonth;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
+// Payroll (docs/REVIEW-DECISIONS.md). HR approves timesheets
+// (TimesheetController), which makes each payroll; Admin processes the pay
+// here: Payroll Records for one pay period, adjustments (bonus, incentive,
+// referral bonus), marking paid (final, audited), payslips and the 13th month.
+// Salary is confidential: no totals or summaries are returned.
 class PayrollController extends Controller
 {
-    // GET /api/payrolls
-    // Optional filters: ?employee_id=, ?status=
+    // GET /api/payroll-periods (HR): the latest pay periods
+    public function periods()
+    {
+        return response()->json(array_map(
+            fn ($p) => $p + ['missing' => PayrollCalendar::missing($p)->count()],
+            PayrollCalendar::recent(6)
+        ));
+    }
+
+    // GET /api/payrolls (HR): which periods are paid, without amounts
     public function index(Request $request)
     {
-        $query = Payroll::with(['employee', 'preparedBy:id,name']);
-
-        if ($request->filled('employee_id')) {
-            $query->where('employee_id', $request->employee_id);
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        return response()->json(
-            $query->orderBy('period_start', 'desc')->orderBy('created_at', 'desc')->get(),
-            200
-        );
+        return response()->json(Payroll::query()
+            ->when($request->filled('employee_id'), fn ($q) => $q->where('employee_id', $request->employee_id))
+            ->orderByDesc('period_start')
+            ->get(['id', 'employee_id', 'period_start', 'period_end', 'pay_day', 'status', 'paid_at']));
     }
 
-    // POST /api/payrolls
-    // The computation (Sweldong Pinoy reference: SSS, PhilHealth, Pag-IBIG,
-    // withholding tax) happens on the frontend. This endpoint checks the
-    // period (no overlap, days worked within the period, net pay consistent)
-    // and stores the computed values.
-    public function store(Request $request)
+    // GET /api/payroll-records?date=&status=unpaid|paid (Admin): every active
+    // employee for the pay period, with their payroll once HR approved it.
+    public function records(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'employee_id' => 'required|exists:employees,id',
-            'period_start' => 'required|date|before_or_equal:today',
-            'period_end' => 'required|date|after_or_equal:period_start',
-            'days_worked' => 'required|numeric|min:0',
-            'daily_rate' => 'required|numeric|min:0',
-            'gross_pay' => 'required|numeric|min:0',
-            'sss_deduction' => 'nullable|numeric|min:0',
-            'philhealth_deduction' => 'nullable|numeric|min:0',
-            'pagibig_deduction' => 'nullable|numeric|min:0',
-            'tax_deduction' => 'nullable|numeric|min:0',
-            'other_deductions' => 'nullable|numeric|min:0',
-            'net_pay' => 'required|numeric|min:0',
-            'status' => 'nullable|in:pending,approved,paid',
-            'notes' => 'nullable|string|max:500',
-        ]);
+        $request->validate(['date' => 'nullable|date_format:Y-m-d', 'status' => 'nullable|in:unpaid,paid']);
+        $period = PayPeriod::for($request->input('date', now('Asia/Manila')->toDateString()));
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+        $payrolls = Payroll::with('adjustments')->whereDate('period_start', $period['start'])->get()->keyBy('employee_id');
+        $employees = Employee::where(fn ($q) => $q->where('is_active', true)->whereDate('date_hired', '<=', $period['end']))
+            ->orWhereIn('id', $payrolls->keys())
+            ->get();
 
-        if ($error = $this->periodAndPayErrors((int) $request->employee_id, $request->all())) {
-            return response()->json(['errors' => $error], 422);
-        }
-
-        $status = $request->status ?? 'pending';
-
-        $payroll = Payroll::create([
-            'employee_id' => $request->employee_id,
-            'period_start' => $request->period_start,
-            'period_end' => $request->period_end,
-            'days_worked' => $request->days_worked,
-            'daily_rate' => $request->daily_rate,
-            'gross_pay' => $request->gross_pay,
-            'sss_deduction' => $request->sss_deduction ?? 0,
-            'philhealth_deduction' => $request->philhealth_deduction ?? 0,
-            'pagibig_deduction' => $request->pagibig_deduction ?? 0,
-            'tax_deduction' => $request->tax_deduction ?? 0,
-            'other_deductions' => $request->other_deductions ?? 0,
-            'net_pay' => $request->net_pay,
-            'status' => $status,
-            'prepared_by' => auth()->id(),
-            'paid_at' => $status === 'paid' ? now() : null,
-            'notes' => $request->notes ?? null,
-        ]);
-
-        return response()->json(['message' => 'Payroll record created.', 'data' => $payroll], 201);
-    }
-
-    // Checks shared by a new payroll and an edit ($ignoreId: the payroll being
-    // edited, so it does not overlap itself). Returns the errors, or null.
-    private function periodAndPayErrors(int $employeeId, array $p, ?int $ignoreId = null): ?array
-    {
-        $start = Carbon::parse($p['period_start'])->startOfDay();
-        $end = Carbon::parse($p['period_end'])->startOfDay();
-
-        if ($end->lt($start)) {
-            return ['period_end' => ['Period end cannot be before period start.']];
-        }
-
-        // Days worked cannot exceed the calendar days in the period.
-        // (Carbon 3 returns a float from diffInDays, so round and cast to int.)
-        $periodDays = (int) round(abs($start->diffInDays($end))) + 1;
-        if ((float) $p['days_worked'] > $periodDays) {
-            return ['days_worked' => ["Days worked ({$p['days_worked']}) cannot be more than the {$periodDays} calendar days in this period."]];
-        }
-
-        // One payroll per employee per period: block overlapping periods.
-        $overlap = Payroll::where('employee_id', $employeeId)
-            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
-            ->whereDate('period_start', '<=', $end->toDateString())
-            ->whereDate('period_end', '>=', $start->toDateString())
-            ->first();
-        if ($overlap) {
-            $from = Carbon::parse($overlap->period_start)->format('M j, Y');
-            $to = Carbon::parse($overlap->period_end)->format('M j, Y');
-
-            return ['period_start' => ["This employee already has a payroll for {$from} to {$to}. Payroll periods cannot overlap."]];
-        }
-
-        // Net pay must equal gross pay minus all deductions.
-        $deductions = 0.0;
-        foreach (['sss_deduction', 'philhealth_deduction', 'pagibig_deduction', 'tax_deduction', 'other_deductions'] as $field) {
-            $deductions += (float) ($p[$field] ?? 0);
-        }
-        if (abs(((float) $p['gross_pay'] - $deductions) - (float) $p['net_pay']) > 0.01) {
-            return ['net_pay' => ['Net pay does not match gross pay minus total deductions.']];
-        }
-
-        return null;
-    }
-
-    // GET /api/payrolls/{id}
-    public function show($id)
-    {
-        $payroll = Payroll::with(['employee', 'preparedBy:id,name'])->find($id);
-
-        if (! $payroll) {
-            return response()->json(['message' => 'Payroll not found.'], 404);
-        }
-
-        return response()->json($payroll, 200);
-    }
-
-    // PUT /api/payrolls/{id}
-    // Also used by the Payroll page for status changes
-    // (pending -> approved -> paid). paid_at is set when marked paid.
-    public function update(Request $request, $id)
-    {
-        $payroll = Payroll::find($id);
-
-        if (! $payroll) {
-            return response()->json(['message' => 'Payroll not found.'], 404);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'period_start' => 'sometimes|date|before_or_equal:today',
-            'period_end' => 'sometimes|date|after_or_equal:period_start',
-            'days_worked' => 'sometimes|numeric|min:0',
-            'daily_rate' => 'sometimes|numeric|min:0',
-            'gross_pay' => 'sometimes|numeric|min:0',
-            'sss_deduction' => 'sometimes|nullable|numeric|min:0',
-            'philhealth_deduction' => 'sometimes|nullable|numeric|min:0',
-            'pagibig_deduction' => 'sometimes|nullable|numeric|min:0',
-            'tax_deduction' => 'sometimes|nullable|numeric|min:0',
-            'other_deductions' => 'sometimes|nullable|numeric|min:0',
-            'net_pay' => 'sometimes|numeric|min:0',
-            'status' => 'sometimes|in:pending,approved,paid',
-            'notes' => 'sometimes|nullable|string|max:500',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        // A paid payroll is final: nothing on it changes any more.
-        if ($payroll->status === 'paid') {
-            return response()->json(['message' => 'This payroll is already paid and can no longer be changed.'], 422);
-        }
-
-        // Status only moves forward: pending -> approved -> paid.
-        $order = ['pending' => 0, 'approved' => 1, 'paid' => 2];
-        if ($request->has('status') && $order[$request->status] < $order[$payroll->status]) {
-            return response()->json(['errors' => [
-                'status' => ["A payroll that is {$payroll->status} cannot go back to {$request->status}."],
-            ]], 422);
-        }
-
-        $data = $request->only([
-            'period_start', 'period_end', 'days_worked', 'daily_rate',
-            'gross_pay', 'sss_deduction', 'philhealth_deduction',
-            'pagibig_deduction', 'tax_deduction', 'other_deductions',
-            'net_pay', 'status', 'notes',
-        ]);
-
-        // The same checks as a new payroll, on the values it will have after
-        // this change (fields not sent keep their stored value).
-        $after = $data + $payroll->only([
-            'period_start', 'period_end', 'days_worked', 'gross_pay', 'net_pay',
-            'sss_deduction', 'philhealth_deduction', 'pagibig_deduction', 'tax_deduction', 'other_deductions',
-        ]);
-        if ($error = $this->periodAndPayErrors($payroll->employee_id, $after, $payroll->id)) {
-            return response()->json(['errors' => $error], 422);
-        }
-
-        if ($request->has('status')) {
-            $data['paid_at'] = $request->status === 'paid'
-                ? ($payroll->paid_at ?? now())
-                : null;
-        }
-
-        $payroll->update($data);
+        $rows = $employees->map(fn (Employee $e) => [
+            'id' => $e->id,
+            'employee_id' => $e->employee_id,
+            'name' => $e->full_name,
+            'position' => $e->position,
+            'payroll' => $payrolls->get($e->id),
+        ])
+            ->filter(fn ($r) => ! $request->filled('status') || ($r['payroll'] && $r['payroll']->status === $request->status))
+            ->sortBy('employee_id')->values();
 
         return response()->json([
-            'message' => 'Payroll updated.',
-            'data' => $payroll->fresh(['employee', 'preparedBy:id,name']),
-        ], 200);
+            'period' => $period,
+            'gov_share' => PayrollCalculator::governmentShare($period['pay_day']),
+            'gov_strategy' => Settings::get('payroll.gov_deduction_strategy'),
+            'rows' => $rows,
+        ]);
     }
 
-    // DELETE /api/payrolls/{id}
-    public function destroy($id)
+    // GET /api/payrolls/{id}/payslip (Admin): everything on the payslip
+    public function payslip($id)
     {
-        $payroll = Payroll::find($id);
+        return response()->json(Payroll::with(['employee', 'adjustments'])->findOrFail($id));
+    }
 
-        if (! $payroll) {
-            return response()->json(['message' => 'Payroll not found.'], 404);
+    // POST /api/payrolls/{id}/adjustments { label, amount, taxable } (Admin)
+    public function addAdjustment(Request $request, $id)
+    {
+        $payroll = $this->unpaid($id);
+        $data = $request->validate([
+            'label' => 'required|string|max:100',
+            'amount' => 'required|numeric|min:0.01|max:1000000',
+            'taxable' => 'required|boolean',
+        ]);
+        $adj = $payroll->adjustments()->create($data + ['created_by' => $request->user()->id]);
+        PayrollCalculator::refresh($payroll->fresh());
+        Audit::log('payroll.adjustment_added', $payroll, null, $adj->only(['label', 'amount', 'taxable']));
+
+        return response()->json($payroll->fresh()->load('adjustments'), 201);
+    }
+
+    // DELETE /api/payroll-adjustments/{id} (Admin)
+    public function removeAdjustment($id)
+    {
+        $adj = PayrollAdjustment::findOrFail($id);
+        $payroll = $this->unpaid($adj->payroll_id);
+        $adj->delete();
+        PayrollCalculator::refresh($payroll->fresh());
+        Audit::log('payroll.adjustment_removed', $payroll, $adj->only(['label', 'amount', 'taxable']), null);
+
+        return response()->json($payroll->fresh()->load('adjustments'));
+    }
+
+    // POST /api/payrolls/mark-paid { ids: [] } (Admin). Paid is final.
+    public function markPaid(Request $request)
+    {
+        $data = $request->validate(['ids' => 'required|array|min:1', 'ids.*' => 'integer|exists:payrolls,id']);
+        $count = 0;
+        foreach (Payroll::whereIn('id', $data['ids'])->where('status', 'unpaid')->get() as $payroll) {
+            $payroll->update(['status' => 'paid', 'paid_at' => now(), 'paid_by' => $request->user()->id]);
+            Audit::log('payroll.paid', $payroll, ['status' => 'unpaid'], ['status' => 'paid', 'net_pay' => (string) $payroll->net_pay]);
+            $count++;
         }
 
+        return response()->json(['message' => "{$count} payroll".($count === 1 ? '' : 's').' marked paid.', 'paid' => $count]);
+    }
+
+    // GET /api/thirteenth-month?year= (Admin): each employee's 13th month pay so far
+    public function thirteenthMonth(Request $request)
+    {
+        $year = (int) $request->input('year', now('Asia/Manila')->year);
+        $rows = Employee::where('is_active', true)->orderBy('employee_id')->get()->map(fn (Employee $e) => [
+            'id' => $e->id,
+            'employee_id' => $e->employee_id,
+            'name' => $e->full_name,
+        ] + ThirteenthMonth::for($e, $year));
+
+        return response()->json(['year' => $year, 'credit_date' => $year.'-'.Settings::get('thirteenth.credit_date'), 'rows' => $rows]);
+    }
+
+    private function unpaid($id): Payroll
+    {
+        $payroll = Payroll::findOrFail($id);
         if ($payroll->status === 'paid') {
-            return response()->json(['message' => 'A paid payroll is kept as a record and cannot be deleted.'], 422);
+            throw ValidationException::withMessages(['payroll' => ['This payroll is already paid and can no longer be changed.']]);
         }
 
-        $payroll->delete();
-
-        return response()->json(['message' => 'Payroll record deleted.'], 200);
+        return $payroll;
     }
 }

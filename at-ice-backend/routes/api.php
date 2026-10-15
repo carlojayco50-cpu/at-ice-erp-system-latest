@@ -10,8 +10,10 @@ use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\CustomerPriceController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryProofController;
+use App\Http\Controllers\DocumentScanController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\FaceDataController;
+use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\IceLoadingController;
 use App\Http\Controllers\InventoryAlertController;
 use App\Http\Controllers\KioskController;
@@ -24,11 +26,16 @@ use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PickupLogController;
 use App\Http\Controllers\PlaceSearchController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\PublicApplicationController;
 use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\RetentionController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\StockOutRequestController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\SupportMessageController;
+use App\Http\Controllers\TimesheetController;
 use Illuminate\Support\Facades\Route;
 
 // RATE LIMITS
@@ -50,13 +57,19 @@ Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middl
 
 // Attendance Station kiosk. It has no user login. A device is unlocked with the
 // HR security PIN (POST kiosk/unlock) and then sends the kiosk token it gets in
-// the X-Kiosk-Token header. The unlock route is public but has its own lockout
-// (see KioskLockout). The two data routes below need the kiosk token.
+// the X-Kiosk-Token header. The unlock route is public, but each kiosk (its own
+// device_id) is locked after too many wrong PINs until Admin types the override
+// PIN on it (App\Models\KioskDevice). The data routes below need the kiosk token.
 Route::post('kiosk/unlock', [KioskController::class, 'unlock'])->middleware('throttle:30,1,kiosk-unlock');
+Route::get('kiosk/lock-state', [KioskController::class, 'lockState'])->middleware('throttle:60,1,kiosk-unlock');
+Route::post('kiosk/override', [KioskController::class, 'override'])->middleware('throttle:10,1,kiosk-override');
 Route::get('kiosk/status', [KioskController::class, 'status'])->middleware(['kiosk', 'throttle:60,1,kiosk']);
 
 // Face Descriptors: kiosk token required
 Route::get('face-descriptors', [FaceDataController::class, 'descriptors'])->middleware(['kiosk', 'throttle:30,1,kiosk']);
+
+// Public job application form (/apply, from the QR code in HRIS > Interviews)
+Route::post('apply', [PublicApplicationController::class, 'store'])->middleware('throttle:20,10,apply');
 
 // Attendance recording: kiosk token required
 Route::post('attendances', [AttendanceController::class, 'store'])->middleware(['kiosk', 'throttle:30,1,kiosk']);
@@ -81,6 +94,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // The controller looks up the Employee row from employees.user_id.
     Route::get('my-leave-requests', [LeaveRequestController::class, 'myIndex']);
+    Route::get('my-leave-credits', [LeaveRequestController::class, 'myCredits']);
+    Route::get('my-leave-requests/{id}/attachment', [LeaveRequestController::class, 'myAttachment']);
     Route::post('my-leave-requests', [LeaveRequestController::class, 'myStore']);
     Route::delete('my-leave-requests/{id}', [LeaveRequestController::class, 'myDestroy']);
 
@@ -91,6 +106,32 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
+
+        // Rates and rules (AppSupportSettings) and the audit log
+        Route::get('settings', [SettingsController::class, 'index']);
+        Route::put('settings', [SettingsController::class, 'update']);
+        Route::get('audit-logs', [SettingsController::class, 'auditLogs']);
+        // Holiday and overtime pay rates (dated)
+        Route::get('pay-multipliers', [SettingsController::class, 'multipliers']);
+        Route::post('pay-multipliers', [SettingsController::class, 'setMultiplier']);
+
+        // Payroll Records: pay, adjustments, mark paid, payslip, 13th month
+        Route::get('payroll-records', [PayrollController::class, 'records']);
+        Route::get('payrolls/{id}/payslip', [PayrollController::class, 'payslip']);
+        Route::post('payrolls/{id}/adjustments', [PayrollController::class, 'addAdjustment']);
+        Route::delete('payroll-adjustments/{id}', [PayrollController::class, 'removeAdjustment']);
+        Route::post('payrolls/mark-paid', [PayrollController::class, 'markPaid']);
+        Route::get('thirteenth-month', [PayrollController::class, 'thirteenthMonth']);
+
+        // Records past the retention period: Admin keeps or deletes each (never automatic)
+        Route::get('retention-review', [RetentionController::class, 'index']);
+        Route::post('retention-review/keep', [RetentionController::class, 'keep']);
+        Route::post('retention-review/delete', [RetentionController::class, 'delete']);
+        Route::post('retention-review/anonymize', [RetentionController::class, 'anonymize']);
+
+        // Kiosk: the Admin override PIN that unlocks a locked kiosk, and the attempt log
+        Route::put('admin/kiosk-override-pin', [KioskController::class, 'setAdminPin'])->middleware('throttle:5,1,kiosk-pin-change');
+        Route::get('admin/kiosk-attempts', [KioskController::class, 'attempts']);
 
         // Add Customer: map pin lookups (OpenStreetMap) to fill the address
         Route::get('places/from-link', [PlaceSearchController::class, 'fromLink'])->middleware('throttle:30,1');
@@ -125,6 +166,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // CRM
         Route::get('customers', [CustomerController::class, 'index']);
         Route::get('customers/check-email', [CustomerController::class, 'checkEmail'])->middleware('throttle:30,1,check-email');
+        Route::get('customers/invoice-code', [CustomerController::class, 'suggestInvoiceCode']);
         Route::post('customers', [CustomerController::class, 'store']);
         Route::get('customers/{id}', [CustomerController::class, 'show']);
         Route::put('customers/{id}', [CustomerController::class, 'update']);
@@ -160,6 +202,13 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::put('stock-out-requests/{stockOutRequest}/reject', [StockOutRequestController::class, 'reject']);
         Route::put('stock-out-requests/{stockOutRequest}/release', [StockOutRequestController::class, 'release']);
 
+        // Projects board (monday.com style): maintenance and plant jobs and
+        // the supplies their stock-out requests used.
+        Route::get('projects', [ProjectController::class, 'index']);
+        Route::post('projects', [ProjectController::class, 'store']);
+        Route::put('projects/{project}', [ProjectController::class, 'update']);
+        Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
+
         // BUSINESS INTELLIGENCE
         Route::get('bi/summary', [BiController::class, 'summary']);
         Route::get('bi/sales-overview', [BiController::class, 'salesOverview']);
@@ -167,6 +216,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('bi/delivery-stats', [BiController::class, 'deliveryStats']);
         Route::get('bi/inventory-summary', [BiController::class, 'inventorySummary']);
         Route::get('bi/attendance-today', [BiController::class, 'attendanceToday']);
+        Route::get('bi/forecast', [BiController::class, 'forecast']);
         Route::get('bi/overdue-receipts', [BiController::class, 'overdueReceipts']);
         Route::get('bi/recent-activity', [BiController::class, 'recentActivity']);
         Route::get('bi/expenses', [BiController::class, 'getExpenses']);
@@ -181,36 +231,57 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
 
-        // Attendance Station kiosk PIN: HR sets or changes it, and can clear a lockout.
+        // Attendance Station kiosk PIN: HR sets or changes it (only Admin can unlock a locked kiosk).
         // Both changes need the HR user's own account password.
         Route::get('hr/kiosk-pin', [KioskController::class, 'show']);
+        Route::post('kiosk-devices/{id}/unlock', [KioskController::class, 'remoteUnlock']);
         Route::put('hr/kiosk-pin', [KioskController::class, 'update'])->middleware('throttle:5,1,kiosk-pin-change');
-        Route::post('hr/kiosk-pin/clear-lockout', [KioskController::class, 'clearLockout'])->middleware('throttle:5,1,kiosk-pin-change');
 
         // Employee Management: full CRUD (create, edit, deactivate)
         Route::apiResource('employees', EmployeeController::class);
+        // A deactivated employee back for a rehire (same employee ID, history kept)
+        Route::post('employees/{id}/reactivate', [EmployeeController::class, 'reactivate']);
 
         // Payroll: full CRUD, computation happens on the frontend
         // (Sweldong Pinoy-style: SSS/PhilHealth/Pag-IBIG/withholding tax),
         // this endpoint just stores whatever computed values are sent.
-        Route::apiResource('payrolls', PayrollController::class);
+        Route::get('payroll-periods', [PayrollController::class, 'periods']);
+        // The cutoff containing a date (read-only start and end)
+        Route::get('pay-period', [SettingsController::class, 'payPeriod']);
+        // Payroll: HR approves each employee's timesheet for a pay period, which
+        // makes their payroll; Admin pays it (payroll-records, admin group). HR
+        // sees no amounts.
+        Route::get('payrolls', [PayrollController::class, 'index']);
+        Route::get('timesheets', [TimesheetController::class, 'index']);
+
+        // Holiday calendar (HR and Admin)
+        Route::get('holidays', [HolidayController::class, 'index']);
+        Route::post('holidays', [HolidayController::class, 'store']);
+        Route::put('holidays/{id}', [HolidayController::class, 'update']);
+        Route::delete('holidays/{id}', [HolidayController::class, 'destroy']);
+        Route::post('timesheets/approve', [TimesheetController::class, 'approve']);
 
         Route::get('attendances', [AttendanceController::class, 'index']);
         Route::get('attendances/summary', [AttendanceController::class, 'summary']);
+        Route::get('attendances/export', [AttendanceController::class, 'export']);
         Route::get('attendances/roster', [AttendanceController::class, 'roster']);
         Route::put('attendances/{id}', [AttendanceController::class, 'update']);
         Route::get('attendances/employee/{employee_id}', [AttendanceController::class, 'getByEmployee']);
 
         Route::get('leave-requests', [LeaveRequestController::class, 'index']);
-        Route::post('leave-requests', [LeaveRequestController::class, 'store']);
         Route::get('leave-requests/{id}', [LeaveRequestController::class, 'show']);
+        Route::get('leave-requests/{id}/attachment', [LeaveRequestController::class, 'attachment']);
         Route::put('leave-requests/{id}/status', [LeaveRequestController::class, 'updateStatus']);
         Route::delete('leave-requests/{id}', [LeaveRequestController::class, 'destroy']);
+
+        // Name, mobile, email and address from an uploaded resume, CV or driver's license (Groq vision)
+        Route::post('scan-document', [DocumentScanController::class, 'scan'])->middleware('throttle:20,1');
 
         Route::get('applicants/upcoming', [ApplicantController::class, 'upcoming']);
         Route::get('applicants', [ApplicantController::class, 'index']);
         Route::post('applicants', [ApplicantController::class, 'store']);
         Route::get('applicants/{id}', [ApplicantController::class, 'show']);
+        Route::get('applicants/{id}/resume', [ApplicantController::class, 'resume']);
         Route::put('applicants/{id}', [ApplicantController::class, 'update']);
         Route::patch('applicants/{id}/status', [ApplicantController::class, 'updateStatus']);
         Route::delete('applicants/{id}', [ApplicantController::class, 'destroy']);
@@ -268,6 +339,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
         Route::get('stock-out-items', [StockOutRequestController::class, 'items']);
+        Route::get('project-options', [ProjectController::class, 'options']);
 
         // Maintenance views its own requests (the controller filters by
         // requester). The Admin reaches these same two endpoints through the

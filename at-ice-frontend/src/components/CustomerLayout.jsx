@@ -28,7 +28,7 @@ const navSections = [
       { icon:<CameraIcon />, label:"Delivery Proofs", path:"/customer/delivery-proofs" },
     ] },
   { label:"Billing",    items:[
-      { icon:<ReceiptIcon />, label:"Receipts & Balance", path:"/customer/receipts" },
+      { icon:<ReceiptIcon />, label:"Invoices & Balance", path:"/customer/receipts" },
       { icon:<TagIcon />, label:"My Prices", path:"/customer/prices" },
     ] },
   { label:"Support",    items:[{ icon:<HeadsetIcon />, label:"Contact Support", path:"/customer/support" }] },

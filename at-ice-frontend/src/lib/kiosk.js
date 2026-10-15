@@ -22,6 +22,24 @@ try {
 } catch { /* ignore */ }
 
 export const getKioskToken = () => store()?.getItem(TOKEN_KEY) || "";
+
+// This kiosk's own random ID, kept by the browser for good. The server counts
+// wrong PINs per kiosk ID and locks only this kiosk after too many.
+const DEVICE_KEY = "kiosk_device_id";
+export function getKioskDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      id = "kiosk-" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return "kiosk-unsaved-device-0000";
+  }
+}
 export const setKioskToken = (token) => store()?.setItem(TOKEN_KEY, token);
 export const clearKioskToken = () => store()?.removeItem(TOKEN_KEY);
 

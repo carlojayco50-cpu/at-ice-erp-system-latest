@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Supplier;
+use App\Services\AddressFormatter;
 use App\Services\PhoneFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -42,8 +43,10 @@ class SupplierController extends Controller
             'contact_number' => ['nullable', 'regex:'.self::PHONE_REGEX],
             'email' => 'nullable|email:rfc,filter,dns|max:255',
             'address' => 'nullable|string|max:500',
+            'barangay' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
             'province' => 'nullable|string|max:100',
+            ...AddressFormatter::PSGC_RULES,
             'notes' => 'nullable|string|max:1000',
         ];
     }

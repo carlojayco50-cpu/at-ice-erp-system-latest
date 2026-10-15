@@ -211,6 +211,7 @@ export default function StockOutApprovalPage() {
                   </div>
 
                   <p className="text-sm text-slate-600 mt-2">{req.purpose}</p>
+                  {req.project?.name && <p className="mt-1 inline-block px-2 py-0.5 rounded bg-violet-50 border border-violet-200 text-[11px] font-medium text-violet-700">Project: {req.project.name}</p>}
 
                   <p className="text-xs text-slate-400 mt-2">
                     Requested by {req.requested_by?.name || 'Unknown'} ·{' '}

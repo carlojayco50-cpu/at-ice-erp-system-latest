@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\LiveEvent;
+use App\Support\ArchiveExpiry;
+use App\Support\PayrollCalendar;
 use Illuminate\Http\Request;
 
 class LiveFeedController extends Controller
@@ -14,6 +16,14 @@ class LiveFeedController extends Controller
     {
         $user = $request->user();
         $after = $request->query('after');
+
+        // There is no scheduler: the poll sends the payroll cut-off notice
+        // (once per period) and applies the archive expiry (once a day) while
+        // HR or Admin is online.
+        if (in_array($user->role, ['hr', 'admin'], true)) {
+            PayrollCalendar::notifyCutoff();
+            ArchiveExpiry::daily();
+        }
 
         if ($after === null || $after === '') {
             return response()->json(['last_id' => (int) LiveEvent::max('id'), 'events' => []]);

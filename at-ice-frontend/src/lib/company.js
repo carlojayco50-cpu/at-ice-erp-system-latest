@@ -13,7 +13,7 @@ export const COMPANY = {
 export const SUPPORT_TOPICS = [
   { key: "delivery_status", label: "Delivery Status & Schedule Confirmation" },
   { key: "emergency_supply", label: "Emergency Ice Shortage / Urgent Additional Sacks" },
-  { key: "billing", label: "Billing, Receipt or Payment Clearance" },
+  { key: "billing", label: "Billing, Invoice or Payment Clearance" },
   { key: "ice_quality", label: "Ice Quality / Temperature Verification" },
   { key: "contract_rate", label: "Contract Rate or Volume Discount Review" },
 ];

@@ -83,7 +83,7 @@ class Receipt extends Model
                     'receipt_no' => $receipt->receipt_no,
                     'customer' => $receipt->customer?->name ?? 'Unknown',
                     'total_amount' => $receipt->total_amount,
-                    'message' => "Receipt {$receipt->receipt_no} is overdue!",
+                    'message' => "Invoice {$receipt->receipt_no} is overdue!",
                 ]));
             } catch (\Throwable $e) {
                 report($e);
@@ -91,10 +91,14 @@ class Receipt extends Model
         }
     }
 
-    public static function generateReceiptNo(): string
+    // Invoice number: the customer's invoice code, the date and a number for
+    // that customer that day, e.g. PG-20261013-001. Older invoices keep their
+    // RCP-... numbers.
+    public static function generateReceiptNo(?Customer $customer = null): string
     {
         $date = now()->format('Ymd');
-        $prefix = "RCP-{$date}-";
+        $code = $customer?->invoice_code ?: 'INV';
+        $prefix = "{$code}-{$date}-";
 
         // One above the highest number used today (a count could repeat one).
         // Two receipts made at the same moment can still get the same number:

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { setKioskToken } from "../lib/kiosk";
+import { getKioskDeviceId, setKioskToken } from "../lib/kiosk";
 import { playSplash } from "../lib/splash";
 
 // Screens of the Attendance Station gate (see KioskGate.jsx).
@@ -110,12 +110,6 @@ export function KioskOfflineScreen({ onRetry, onReturn }) {
   );
 }
 
-const formatClock = (seconds) => {
-  const m = Math.floor(seconds / 60);
-  const s = String(seconds % 60).padStart(2, "0");
-  return `${m}:${s}`;
-};
-
 // Four PIN boxes over one real input (so paste, backspace and number pads just
 // work). The PIN is sent as soon as the 4th digit is typed; there is no submit
 // button. The PIN is only ever checked by the backend. Used by PinModal and by
@@ -127,25 +121,15 @@ export function PinEntry({ onUnlocked }) {
   const [error, setError] = useState("");
   const [shake, setShake] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [lockedUntil, setLockedUntil] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
+  // Locked after too many wrong PINs: no time limit, only the Admin PIN unlocks it.
+  const [lockedOut, setLockedOut] = useState(false);
 
-  // Counts down a lockout.
   useEffect(() => {
-    if (!lockedUntil) return;
-    const id = setInterval(() => {
-      const current = Date.now();
-      setNow(current);
-      if (current >= lockedUntil) {
-        setLockedUntil(0);
-        setError("");
-      }
-    }, 1000);
-    return () => clearInterval(id);
-  }, [lockedUntil]);
-
-  const secondsLeft = lockedUntil ? Math.max(0, Math.ceil((lockedUntil - now) / 1000)) : 0;
-  const lockedOut = secondsLeft > 0;
+    fetch(`/api/kiosk/lock-state?device_id=${encodeURIComponent(getKioskDeviceId())}`, { headers: { Accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.locked) setLockedOut(true); })
+      .catch(() => { /* checked again on the next PIN */ });
+  }, []);
 
   // A disabled input loses focus: give it back after each check and lockout.
   useEffect(() => {
@@ -167,7 +151,7 @@ export function PinEntry({ onUnlocked }) {
       const res = await fetch("/api/kiosk/unlock", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin, device_id: getKioskDeviceId() }),
       });
       const data = await res.json().catch(() => null);
 
@@ -177,12 +161,11 @@ export function PinEntry({ onUnlocked }) {
         onUnlocked();
         return;
       }
-      if (res.status === 429) {
-        setNow(Date.now());
-        setLockedUntil(Date.now() + (data?.retry_after_seconds || 900) * 1000);
-        setError(data?.message || "Too many wrong PINs. Try again later.");
+      if (res.status === 423) {
+        setLockedOut(true);
+        setError("");
       } else if (res.status === 422 && typeof data?.attempts_remaining === "number") {
-        setError(`Wrong PIN. ${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} left before a lockout.`);
+        setError(`Wrong PIN. ${data.attempts_remaining} attempt${data.attempts_remaining === 1 ? "" : "s"} left before this kiosk locks.`);
       } else {
         setError(data?.message || "The PIN could not be checked. Please try again.");
       }
@@ -197,6 +180,8 @@ export function PinEntry({ onUnlocked }) {
   }
 
   const active = focused && !loading && !lockedOut ? Math.min(pin.length, 3) : -1;
+
+  if (lockedOut) return <AdminOverride onUnlocked={() => { setLockedOut(false); setError(""); }} />;
 
   return (
     <div className="flex flex-col gap-3">
@@ -255,10 +240,67 @@ export function PinEntry({ onUnlocked }) {
       {error && (
         <div role="alert" className="text-[13px] text-red-300 bg-red-500/10 border border-red-400/30 rounded-xl px-4 py-3 text-center">
           {error}
-          {lockedOut && <span className="block mt-1 font-mono text-red-200">{formatClock(secondsLeft)}</span>}
         </div>
       )}
     </div>
+  );
+}
+
+// A kiosk locked after too many wrong HR PINs. It stays locked (no timer) until
+// an Admin types the 6-digit Admin override PIN here, on this kiosk. HR cannot
+// unlock it. Every try is logged on the server.
+function AdminOverride({ onUnlocked }) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (pin.length !== 6 || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/kiosk/override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ device_id: getKioskDeviceId(), admin_pin: pin }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        onUnlocked();
+        return;
+      }
+      setError(res.status === 429 ? "Too many tries. Wait a minute and try again." : data?.message || "The Admin PIN could not be checked.");
+      setPin("");
+    } catch {
+      setError("Network error. Check the connection of this terminal and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3 text-center">
+      <div role="alert" className="text-[13px] text-red-200 bg-red-500/10 border border-red-400/30 rounded-xl px-4 py-3">
+        This kiosk is locked after too many wrong PINs. Only an Admin can unlock it, here on this kiosk.
+      </div>
+      <label htmlFor="kiosk-admin-pin" className="text-[12px] text-slate-300">Admin override PIN (6 digits)</label>
+      <input
+        id="kiosk-admin-pin"
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={6}
+        value={pin}
+        onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+        className="mx-auto w-48 text-center tracking-[0.5em] font-mono text-[20px] px-3 py-2.5 rounded-xl bg-slate-950/70 border border-slate-600/60 text-cyan-100 outline-none focus:border-cyan-400"
+        autoFocus
+      />
+      {error && <div role="alert" className="text-[13px] text-red-300">{error}</div>}
+      <button type="submit" disabled={pin.length !== 6 || busy} className="mx-auto px-5 py-2.5 rounded-xl bg-cyan-500 text-slate-900 text-[14px] font-semibold disabled:opacity-50 cursor-pointer">
+        {busy ? "Checking…" : "Unlock kiosk"}
+      </button>
+    </form>
   );
 }
 

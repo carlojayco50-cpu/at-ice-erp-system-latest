@@ -434,12 +434,20 @@ class BiController extends Controller
             ])
             ->values();
 
+        // Open projects on Admin's board and the supplies they used (Admin > Projects)
+        $projects = collect(json_decode(app(ProjectController::class)->index()->content(), true))
+            ->where('status', '!=', 'done')
+            ->take(6)
+            ->map(fn ($p) => \Illuminate\Support\Arr::only($p, ['id', 'name', 'status', 'priority', 'owner', 'due_date', 'materials_cost', 'requests_total', 'requests_waiting', 'progress', 'overdue']))
+            ->values();
+
         return response()->json([
             'total' => $total,
             'in_stock' => $inStock,
             'low_stock' => $lowStock,
             'out_of_stock' => $outOfStock,
             'critical_items' => $criticalItems,
+            'projects' => $projects,
         ]);
     }
 
@@ -465,7 +473,7 @@ class BiController extends Controller
         $onLeave = isset($statusCounts['on_leave']) ? (int) $statusCounts['on_leave']->count : 0;
 
         // Total active employees
-        $totalEmployees = Employee::count();
+        $totalEmployees = Employee::where('is_active', true)->count();
 
         // Present + late count as "in"
         $totalIn = $present + $late + $halfDay;
@@ -613,7 +621,187 @@ class BiController extends Controller
             'attendance' => json_decode($this->attendanceToday()->content(), true),
             'expenses' => json_decode($this->getExpenses($expenseRequest)->content(), true),
             'overdue' => json_decode($this->overdueReceipts()->content(), true),
+            'forecast' => $this->forecastData(),
+            'drivers_today' => $this->driversToday(),
+            'stores' => $this->storePerformance(),
         ]);
+    }
+
+    // GET /api/bi/forecast
+    public function forecast()
+    {
+        return response()->json($this->forecastData());
+    }
+
+    // MRR and next month's estimate, from invoices (receipts) of the last six
+    // complete months:
+    //   mrr: monthly recurring revenue, the average of the last 3 complete
+    //        months from customers who bought in at least 2 of those 3 months
+    //        (regular stores, not one-time buyers)
+    //   next_month: revenue and quantity per ice product, from the trend of
+    //        the last 6 months (least squares line), never below zero; with
+    //        less than 3 months of sales it is the plain average instead
+    //   history: the 6 months, for the chart
+    public function forecastData(): array
+    {
+        $now = Carbon::now(self::LOCAL_TZ);
+        $first = $now->copy()->startOfMonth()->subMonths(6);
+        $months = collect(range(0, 5))->map(fn ($i) => $first->copy()->addMonths($i)->format('Y-m'));
+
+        $receipts = Receipt::with('items:id,receipt_id,product_type,quantity')
+            ->where('created_at', '>=', $first->copy()->timezone(config('app.timezone')))
+            ->where('created_at', '<', $now->copy()->startOfMonth()->timezone(config('app.timezone')))
+            ->get(['id', 'customer_id', 'total_amount', 'quantity', 'created_at']);
+        $monthOf = fn ($r) => Carbon::parse($r->created_at)->timezone(self::LOCAL_TZ)->format('Y-m');
+
+        $products = array_keys(\App\Models\DeliveryItem::PRODUCT_TYPES);
+        $history = $months->map(function ($m) use ($receipts, $monthOf, $products) {
+            $inMonth = $receipts->filter(fn ($r) => $monthOf($r) === $m);
+            $qty = array_fill_keys($products, 0);
+            foreach ($inMonth as $r) {
+                foreach ($r->items as $it) {
+                    if (isset($qty[$it->product_type])) {
+                        $qty[$it->product_type] += (int) $it->quantity;
+                    }
+                }
+            }
+
+            return [
+                'month' => $m,
+                'label' => Carbon::createFromFormat('Y-m-d', $m.'-01')->format('M Y'),
+                'revenue' => round((float) $inMonth->sum('total_amount'), 2),
+                'quantity' => $qty,
+                'invoices' => $inMonth->count(),
+            ];
+        })->values();
+
+        // Regular customers: bought in at least 2 of the last 3 complete months.
+        $last3 = $months->slice(-3)->values();
+        $regular = $receipts->filter(fn ($r) => $last3->contains($monthOf($r)))
+            ->groupBy('customer_id')
+            ->filter(fn ($rs) => $rs->map($monthOf)->unique()->count() >= 2);
+        $mrr = round($regular->flatten()->sum('total_amount') / 3, 2);
+
+        $active = $history->filter(fn ($h) => $h['revenue'] > 0)->count();
+        $estimate = function (array $ys) use ($active) {
+            $ys = array_values($ys);
+            $n = count($ys);
+            if ($active < 3) {
+                $nonZero = array_filter($ys);
+
+                return $nonZero ? array_sum($nonZero) / count($nonZero) : 0;
+            }
+            $mx = ($n - 1) / 2;
+            $my = array_sum($ys) / $n;
+            $num = $den = 0;
+            foreach ($ys as $x => $y) {
+                $num += ($x - $mx) * ($y - $my);
+                $den += ($x - $mx) ** 2;
+            }
+            $slope = $den ? $num / $den : 0;
+
+            return max(0, $my + $slope * ($n - $mx));
+        };
+
+        $nextQty = [];
+        foreach ($products as $p) {
+            $nextQty[$p] = (int) round($estimate($history->pluck("quantity.$p")->all()));
+        }
+        $nextRevenue = round($estimate($history->pluck('revenue')->all()), 2);
+        $lastRevenue = (float) ($history->last()['revenue'] ?? 0);
+        $method = $active < 3 ? 'average' : 'trend';
+
+        // No complete month of sales yet (a new system): this month's pace so
+        // far, stretched to a whole month, is the estimate and the MRR.
+        if ($active === 0) {
+            $monthStart = $now->copy()->startOfMonth();
+            $sofar = Receipt::with('items:id,receipt_id,product_type,quantity')
+                ->where('created_at', '>=', $monthStart->copy()->timezone(config('app.timezone')))
+                ->get(['id', 'total_amount']);
+            $scale = $now->daysInMonth / max(1, $now->day);
+            $nextRevenue = round((float) $sofar->sum('total_amount') * $scale, 2);
+            foreach ($products as $p) {
+                $nextQty[$p] = (int) round($sofar->flatMap->items->where('product_type', $p)->sum('quantity') * $scale);
+            }
+            $mrr = $nextRevenue;
+            $method = 'this_month';
+        }
+
+        return [
+            'mrr' => $mrr,
+            'regular_customers' => $regular->count(),
+            'next_month' => [
+                'label' => $now->copy()->addMonthNoOverflow()->format('F Y'),
+                'revenue' => $nextRevenue,
+                'quantity' => $nextQty,
+                'change_pct' => $lastRevenue > 0 ? round(($nextRevenue - $lastRevenue) / $lastRevenue * 100, 1) : null,
+                'method' => $method,
+            ],
+            'product_labels' => \App\Models\DeliveryItem::PRODUCT_TYPES,
+            'history' => $history,
+        ];
+    }
+
+    // Drivers today: each active Driver's time in and out (Attendance Station)
+    // and their deliveries today: delivered, in transit and still pending.
+    public function driversToday(): array
+    {
+        $today = Carbon::now(self::LOCAL_TZ)->toDateString();
+        $dayStart = Carbon::parse($today, self::LOCAL_TZ)->startOfDay()->timezone(config('app.timezone'));
+        $dayEnd = $dayStart->copy()->addDay();
+
+        $drivers = Employee::with(['user:id,name,role', 'attendances' => fn ($q) => $q->whereDate('date', $today)])
+            ->where('is_active', true)
+            ->whereHas('user', fn ($q) => $q->where('role', 'driver'))
+            ->get();
+
+        $userIds = $drivers->pluck('user_id')->filter()->all();
+        $deliveries = Delivery::whereIn('driver_id', $userIds)
+            ->where(fn ($q) => $q->whereBetween('delivered_at', [$dayStart, $dayEnd])
+                ->orWhereDate('scheduled_date', $today)
+                ->orWhere('status', 'in_transit'))
+            ->get(['id', 'driver_id', 'status', 'delivered_at', 'scheduled_date']);
+
+        return $drivers->map(function ($d) use ($deliveries, $dayStart, $dayEnd) {
+            $mine = $deliveries->where('driver_id', $d->user_id);
+            $att = $d->attendances->first();
+
+            return [
+                'employee_id' => $d->id,
+                'name' => $d->full_name,
+                'vehicle_plate' => $d->vehicle_plate,
+                'time_in' => $att?->time_in,
+                'time_out' => $att?->time_out,
+                'status' => $att?->status ?? 'absent',
+                'delivered' => $mine->filter(fn ($x) => $x->status === 'delivered' && $x->delivered_at && $x->delivered_at->between($dayStart, $dayEnd))->count(),
+                'in_transit' => $mine->where('status', 'in_transit')->count(),
+                'pending' => $mine->where('status', 'pending')->count(),
+            ];
+        })->sortByDesc('delivered')->values()->all();
+    }
+
+    // Store performance this month: each store's deliveries received, ice
+    // quantity, invoice total and unpaid balance, best first (top 10).
+    public function storePerformance(): array
+    {
+        $now = Carbon::now(self::LOCAL_TZ);
+        $from = $now->copy()->startOfMonth()->timezone(config('app.timezone'));
+
+        return Receipt::with('customer:id,name,invoice_code,city')
+            ->where('created_at', '>=', $from)
+            ->get(['id', 'customer_id', 'quantity', 'total_amount', 'payment_status'])
+            ->groupBy('customer_id')
+            ->map(fn ($rs) => [
+                'customer_id' => $rs->first()->customer_id,
+                'name' => $rs->first()->customer?->name ?? 'Unknown',
+                'invoice_code' => $rs->first()->customer?->invoice_code,
+                'city' => $rs->first()->customer?->city,
+                'deliveries' => $rs->count(),
+                'quantity' => (int) $rs->sum('quantity'),
+                'revenue' => round((float) $rs->sum('total_amount'), 2),
+                'unpaid' => round((float) $rs->whereIn('payment_status', ['unpaid', 'overdue'])->sum('total_amount'), 2),
+            ])
+            ->sortByDesc('revenue')->take(10)->values()->all();
     }
 
     // If a reply was cut off by the token limit, keep only complete

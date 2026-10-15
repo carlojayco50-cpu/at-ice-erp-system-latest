@@ -45,6 +45,17 @@ const PRODUCTS = [
 ];
 
 const token = () => localStorage.getItem("token") || "";
+
+// Quantities Admin booked on the delivery, by product: { bags: "20", ... }.
+function orderedQuantities(delivery) {
+  const q = { bags: "", small_sack: "", big_sack: "" };
+  for (const it of delivery?.items || []) {
+    if (!(it.product_type in q)) continue;
+    const n = Number(q[it.product_type] || 0) + Number(it.quantity_ordered || 0);
+    q[it.product_type] = n > 0 ? String(Math.min(n, MAX_QTY)) : "";
+  }
+  return q;
+}
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function SalesmanDeliveryConfirmation() {
@@ -87,6 +98,9 @@ export default function SalesmanDeliveryConfirmation() {
           return;
         }
         setDelivery(found);
+        // Start from what Admin booked on the delivery; the Salesman changes a
+        // number only when fewer (or more) were actually delivered.
+        setQuantities(orderedQuantities(found));
 
         // Start from what the delivery asked for (the limit at most), so a short
         // delivery is a conscious change and shows on the review screen.
@@ -190,7 +204,7 @@ export default function SalesmanDeliveryConfirmation() {
         throw new Error(result.message || "Delivery confirmation failed.");
       }
 
-      toast.success("Delivery confirmed. The receipt was created.");
+      toast.success("Delivery confirmed. The invoice was created.");
       setSuccessResult(result);
       setStep("success");
     } catch (err) {
@@ -274,7 +288,7 @@ export default function SalesmanDeliveryConfirmation() {
 
           <div className="border border-black/[0.08] rounded-2xl overflow-hidden bg-white">
             <div className="bg-slate-50 border-b border-black/[0.08] px-4 py-3 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400 uppercase tracking-widest">Receipt</span>
+              <span className="text-[11px] text-slate-400 uppercase tracking-widest">Invoice</span>
               <span className="text-[12px] font-mono font-semibold text-slate-800">
                 {receipt.receipt_no || "—"}
               </span>
@@ -473,6 +487,8 @@ export default function SalesmanDeliveryConfirmation() {
             const unitPrice = prices[p.key];
             const hasPrice = unitPrice !== null && unitPrice !== undefined;
             const qty = quantities[p.key];
+            const ordered = Number(orderedQuantities(delivery)[p.key] || 0);
+            const diff = Number(qty || 0) - ordered;
 
             return (
               <div key={p.key} className="border border-black/[0.08] rounded-xl bg-white px-4 py-3.5 flex items-center gap-3">
@@ -488,6 +504,11 @@ export default function SalesmanDeliveryConfirmation() {
                     <div className="text-[10px] text-cyan-600 font-mono mt-0.5">{peso(unitPrice)} / unit</div>
                   ) : (
                     <div className="text-[10px] text-red-400 mt-0.5">No price set for this customer</div>
+                  )}
+                  {ordered > 0 && (
+                    <div className={`text-[10px] mt-0.5 ${diff === 0 ? "text-slate-400" : "text-amber-600 font-medium"}`}>
+                      Booked by Admin: {ordered}{diff !== 0 && ` · ${diff < 0 ? `${-diff} short` : `${diff} extra`}`}
+                    </div>
                   )}
                 </div>
                 <div className="flex flex-col items-center gap-1">
