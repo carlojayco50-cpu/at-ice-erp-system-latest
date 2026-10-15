@@ -46,13 +46,14 @@ const PRODUCTS = [
 
 const token = () => localStorage.getItem("token") || "";
 
-// Quantities Admin booked on the delivery, by product: { bags: "20", ... }.
-function orderedQuantities(delivery) {
+// Quantities Admin booked on the delivery, by product: { bags: "20", ... }, at most
+// the shared per-product limit.
+function orderedQuantities(delivery, max) {
   const q = { bags: "", small_sack: "", big_sack: "" };
   for (const it of delivery?.items || []) {
     if (!(it.product_type in q)) continue;
     const n = Number(q[it.product_type] || 0) + Number(it.quantity_ordered || 0);
-    q[it.product_type] = n > 0 ? String(Math.min(n, MAX_QTY)) : "";
+    q[it.product_type] = n > 0 ? String(Math.min(n, max)) : "";
   }
   return q;
 }
@@ -100,15 +101,7 @@ export default function SalesmanDeliveryConfirmation() {
         setDelivery(found);
         // Start from what Admin booked on the delivery; the Salesman changes a
         // number only when fewer (or more) were actually delivered.
-        setQuantities(orderedQuantities(found));
-
-        // Start from what the delivery asked for (the limit at most), so a short
-        // delivery is a conscious change and shows on the review screen.
-        const start = { bags: "", small_sack: "", big_sack: "" };
-        (found.items || []).forEach((it) => {
-          if (it.product_type in start) start[it.product_type] = String(Math.min(Number(it.quantity_ordered) || 0, maxRef.current) || "");
-        });
-        setQuantities(start);
+        setQuantities(orderedQuantities(found, maxRef.current));
 
         const customerId = found.customer?.id;
         if (customerId) {
@@ -141,7 +134,7 @@ export default function SalesmanDeliveryConfirmation() {
     });
   }, [MAX_QTY]);
 
-  // Whole numbers only,500 at most per product (the server checks the same)
+  // Whole numbers only, up to the per-product limit (the server checks the same)
   const handleQtyChange = (key, value) => {
     const digits = String(value).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
     if (digits === "") { setQuantities((q) => ({ ...q, [key]: "" })); return; }
@@ -487,7 +480,7 @@ export default function SalesmanDeliveryConfirmation() {
             const unitPrice = prices[p.key];
             const hasPrice = unitPrice !== null && unitPrice !== undefined;
             const qty = quantities[p.key];
-            const ordered = Number(orderedQuantities(delivery)[p.key] || 0);
+            const ordered = orderedBy[p.key] || 0; // what Admin booked (not capped)
             const diff = Number(qty || 0) - ordered;
 
             return (
@@ -495,11 +488,6 @@ export default function SalesmanDeliveryConfirmation() {
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium text-slate-800">{p.label}</div>
                   <div className="text-[10px] text-slate-400">{p.sub}</div>
-                  {orderedBy[p.key] > 0 && (
-                    <div className={`text-[10px] mt-0.5 ${Number(qty || 0) === orderedBy[p.key] ? "text-slate-500" : "text-amber-600 font-medium"}`}>
-                      Ordered {orderedBy[p.key]}{orderedBy[p.key] > MAX_QTY ? ` (limit ${MAX_QTY})` : ""}
-                    </div>
-                  )}
                   {hasPrice ? (
                     <div className="text-[10px] text-cyan-600 font-mono mt-0.5">{peso(unitPrice)} / unit</div>
                   ) : (
