@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import CameraCapture from "../../components/CameraCapture";
 import { ScopeStatusRow } from "../../components/NightMode";
+import { useMaxQuantity } from "../../lib/limits";
 
 // Icons
 const ArrowLeftIcon = () => (
@@ -43,14 +44,15 @@ const PRODUCTS = [
   { key: "big_sack",   label: "Big Sack",   sub: "50kg" },
 ];
 
-const MAX_QTY = 500;
-
 const token = () => localStorage.getItem("token") || "";
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function SalesmanDeliveryConfirmation() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const MAX_QTY = useMaxQuantity(); // same limit as New Delivery and Ice Loading
+  const maxRef = useRef(MAX_QTY);
+  maxRef.current = MAX_QTY;
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -86,6 +88,14 @@ export default function SalesmanDeliveryConfirmation() {
         }
         setDelivery(found);
 
+        // Start from what the delivery asked for (the limit at most), so a short
+        // delivery is a conscious change and shows on the review screen.
+        const start = { bags: "", small_sack: "", big_sack: "" };
+        (found.items || []).forEach((it) => {
+          if (it.product_type in start) start[it.product_type] = String(Math.min(Number(it.quantity_ordered) || 0, maxRef.current) || "");
+        });
+        setQuantities(start);
+
         const customerId = found.customer?.id;
         if (customerId) {
           const priceRes = await fetch(`/api/customer-prices/${customerId}/lookup`, {
@@ -105,12 +115,28 @@ export default function SalesmanDeliveryConfirmation() {
     load();
   }, [id]);
 
-  // Whole numbers only, 500 at most per product (the server checks the same)
+  // The limit may arrive after the prefill: keep every quantity within it
+  useEffect(() => {
+    setQuantities((q) => {
+      const next = { ...q };
+      let changed = false;
+      for (const k of Object.keys(next)) {
+        if (Number(next[k]) > MAX_QTY) { next[k] = String(MAX_QTY); changed = true; }
+      }
+      return changed ? next : q;
+    });
+  }, [MAX_QTY]);
+
+  // Whole numbers only,500 at most per product (the server checks the same)
   const handleQtyChange = (key, value) => {
     const digits = String(value).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
     if (digits === "") { setQuantities((q) => ({ ...q, [key]: "" })); return; }
     setQuantities((q) => ({ ...q, [key]: String(Math.min(Number(digits), MAX_QTY)) }));
   };
+
+  // What the delivery asked for, per product
+  const orderedBy = {};
+  (delivery?.items || []).forEach((it) => { orderedBy[it.product_type] = Number(it.quantity_ordered) || 0; });
 
   const activeLines = PRODUCTS
     .filter((p) => Number(quantities[p.key]) > 0)
@@ -124,8 +150,15 @@ export default function SalesmanDeliveryConfirmation() {
         unitPrice,
         hasPrice,
         lineTotal: hasPrice ? qty * Number(unitPrice) : null,
+        ordered: orderedBy[p.key] ?? null,
       };
     });
+
+  // Products on the delivery that are not being delivered at all (quantity 0) count as short too
+  const missingLines = PRODUCTS
+    .filter((p) => (orderedBy[p.key] ?? 0) > 0 && !(Number(quantities[p.key]) > 0))
+    .map((p) => ({ ...p, ordered: orderedBy[p.key], qty: 0 }));
+  const differences = [...activeLines, ...missingLines].filter((l) => l.ordered !== null && l.ordered !== l.qty);
 
   const grandTotal = activeLines.reduce((sum, l) => sum + (l.lineTotal || 0), 0);
   const missingPriceLines = activeLines.filter((l) => !l.hasPrice);
@@ -264,6 +297,11 @@ export default function SalesmanDeliveryConfirmation() {
                 <div key={it.id} className="flex items-center justify-between text-[12px]">
                   <span className="text-slate-600 capitalize">
                     {it.product_type.replace("_", " ")} × {it.quantity}
+                    {it.quantity_ordered != null && Number(it.quantity_ordered) !== Number(it.quantity) && (
+                      <span className="block text-[11px] text-amber-600 normal-case font-medium">
+                        ordered {it.quantity_ordered}, short by {it.quantity_ordered - it.quantity}
+                      </span>
+                    )}
                   </span>
                   <span className="text-slate-700 font-mono">{peso(it.line_total)}</span>
                 </div>
@@ -314,6 +352,18 @@ export default function SalesmanDeliveryConfirmation() {
             Please review before sending to Admin. This cannot be edited after submission.
           </div>
 
+          {differences.length > 0 && (
+            <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-col gap-1">
+              <span className="font-semibold">Different from the delivery order</span>
+              {differences.map((l) => (
+                <span key={l.key}>
+                  {l.label}: ordered {l.ordered}, delivering {l.qty}{" "}
+                  ({l.qty < l.ordered ? `short by ${l.ordered - l.qty}` : `${l.qty - l.ordered} over`})
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="border border-black/[0.08] rounded-2xl bg-white overflow-hidden">
             <div className="px-4 py-3 border-b border-black/[0.06] flex flex-col gap-0.5">
               <span className="text-[10px] text-slate-400 uppercase tracking-widest">Store</span>
@@ -324,7 +374,12 @@ export default function SalesmanDeliveryConfirmation() {
             <div className="px-4 py-3 flex flex-col gap-2 border-b border-black/[0.06]">
               {activeLines.map((l) => (
                 <div key={l.key} className="flex items-center justify-between text-[12px]">
-                  <span className="text-slate-600">{l.label} ({l.sub}) × {l.qty}</span>
+                  <span className="text-slate-600">
+                    {l.label} ({l.sub}) × {l.qty}
+                    {l.ordered !== null && l.ordered !== l.qty && (
+                      <span className="block text-[11px] text-amber-600 font-medium">ordered {l.ordered}</span>
+                    )}
+                  </span>
                   <span className="text-slate-800 font-mono">{peso(l.lineTotal)}</span>
                 </div>
               ))}
@@ -424,6 +479,11 @@ export default function SalesmanDeliveryConfirmation() {
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium text-slate-800">{p.label}</div>
                   <div className="text-[10px] text-slate-400">{p.sub}</div>
+                  {orderedBy[p.key] > 0 && (
+                    <div className={`text-[10px] mt-0.5 ${Number(qty || 0) === orderedBy[p.key] ? "text-slate-500" : "text-amber-600 font-medium"}`}>
+                      Ordered {orderedBy[p.key]}{orderedBy[p.key] > MAX_QTY ? ` (limit ${MAX_QTY})` : ""}
+                    </div>
+                  )}
                   {hasPrice ? (
                     <div className="text-[10px] text-cyan-600 font-mono mt-0.5">{peso(unitPrice)} / unit</div>
                   ) : (

@@ -6,6 +6,7 @@ import { fullName } from "../../lib/names";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { toList } from "../../lib/list";
+import { useMaxQuantity } from "../../lib/limits";
 
 const API_BASE = "/api";
 // Proof photos are on Laravel's public disk, served by the backend at /storage/.
@@ -81,6 +82,7 @@ export default function DeliveriesPage() {
   const [search, setSearch]   = useState("");
   const [customerFilter, setCustomerFilter] = useState(""); // customer id, "" = all
 
+  const maxQty = useMaxQuantity();
   const [showForm, setShowForm]     = useState(false);
   const [form, setForm]             = useState(emptyForm);
   const [saving, setSaving]         = useState(false);
@@ -159,6 +161,11 @@ export default function DeliveriesPage() {
 
     if (form.scheduled_date < todayStr()) {
       setFormError("Scheduled date cannot be in the past.");
+      return;
+    }
+
+    if (form.items.some((it) => Number(it.quantity_ordered) > maxQty)) {
+      setFormError(`Each product can have at most ${maxQty} on one delivery. Add another delivery for more.`);
       return;
     }
 
@@ -462,7 +469,8 @@ export default function DeliveriesPage() {
                         ))}
                       </select>
                       <input
-                        type="number" min="1" placeholder="Qty"
+                        type="number" min="1" max={maxQty} placeholder={`Qty (max ${maxQty})`}
+                        aria-label={`Quantity, up to ${maxQty}`}
                         value={item.quantity_ordered}
                         onChange={(e) => updateItem(idx, "quantity_ordered", e.target.value)}
                         required
@@ -519,7 +527,12 @@ export default function DeliveriesPage() {
                   {(viewing.items || []).map((it) => (
                     <div key={it.id} className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
                       <span className="text-slate-700">{it.product_type ? productLabel(it.product_type) : it.product?.name}</span>
-                      <span className="text-slate-500 font-mono">{it.quantity_ordered} × ₱{Number(it.unit_price).toFixed(2)}</span>
+                      <span className="text-slate-500 font-mono text-right">
+                        {it.quantity_ordered} × ₱{Number(it.unit_price).toFixed(2)}
+                        {viewing.status === "delivered" && (
+                          <QtyCompare ordered={it.quantity_ordered} delivered={it.quantity_delivered} />
+                        )}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -561,6 +574,21 @@ function Row({ label, value }) {
     </div>
   );
 }
+// "Ordered 500, delivered 400 (short by 100)": amber when the two differ.
+function QtyCompare({ ordered, delivered }) {
+  const o = Number(ordered);
+  const d = Number(delivered);
+  if (!Number.isFinite(o) || !Number.isFinite(d) || ordered == null || delivered == null) return null;
+  const diff = d - o;
+  return (
+    <span className={`block text-[11px] ${diff === 0 ? "text-slate-400" : "text-amber-600 font-medium"}`}>
+      Ordered {o}, delivered {d}
+      {diff < 0 && ` (short by ${-diff})`}
+      {diff > 0 && ` (${diff} over)`}
+    </span>
+  );
+}
+
 // The Salesman's confirmation for a delivered stop: photo, who confirmed it
 // and when, and the receipt that was created from it.
 function ProofSection({ proof }) {
@@ -594,7 +622,10 @@ function ProofSection({ proof }) {
           <div className="flex flex-col gap-1.5">
             {(receipt.items || []).map((it) => (
               <div key={it.id} className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
-                <span className="text-slate-700">{productLabel(it.product_type)} × {it.quantity}</span>
+                <span className="text-slate-700">
+                  {productLabel(it.product_type)} × {it.quantity}
+                  {it.quantity_ordered != null && <QtyCompare ordered={it.quantity_ordered} delivered={it.quantity} />}
+                </span>
                 <span className="text-slate-600 font-mono">{peso(it.line_total)}</span>
               </div>
             ))}

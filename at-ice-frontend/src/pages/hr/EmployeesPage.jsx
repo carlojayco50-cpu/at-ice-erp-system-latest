@@ -934,12 +934,6 @@ export default function EmployeesPage() {
                 </Field>
               )}
 
-              {!editingId && (
-                <div className="text-[11px] text-slate-400 -mt-1">
-                  Daily rate isn't set here — use the Payroll action on this employee's row once the account exists.
-                </div>
-              )}
-
               <div className="flex justify-end gap-2 pt-2 border-t border-black/[0.09] mt-1">
                 <button type="button" onClick={closeModal} className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700">
                   Cancel

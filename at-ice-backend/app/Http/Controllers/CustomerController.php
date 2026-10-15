@@ -150,8 +150,7 @@ class CustomerController extends Controller
         // without the new fields. But once any new address field is filled (or the
         // record already has them), Street, Barangay, City and Province are all
         // required, so the one-line address is never rebuilt from a partial set.
-        // City and Province are not in the trigger list: old customers already
-        // have them from the old format.
+        // City and Province are required on their own below (never emptied).
         $hasStructured = $customer->street !== null || $customer->barangay !== null;
         $addressRule = $hasStructured
             ? 'required|string|max:255'
@@ -178,8 +177,9 @@ class CustomerController extends Controller
             'mop' => 'sometimes|in:cash,gcash,check,bank_transfer',
             'street' => $addressRule,
             'barangay' => $addressRule,
-            'city' => $addressRule,
-            'province' => $addressRule,
+            // City and Province can never be emptied: old customers already have them
+            'city' => 'sometimes|required|string|max:255',
+            'province' => 'sometimes|required|string|max:255',
             'block_lot' => 'nullable|string|max:255',
             'subdivision' => 'nullable|string|max:255',
             'postal_code' => ['nullable', 'regex:/^\d{4}$/'],

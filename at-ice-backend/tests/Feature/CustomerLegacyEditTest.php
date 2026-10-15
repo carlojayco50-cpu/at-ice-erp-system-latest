@@ -121,4 +121,15 @@ class CustomerLegacyEditTest extends TestCase
             'street' => 'Makabud Street', 'barangay' => 'Barangay 183', 'city' => 'Caloocan', 'province' => 'Metro Manila',
         ])->assertUnprocessable()->assertJsonValidationErrors(['email', 'contact_person', 'contact_number']);
     }
+
+    public function test_city_and_province_cannot_be_emptied(): void
+    {
+        $c = $this->legacy();
+
+        $this->putJson("/api/customers/{$c->id}", $this->formPayload(['city' => '']))->assertUnprocessable()->assertJsonValidationErrors('city');
+        $this->putJson("/api/customers/{$c->id}", $this->formPayload(['province' => '']))->assertUnprocessable()->assertJsonValidationErrors('province');
+
+        $this->assertSame('San Jose del Monte', $c->fresh()->city);
+        $this->assertSame('Bulacan', $c->fresh()->province);
+    }
 }

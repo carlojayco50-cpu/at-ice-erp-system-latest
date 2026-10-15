@@ -33,9 +33,10 @@ class DeliveryController extends Controller
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|in:bags,small_sack,big_sack',
-            'items.*.quantity_ordered' => 'required|integer|min:1',
+            'items.*.quantity_ordered' => 'required|integer|min:1|max:'.config('atice.max_product_quantity'),
         ], [
             'customer_id.required_if' => 'Please select a customer.',
+            'items.*.quantity_ordered.max' => 'Each product can have at most '.config('atice.max_product_quantity').' on one delivery. Add another delivery for more.',
         ]);
 
         // Each product type only once per delivery

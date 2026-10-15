@@ -85,4 +85,17 @@ class DeliveryConfirmationTest extends TestCase
         Sanctum::actingAs(User::create(['name' => 'Other', 'email' => 'other@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']));
         $this->assertNull(collect($this->getJson('/api/my-deliveries')->json())->firstWhere('id', $delivery->id));
     }
+
+    public function test_a_short_delivery_keeps_what_was_ordered_next_to_what_was_delivered(): void
+    {
+        $delivery = $this->delivery('in_transit');
+        $delivery->items()->create(['product_type' => 'bags', 'quantity_ordered' => 500, 'unit_price' => 50]);
+
+        $this->confirm($delivery, 400)->assertSuccessful();
+
+        $line = $delivery->fresh()->items->first();
+        $this->assertSame(400, (int) $line->quantity_delivered);
+        $this->assertSame(500, (int) $line->quantity_ordered);
+        $this->assertDatabaseHas('receipt_items', ['product_type' => 'bags', 'quantity' => 400, 'quantity_ordered' => 500]);
+    }
 }

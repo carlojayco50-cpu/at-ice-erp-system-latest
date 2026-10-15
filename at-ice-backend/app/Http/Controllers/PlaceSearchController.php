@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Nominatim;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -10,12 +11,10 @@ use Throwable;
 // Map lookups for the Add/Edit Customer form (Admin):
 // - reverse: the address under the Grab-style map pin.
 // - fromLink: the pin and address from a pasted Google Maps link.
-// Addresses come from OpenStreetMap's Nominatim (free, no key), sent with the
-// User-Agent its usage policy asks for, and cached.
+// Addresses come from OpenStreetMap's Nominatim (free, no key) through
+// App\Services\Nominatim (User-Agent, 1 request/sec), and are cached.
 class PlaceSearchController extends Controller
 {
-    private const USER_AGENT = 'AT-ICE-ERP/1.0 (STI SJDM Capstone Project)';
-
     // GET /api/places/reverse?lat=14.73&lng=121.04
     // Name of the spot under the pin, e.g. "Makabud Street, Novaliches", plus
     // its address split into the form's fields.
@@ -146,11 +145,9 @@ class PlaceSearchController extends Controller
 
         $place = Cache::remember($key, now()->addWeek(), function () use ($lat, $lng) {
             try {
-                $response = Http::timeout(8)
-                    ->withHeaders(['User-Agent' => self::USER_AGENT])
-                    ->get('https://nominatim.openstreetmap.org/reverse', [
-                        'lat' => $lat, 'lon' => $lng, 'format' => 'jsonv2', 'zoom' => 18, 'addressdetails' => 1,
-                    ]);
+                $response = Nominatim::get('reverse', [
+                    'lat' => $lat, 'lon' => $lng, 'format' => 'jsonv2', 'zoom' => 18, 'addressdetails' => 1,
+                ]);
             } catch (Throwable) {
                 return null;
             }

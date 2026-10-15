@@ -43,8 +43,8 @@ class DeliveryProofController extends Controller
             'delivery_id' => 'required|exists:deliveries,id',
             'products' => 'required|array|min:1',
             'products.*.product_type' => 'required|in:bags,small_sack,big_sack',
-            // 500 at most per product, the same limit as the Salesman's form
-            'products.*.quantity' => 'required|integer|min:1|max:500',
+            // Same per-product limit as New Delivery and Ice Loading (config/atice.php)
+            'products.*.quantity' => 'required|integer|min:1|max:'.config('atice.max_product_quantity'),
             'photo' => 'required|image|mimes:jpg,jpeg,png|max:5120',
         ]);
 
@@ -63,7 +63,8 @@ class DeliveryProofController extends Controller
             ], 422);
         }
 
-        $delivery = Delivery::with('customer')->findOrFail($request->delivery_id);
+        $delivery = Delivery::with(['customer', 'items'])->findOrFail($request->delivery_id);
+        $ordered = $delivery->items->pluck('quantity_ordered', 'product_type');
 
         // Only a delivery the Driver has started (in_transit) can be confirmed:
         // a pending one has not left the plant yet, and a cancelled (or
@@ -96,6 +97,7 @@ class DeliveryProofController extends Controller
             $lineItems[] = [
                 'product_type' => $line['product_type'],
                 'quantity' => $line['quantity'],
+                'quantity_ordered' => $ordered[$line['product_type']] ?? null,
                 'unit_price' => $unitPrice,
                 'line_total' => round($line['quantity'] * $unitPrice, 2),
             ];
@@ -154,6 +156,9 @@ class DeliveryProofController extends Controller
 
                         foreach ($lineItems as $item) {
                             $receipt->items()->create($item);
+                            // What was delivered, next to what was ordered
+                            $locked->items()->where('product_type', $item['product_type'])
+                                ->update(['quantity_delivered' => $item['quantity']]);
                         }
 
                         $locked->update([

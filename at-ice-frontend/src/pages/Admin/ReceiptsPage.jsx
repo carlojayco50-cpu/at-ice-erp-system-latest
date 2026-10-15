@@ -278,7 +278,16 @@ export default function ReceiptsPage() {
                   {(viewing.items || []).map((it) => (
                     <div key={it.id} className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
                       <span className="text-slate-700 capitalize">{it.product_type?.replace("_", " ")}</span>
-                      <span className="text-slate-500 font-mono">{it.quantity} × ₱{Number(it.unit_price).toFixed(2)} = {peso(it.line_total)}</span>
+                      <span className="text-slate-500 font-mono text-right">
+                        {it.quantity} × ₱{Number(it.unit_price).toFixed(2)} = {peso(it.line_total)}
+                        {it.quantity_ordered != null && (
+                          <span className={`block text-[11px] ${Number(it.quantity_ordered) === Number(it.quantity) ? "text-slate-400" : "text-amber-600 font-medium"}`}>
+                            Ordered {it.quantity_ordered}, delivered {it.quantity}
+                            {Number(it.quantity) < Number(it.quantity_ordered) && ` (short by ${it.quantity_ordered - it.quantity})`}
+                            {Number(it.quantity) > Number(it.quantity_ordered) && ` (${it.quantity - it.quantity_ordered} over)`}
+                          </span>
+                        )}
+                      </span>
                     </div>
                   ))}
                 </div>

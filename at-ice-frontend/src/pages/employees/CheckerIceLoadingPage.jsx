@@ -5,6 +5,7 @@ import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import { ScopeStatusRow } from "../../components/NightMode";
+import { useMaxQuantity } from "../../lib/limits";
 
 // Icons
 const ChevronLeftIcon = () => (
@@ -27,6 +28,12 @@ const ClockIcon = () => (
   <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+const CloseIcon = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
 const UserIcon = () => (
@@ -52,6 +59,7 @@ const PRODUCT_LABELS = {
 
 export default function CheckerIceLoadingPage() {
   const navigate = useNavigate();
+  const maxQty = useMaxQuantity();
 
   const [loadings, setLoadings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +70,8 @@ export default function CheckerIceLoadingPage() {
   const [formError, setFormError] = useState("");
 
   const [deliveryId, setDeliveryId] = useState("");
+  const [todays, setTodays] = useState([]); // today's deliveries for the dropdown
+  const [todaysLoaded, setTodaysLoaded] = useState(false);
   const [loadedAt, setLoadedAt] = useState("");
   const [quantities, setQuantities] = useState({ bags: "", small_sack: "", big_sack: "" });
 
@@ -92,6 +102,24 @@ export default function CheckerIceLoadingPage() {
     fetchLoadings();
   }, [live]);
 
+  // Today's deliveries (delivery number, customer, driver) for the dropdown
+  const fetchTodays = async () => {
+    try {
+      const res = await fetch("/api/ice-loadings/deliveries", {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token()}` },
+      });
+      setTodays(res.ok ? await res.json() : []);
+    } catch {
+      setTodays([]);
+    } finally {
+      setTodaysLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    if (showForm) fetchTodays();
+  }, [showForm, live]);
+
   const resetForm = () => {
     setDeliveryId("");
     setLoadedAt("");
@@ -99,8 +127,10 @@ export default function CheckerIceLoadingPage() {
     setFormError("");
   };
 
+  // Whole numbers only, up to the shared per-product limit
   const handleQuantityChange = (key, value) => {
-    setQuantities((prev) => ({ ...prev, [key]: value }));
+    const digits = String(value).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    setQuantities((prev) => ({ ...prev, [key]: digits === "" ? "" : String(Math.min(Number(digits), maxQty)) }));
   };
 
   const handleSubmit = async (e) => {
@@ -108,7 +138,7 @@ export default function CheckerIceLoadingPage() {
     setFormError("");
 
     if (!deliveryId || !loadedAt) {
-      setFormError("Please fill in delivery ID and loaded-at time.");
+      setFormError("Please choose the delivery and the loaded-at time.");
       return;
     }
     if (total <= 0) {
@@ -162,6 +192,8 @@ export default function CheckerIceLoadingPage() {
       if (!map.has(key)) {
         map.set(key, {
           delivery_id: rec.delivery_id,
+          delivery_no: rec.delivery?.delivery_no,
+          customerName: rec.delivery?.customer?.name,
           loaded_at: rec.loaded_at,
           checkerName: rec.checker?.name,
           items: [],
@@ -200,8 +232,8 @@ export default function CheckerIceLoadingPage() {
           onClick={() => setShowForm((v) => !v)}
           className="w-full mt-3 py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <PlusIcon />
-          {showForm ? "Cancel" : "New Loading Count"}
+          {showForm ? <CloseIcon /> : <PlusIcon />}
+          {showForm ? "Close Form" : "New Loading Count"}
         </button>
       </header>
 
@@ -213,16 +245,20 @@ export default function CheckerIceLoadingPage() {
               <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
                 Delivery ID
               </label>
-              <input
-                type="number"
-                min="1"
-                placeholder="e.g. 4"
+              <select
                 value={deliveryId}
                 onChange={(e) => setDeliveryId(e.target.value)}
                 className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
-              />
+              >
+                <option value="">{todaysLoaded && todays.length === 0 ? "No deliveries today" : "Select a delivery…"}</option>
+                {todays.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.delivery_no} · {d.customer || "No customer"} · {d.driver || "No driver"}
+                  </option>
+                ))}
+              </select>
               <span className="text-[11px] text-slate-400 px-0.5">
-                Ask the Driver or check the delivery order slip for this ID.
+                Today's deliveries only, with the customer and the driver.
               </span>
             </div>
 
@@ -240,7 +276,7 @@ export default function CheckerIceLoadingPage() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                Sacks Loaded, per type
+                Sacks Loaded, per type (up to {maxQty} each)
               </label>
               <div className="flex flex-col gap-2">
                 {PRODUCT_TYPES.map((p) => (
@@ -253,9 +289,10 @@ export default function CheckerIceLoadingPage() {
                       <div className="text-[10px] text-slate-400">{p.sub}</div>
                     </div>
                     <input
-                      type="number"
-                      min="0"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="0"
+                      aria-label={`${p.label} loaded, up to ${maxQty}`}
                       value={quantities[p.key]}
                       onChange={(e) => handleQuantityChange(p.key, e.target.value)}
                       className="w-20 text-right px-3 py-2 border border-black/[0.1] rounded-lg bg-white focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
@@ -311,7 +348,7 @@ export default function CheckerIceLoadingPage() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[13px] font-semibold text-slate-800 truncate">
-                  DEL-{String(group.delivery_id).padStart(4, "0")}
+                  {group.delivery_no || `DEL-${String(group.delivery_id).padStart(4, "0")}`}
                 </span>
                 <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600">
                   {group.total} total
@@ -320,7 +357,7 @@ export default function CheckerIceLoadingPage() {
 
               <div className="flex items-center gap-1 mt-1.5 text-[11px] text-slate-400">
                 <TruckIcon />
-                <span>Delivery #{group.delivery_id}</span>
+                <span>{group.customerName || `Delivery #${group.delivery_id}`}</span>
               </div>
 
               <div className="flex flex-wrap gap-1.5 mt-2">
@@ -339,6 +376,7 @@ export default function CheckerIceLoadingPage() {
                   <span className="text-[10px] text-slate-400 flex items-center gap-1">
                     <ClockIcon />
                     {new Date(group.loaded_at).toLocaleString("en-PH", {
+                      timeZone: "Asia/Manila",
                       month: "short",
                       day: "numeric",
                       hour: "2-digit",

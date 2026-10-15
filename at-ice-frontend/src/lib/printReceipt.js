@@ -30,7 +30,11 @@ export function printReceipt(receipt, customer) {
     .map(
       (it) => `<tr>
         <td>${esc(PRODUCT_LABEL[it.product_type] || it.product_type || "Ice")}</td>
-        <td class="num">${esc(it.quantity ?? "—")}</td>
+        <td class="num">${esc(it.quantity ?? "—")}${
+          it.quantity_ordered != null && Number(it.quantity_ordered) !== Number(it.quantity)
+            ? `<br><small>ordered ${esc(it.quantity_ordered)}</small>`
+            : ""
+        }</td>
         <td class="num">${esc(peso(it.unit_price))}</td>
         <td class="num">${esc(peso(it.line_total ?? Number(it.quantity || 0) * Number(it.unit_price || 0)))}</td>
       </tr>`

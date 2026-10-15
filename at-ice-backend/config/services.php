@@ -41,6 +41,12 @@ return [
         'key' => env('GROQ_API_KEY'),
     ],
 
+    // OpenStreetMap Nominatim (App\Services\Nominatim). Its usage policy needs a
+    // User-Agent that names the app and a way to contact us.
+    'nominatim' => [
+        'user_agent' => env('NOMINATIM_USER_AGENT', 'AT-ICE-ERP/1.0 (STI SJDM Capstone Project; contact: rhalfgigi12345678@gmail.com)'),
+    ],
+
     // Customer email check (App\Services\EmailVerifier). Optional: without a
     // key the server asks the mail server itself on port 25.
     'email_verify' => [

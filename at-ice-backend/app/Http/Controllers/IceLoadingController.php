@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Delivery;
 use App\Models\IceLoading;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -24,6 +26,28 @@ class IceLoadingController extends Controller
         return response()->json($query->paginate(50));
     }
 
+    // GET /api/ice-loadings/deliveries
+    // Today's deliveries (not cancelled) for the Checker's dropdown: delivery
+    // number, customer and driver. "Today" is the business day in config('atice.timezone').
+    public function todaysDeliveries()
+    {
+        $today = Carbon::now(config('atice.timezone'))->toDateString();
+
+        $rows = Delivery::with(['customer:id,name', 'driver:id,name'])
+            ->whereDate('scheduled_date', $today)
+            ->where('status', '!=', 'cancelled')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'delivery_no' => $d->delivery_no,
+                'customer' => $d->customer?->name,
+                'driver' => $d->driver?->name,
+            ]);
+
+        return response()->json($rows);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -31,8 +55,17 @@ class IceLoadingController extends Controller
             'loaded_at' => 'required|date',
             'items' => 'required|array|min:1',
             'items.*.product_type' => 'required|in:bags,small_sack,big_sack',
-            'items.*.quantity' => 'required|integer|min:0',
+            'items.*.quantity' => 'required|integer|min:0|max:'.config('atice.max_product_quantity'),
+        ], [
+            'items.*.quantity.max' => 'Each product can have at most '.config('atice.max_product_quantity').' in one loading count.',
         ]);
+
+        if (Delivery::whereKey($validated['delivery_id'])->value('status') === 'cancelled') {
+            return response()->json(['message' => 'That delivery was cancelled.'], 422);
+        }
+
+        // The time is typed without a zone: it is local time, not UTC.
+        $loadedAt = Carbon::parse($validated['loaded_at'], config('atice.timezone'))->utc();
 
         $productTypes = array_column($validated['items'], 'product_type');
         if (count($productTypes) !== count(array_unique($productTypes))) {
@@ -61,7 +94,7 @@ class IceLoadingController extends Controller
                     'delivery_id' => $validated['delivery_id'],
                     'product_type' => $item['product_type'],
                     'quantity_loaded' => $item['quantity'],
-                    'loaded_at' => $validated['loaded_at'],
+                    'loaded_at' => $loadedAt,
                     'checker_id' => auth()->id(),
                 ]);
             }

@@ -41,9 +41,19 @@ export default function CameraCapture({ stamp = "", onCapture, disabled = false 
       });
     } catch (e) {
       setState("error");
+      // No camera device at all: say so, instead of blaming other apps
+      let noCamera = e?.name === "NotFoundError" || e?.name === "DevicesNotFoundError";
+      if (!noCamera && e?.name !== "NotAllowedError") {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          noCamera = !devices.some((d) => d.kind === "videoinput");
+        } catch { /* keep the generic message */ }
+      }
       setError(e?.name === "NotAllowedError"
         ? "Camera permission was denied. Allow the camera for this site, then try again."
-        : "The camera could not be opened. Close other apps using it, then try again.");
+        : noCamera
+          ? "No camera found. Connect a camera to this device, then try again."
+          : "The camera could not be opened. Close other apps using it, then try again.");
     }
   };
 

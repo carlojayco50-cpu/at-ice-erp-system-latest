@@ -72,6 +72,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
+    // Limits the forms share with the server (config/atice.php)
+    Route::get('/limits', fn () => response()->json(['max_product_quantity' => config('atice.max_product_quantity')]));
+
     // Change own password (all roles). Throttled: 5 attempts per minute.
     Route::put('/change-password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
     Route::post('/logout-others', [AuthController::class, 'logoutOthers'])->middleware('throttle:5,1');
@@ -89,7 +92,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
 
-        // Add Customer: business/place search (OpenStreetMap) to fill the address and pin
+        // Add Customer: map pin lookups (OpenStreetMap) to fill the address
         Route::get('places/from-link', [PlaceSearchController::class, 'fromLink'])->middleware('throttle:30,1');
         Route::get('places/reverse', [PlaceSearchController::class, 'reverse'])->middleware('throttle:40,1,places-reverse');
 
@@ -244,6 +247,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
         // Ice Loading Count (simple count log per delivery, NOT a stock deduction)
         Route::get('ice-loadings', [IceLoadingController::class, 'index']);
+        Route::get('ice-loadings/deliveries', [IceLoadingController::class, 'todaysDeliveries']);
         Route::post('ice-loadings', [IceLoadingController::class, 'store']);
         Route::get('ice-loadings/{iceLoading}', [IceLoadingController::class, 'show']);
 

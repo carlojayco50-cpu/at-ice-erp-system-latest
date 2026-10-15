@@ -10,6 +10,7 @@ class ReceiptItem extends Model
         'receipt_id',
         'product_type',
         'quantity',
+        'quantity_ordered',
         'unit_price',
         'line_total',
     ];

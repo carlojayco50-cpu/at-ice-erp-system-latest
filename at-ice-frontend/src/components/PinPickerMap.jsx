@@ -5,8 +5,8 @@ import "leaflet/dist/leaflet.css";
 // Grab-style map pin for Add/Edit Customer. The pin stays in the middle and
 // the admin drags the map under it; when the map stops, onChange gets the new
 // latitude/longitude and the bubble shows the place name there (GET
-// /api/places/reverse). Coordinates set from outside (picking a search
-// result) move the map. "Lock pin" stops dragging so the pin cannot be moved
+// /api/places/reverse). Coordinates set from outside (a pasted map link)
+// move the map. "Lock pin" stops dragging so the pin cannot be moved
 // by accident (zoom still works); "Change pin" unlocks it. Every time the
 // admin moves the pin, onAddress gets the address under it so the form's
 // address follows the pin. OpenStreetMap tiles: free, no key.
@@ -73,7 +73,7 @@ export default function PinPickerMap({ latitude, longitude, onChange, onAddress 
     L.control.zoom({ position: "bottomright" }).addTo(map);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap",
+      attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
     map.on("movestart", () => setMoving(true));

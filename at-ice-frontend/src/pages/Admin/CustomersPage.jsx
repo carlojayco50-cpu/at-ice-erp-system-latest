@@ -176,12 +176,13 @@ export default function CustomersPage() {
       setFormError(ANY_MESSAGE);
       return;
     }
-    if (addressRequired) {
+    // City and Province are always required, even on an old customer
+    {
       const missing = [["street", "Street"], ["barangay", "Barangay"], ["city", "City"], ["province", "Province"]]
-        .filter(([f]) => !String(form[f] || "").trim())
+        .filter(([f]) => (addressRequired || f === "city" || f === "province") && !String(form[f] || "").trim())
         .map(([, label]) => label);
       if (missing.length) {
-        setFormError(`${missing.join(", ")} required when an address is filled in.`);
+        setFormError(`${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} required.`);
         return;
       }
     }
@@ -491,8 +492,8 @@ export default function CustomersPage() {
                 <Field label={addressRequired ? "Street *" : "Street"} value={form.street} onChange={(v) => setForm({ ...form, street: v })} placeholder="e.g. Quirino Highway" required={addressRequired} />
                 <Field label="Subdivision" value={form.subdivision} onChange={(v) => setForm({ ...form, subdivision: v })} placeholder="e.g. Citrus Subdivision" />
                 <Field label={addressRequired ? "Barangay *" : "Barangay"} value={form.barangay} onChange={(v) => setForm({ ...form, barangay: v })} placeholder="e.g. Muzon" required={addressRequired} />
-                <Field label={addressRequired ? "City *" : "City"} value={form.city} onChange={(v) => setForm({ ...form, city: v })} placeholder="e.g. San Jose del Monte" required={addressRequired} />
-                <Field label={addressRequired ? "Province *" : "Province"} value={form.province} onChange={(v) => setForm({ ...form, province: v })} placeholder="e.g. Bulacan" required={addressRequired} />
+                <Field label="City *" value={form.city} onChange={(v) => setForm({ ...form, city: v })} placeholder="e.g. San Jose del Monte" required />
+                <Field label="Province *" value={form.province} onChange={(v) => setForm({ ...form, province: v })} placeholder="e.g. Bulacan" required />
                 <Field label="Postal Code" value={form.postal_code} onChange={(v) => setForm({ ...form, postal_code: v.replace(/\D/g, "").slice(0, 4) })} placeholder="e.g. 3023" inputMode="numeric" />
                 <div>
                   <label className="text-[11px] text-slate-500 mb-1 block">Mode of Payment *</label>
