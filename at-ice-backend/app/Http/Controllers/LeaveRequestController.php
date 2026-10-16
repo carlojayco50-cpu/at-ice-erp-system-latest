@@ -31,7 +31,7 @@ class LeaveRequestController extends Controller
 
     private function today(): Carbon
     {
-        return Carbon::now('Asia/Manila')->startOfDay();
+        return Carbon::now(config('atice.timezone'))->startOfDay();
     }
 
     // Number of days: 0.5 for a half day, otherwise start to end inclusive,

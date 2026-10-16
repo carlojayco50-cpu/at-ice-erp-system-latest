@@ -20,7 +20,6 @@ use Illuminate\Support\Facades\Log;
 class BiController extends Controller
 {
     // The app runs in UTC; "today" for attendance must be Philippine time.
-    private const LOCAL_TZ = 'Asia/Manila';
 
     // Receipts unpaid for longer than this many days count as overdue
     // (same rule as ReceiptController@overdue).
@@ -458,7 +457,7 @@ class BiController extends Controller
     // (the app runs in UTC, which is 8 hours behind).
     public function attendanceToday()
     {
-        $now = Carbon::now(self::LOCAL_TZ);
+        $now = Carbon::now(config('atice.timezone'));
         $today = $now->toDateString();
 
         // Count by status for today
@@ -646,7 +645,7 @@ class BiController extends Controller
     //   history: the 6 months, for the chart
     public function forecastData(): array
     {
-        $now = Carbon::now(self::LOCAL_TZ);
+        $now = Carbon::now(config('atice.timezone'));
         $first = $now->copy()->startOfMonth()->subMonths(6);
         $months = collect(range(0, 5))->map(fn ($i) => $first->copy()->addMonths($i)->format('Y-m'));
 
@@ -654,7 +653,7 @@ class BiController extends Controller
             ->where('created_at', '>=', $first->copy()->timezone(config('app.timezone')))
             ->where('created_at', '<', $now->copy()->startOfMonth()->timezone(config('app.timezone')))
             ->get(['id', 'customer_id', 'total_amount', 'quantity', 'created_at']);
-        $monthOf = fn ($r) => Carbon::parse($r->created_at)->timezone(self::LOCAL_TZ)->format('Y-m');
+        $monthOf = fn ($r) => Carbon::parse($r->created_at)->timezone(config('atice.timezone'))->format('Y-m');
 
         $products = array_keys(\App\Models\DeliveryItem::PRODUCT_TYPES);
         $history = $months->map(function ($m) use ($receipts, $monthOf, $products) {
@@ -748,8 +747,8 @@ class BiController extends Controller
     // and their deliveries today: delivered, in transit and still pending.
     public function driversToday(): array
     {
-        $today = Carbon::now(self::LOCAL_TZ)->toDateString();
-        $dayStart = Carbon::parse($today, self::LOCAL_TZ)->startOfDay()->timezone(config('app.timezone'));
+        $today = Carbon::now(config('atice.timezone'))->toDateString();
+        $dayStart = Carbon::parse($today, config('atice.timezone'))->startOfDay()->timezone(config('app.timezone'));
         $dayEnd = $dayStart->copy()->addDay();
 
         $drivers = Employee::with(['user:id,name,role', 'attendances' => fn ($q) => $q->whereDate('date', $today)])
@@ -786,7 +785,7 @@ class BiController extends Controller
     // quantity, invoice total and unpaid balance, best first (top 10).
     public function storePerformance(): array
     {
-        $now = Carbon::now(self::LOCAL_TZ);
+        $now = Carbon::now(config('atice.timezone'));
         $from = $now->copy()->startOfMonth()->timezone(config('app.timezone'));
 
         return Receipt::with('customer:id,name,invoice_code,city')

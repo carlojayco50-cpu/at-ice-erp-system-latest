@@ -183,7 +183,7 @@ class PayrollCalculator
         }
 
         // Ordinary overtime: rate of the period's last day is fine, the rate is per key.
-        $out['overtime_pay'] = $sheet['ot_ordinary_hours'] * $hourly * PayMultiplier::rate('OT_ORDINARY', now('Asia/Manila')->toDateString());
+        $out['overtime_pay'] = $sheet['ot_ordinary_hours'] * $hourly * PayMultiplier::rate('OT_ORDINARY', now(config('atice.timezone'))->toDateString());
 
         return $out;
     }
@@ -207,7 +207,7 @@ class PayrollCalculator
         $hpd = (float) Settings::get('payroll.hours_per_day');
         $workDayNumbers = array_map('intval', explode(',', (string) Settings::get('attendance.work_days')));
         $hired = CarbonImmutable::parse($employee->date_hired);
-        $today = CarbonImmutable::now('Asia/Manila')->startOfDay();
+        $today = CarbonImmutable::now(config('atice.timezone'))->startOfDay();
 
         $records = Attendance::whereDate('date', '>=', $start->toDateString())
             ->whereDate('date', '<=', $end->toDateString())

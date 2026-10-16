@@ -91,7 +91,7 @@ class KioskController extends Controller
     private function notifyLocked(KioskDevice $device, string $ip): int
     {
         $kiosk = strtoupper(substr($device->device_id, 0, 8));
-        $at = now('Asia/Manila')->format('M j, Y g:i A');
+        $at = now(config('atice.timezone'))->format('M j, Y g:i A');
         LiveEvent::create([
             'module' => 'kiosk',
             'action' => 'locked',

@@ -46,8 +46,8 @@ class DriverLicense
         return [
             $required ? 'required' : 'nullable',
             'date',
-            'after:today',
-            'before_or_equal:'.now()->addYears(self::MAX_VALID_YEARS)->toDateString(),
+            'after:'.now(config('atice.timezone'))->toDateString(),
+            'before_or_equal:'.now(config('atice.timezone'))->addYears(self::MAX_VALID_YEARS)->toDateString(),
         ];
     }
 

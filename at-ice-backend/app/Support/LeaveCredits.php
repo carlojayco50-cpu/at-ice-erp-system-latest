@@ -16,7 +16,7 @@ class LeaveCredits
     // ['year', 'earned', 'used', 'available'] (days)
     public static function for(Employee $employee, ?string $asOf = null): array
     {
-        $today = CarbonImmutable::parse($asOf ?? now('Asia/Manila')->toDateString());
+        $today = CarbonImmutable::parse($asOf ?? now(config('atice.timezone'))->toDateString());
         $out = ['year' => $today->year, 'earned' => 0.0, 'used' => 0.0, 'available' => 0.0];
 
         if ($employee->employment_status !== 'regular' || ! $employee->regularized_at) {
