@@ -18,8 +18,9 @@ import { APPLICANT_POSITIONS, applyUrl, isLocalTesting } from "../../lib/positio
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import QRCode from "qrcode";
 import { formatDateTime, formatTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
-const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 const SearchIcon  = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const PlusIcon    = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const XIcon       = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
@@ -475,18 +476,12 @@ export default function InterviewsPage() {
 
   const actionBtn = "px-2.5 py-1 border rounded-md text-[11px] cursor-pointer whitespace-nowrap";
 
+  const pager = usePagination(filtered);
+
   return (
     <HrLayout
       pageTitle="Interviews"
       breadcrumb="HRIS / Interviews"
-      headerActions={
-        <button
-          onClick={fetchAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 cursor-pointer hover:border-cyan-400 hover:text-cyan-500 transition-colors"
-        >
-          <RefreshIcon /> Refresh
-        </button>
-      }
     >
       {notice && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg px-4 py-2.5">{notice}</div>
@@ -563,7 +558,7 @@ export default function InterviewsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((a) => {
+                  {pager.pageItems.map((a) => {
                     const hint = scheduleHint(a);
                     return (
                       <tr key={a.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
@@ -621,6 +616,7 @@ export default function InterviewsPage() {
                   })}
                 </tbody>
               </table>
+              <Pagination pager={pager} />
             </div>
           )}
         </div>

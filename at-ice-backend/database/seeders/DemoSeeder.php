@@ -24,7 +24,8 @@ use Illuminate\Database\Seeder;
 //   EMP-9003  daily rate, probationary: two absences (unpaid)
 //   EMP-9004  monthly rate, hired in the middle of the period
 //   EMP-9005  inactive (deactivated), for the Archived list
-// Running it again replaces these five and their records.
+// Running it again replaces these five and their records. It then runs
+// ModuleDemoSeeder: example data for every other module.
 class DemoSeeder extends Seeder
 {
     public function run(): void
@@ -87,5 +88,9 @@ class DemoSeeder extends Seeder
             'hours' => 4, 'reason' => 'Family emergency (demo)', 'status' => 'approved', 'is_paid' => false, 'paid_days' => 0, 'unpaid_days' => 0.5, 'approved_at' => now()]);
 
         $this->command?->info("Demo employees EMP-9001 to EMP-9005 with attendance for {$period['start']} to {$period['end']}.");
+
+        // Example data for every other module (deliveries, contracts, invoices,
+        // inventory, projects, applicants, support...).
+        $this->call(ModuleDemoSeeder::class);
     }
 }

@@ -22,6 +22,8 @@ import { payPeriodLabel } from "../../lib/payPeriod";
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import { toast } from "../../lib/toast";
 import { formatDateTime, formatTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const SearchIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 
@@ -192,6 +194,8 @@ export default function AttendancePage() {
     </div></body></html>`);
   };
 
+  const pager = usePagination(shown);
+
   return (
     <HrLayout pageTitle="Attendance" breadcrumb="HRIS / Attendance">
       {/* FILTERS */}
@@ -315,7 +319,7 @@ export default function AttendancePage() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((a) => (
+                {pager.pageItems.map((a) => (
                   <tr key={a.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                     <td className="px-[18px] py-2.5 font-mono text-slate-600 whitespace-nowrap">{workerCode(a) || "—"}</td>
                     <td className="px-[18px] py-2.5 text-slate-800 font-medium whitespace-nowrap">{workerName(a)}</td>
@@ -337,6 +341,7 @@ export default function AttendancePage() {
                 ))}
               </tbody>
             </table>
+            <Pagination pager={pager} />
           </div>
         )}
       </div>

@@ -3,6 +3,8 @@ import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { fullName, shiftLabel } from "../../lib/names";
 import { useLiveTick } from "../../lib/live";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const API_BASE = "/api";
 
@@ -88,6 +90,8 @@ export default function EmployeesOverviewPage() {
     return true;
   });
 
+  const pager = usePagination(filtered);
+
   return (
     <AdminLayout pageTitle="Employees" breadcrumb="Employees">
       <div className="bg-white border border-black/[0.09] rounded-xl">
@@ -160,7 +164,7 @@ export default function EmployeesOverviewPage() {
                   {filtering ? "No employees match these filters." : "No employees registered yet."}
                 </td></tr>
               ) : (
-                filtered.map((emp) => (
+                pager.pageItems.map((emp) => (
                   <tr key={emp.id} className="border-b border-black/[0.06] last:border-0 hover:bg-slate-50/60">
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-800">{fullName(emp)}</div>
@@ -183,6 +187,7 @@ export default function EmployeesOverviewPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
       </div>
     </AdminLayout>
   );

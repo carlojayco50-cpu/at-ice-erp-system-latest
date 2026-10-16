@@ -549,3 +549,161 @@ select:-webkit-autofill {
 #login-password:-webkit-autofill {
   -webkit-text-fill-color: #1e293b;
 }
+
+/* ---- One look for every page (owner, 2026-10-17) --------------------------
+   Pages write their tables, badges, dialogs, buttons and fields with slightly
+   different classes; these rules give each kind of element the same type,
+   size and spacing everywhere, inside the ice / neumorphism theme. A page
+   that sets an explicit size (h-*, w-*) keeps it. */
+
+/* Table headers: one size, weight, case and spacing on every table. */
+:is(.ice-main, .ice-scope) thead th {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--neu-faint, #94a3b8) !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  white-space: nowrap;
+}
+/* Table body text: one size. */
+:is(.ice-main, .ice-scope) tbody td {
+  font-size: 13px;
+}
+
+/* Badges: small rounded labels (status, type, counts) are one size. Solid
+   board status cells (rounded-sm / rounded-md blocks) keep their board look. */
+:is(.ice-main, .ice-scope) span.rounded-full:is([class*=" px-"], [class^="px-"]):is([class*="text-[10px]"], [class*="text-[10.5px]"], [class*="text-[11px]"], .text-xs):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 18px !important;
+  padding: 0 8px !important;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Dialogs: one title bar (padding, title size) and one body padding. */
+.fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-b:first-child {
+  padding: 14px 20px !important;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-b:first-child :is(h2, h3),
+.fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-b:first-child.font-semibold {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 20px;
+}
+.fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > :is(h2, h3):first-child {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+/* Buttons and fields in the Admin, HR and Customer layouts: one text size
+   (the role portals keep their larger tap-friendly text). Primary (filled)
+   buttons are semibold, the rest medium. */
+.ice-main button:is([type="submit"], [class*="bg-"], .border, [class*=" px-3"], [class^="px-3"], [class*=" px-4"], [class^="px-4"]):not([class*=" h-"], [class^="h-"], .rounded-full, .rounded-2xl, .rounded-3xl, .text-left, td button) {
+  font-size: 12px !important;
+  font-weight: 500;
+}
+.ice-main button:is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-emerald-500, .bg-emerald-600):not(.rounded-full) {
+  font-weight: 600 !important;
+}
+.ice-main :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea) {
+  font-size: 13px !important;
+}
+/* Field labels written as small grey text above a field: one size. */
+.ice-main label:is(.text-\[11px\], .text-xs):not(:has(input[type="checkbox"], input[type="radio"])) {
+  font-size: 11px !important;
+  color: var(--neu-muted, #64748b);
+}
+
+/* ---- Maintenance, Checker and Salesman screens (AT-ICE mobile contract) ---
+   components/RoleShell.jsx. Every control is at least 44px tall (touch
+   targets), fields use 16px text so phones do not zoom in, and table-row
+   buttons are not shrunk to the compact desktop size. */
+.role-shell {
+  --control-height: 44px;
+}
+.role-shell :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea) {
+  font-size: 16px !important;
+}
+.role-shell :is(button, a[role="button"]) {
+  min-height: 44px;
+}
+.role-shell td button:not(.rounded-full, .text-left, .bg-transparent) {
+  min-height: 44px !important;
+  height: auto !important;
+  font-size: 13px;
+}
+.role-shell :is(input[type="checkbox"], input[type="radio"]) {
+  width: 20px;
+  height: 20px;
+}
+/* the bottom navigation and the action bar float over the ice background */
+.neu .role-nav, .neu .role-actionbar {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: 0 -6px 16px -8px var(--neu-lo);
+}
+.neu .role-nav a[aria-current="page"] { color: var(--neu-accent) !important; }
+.role-sheet { animation: role-sheet-in 180ms ease-out; }
+@keyframes role-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .role-sheet { animation: none; } }
+/* a row marked flex-nowrap (header, sheet title) stays on one line on phones */
+.role-shell .flex-nowrap { flex-wrap: nowrap !important; }
+/* a selected card (e.g. the Salesman's chosen stop) shows an accent outline over the soft shadow */
+.role-shell [data-selected="true"] {
+  outline: 2px solid var(--neu-accent, #06b6d4);
+  outline-offset: 2px;
+}
+
+/* ---- Top bar: the clock and the Light/Night button are one size ----------- */
+.topbar-chip {
+  height: 40px !important;
+  min-height: 40px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  box-sizing: border-box;
+}
+header:has(> .topbar-chip) { align-items: center; }
+
+/* ---- Desktop sidebar: always open, white with a thin right border --------- */
+.neu:not(.cp-dark) aside.rail {
+  background-color: #ffffff !important;
+  border-right: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: none !important;
+}
+
+/* A dashboard stat card that is open (Inventory Alerts): accent outline and lifted */
+.stat-card[data-selected="true"] {
+  outline: 2px solid var(--neu-accent, #06b6d4);
+  outline-offset: 2px;
+  transform: translateY(-1px);
+}
+/* Toasts fade out at the end of their 3 seconds (components/Toaster.jsx) */
+.soft-toast { transition: opacity 300ms ease, transform 300ms ease; }
+.soft-toast.is-leaving { opacity: 0; transform: translateY(-6px); }
+
+/* Leave request reason (one form for every role, /my-leave): tall enough that
+   the placeholder never clips, grows only downward */
+textarea.leave-textarea {
+  min-height: 100px !important;
+  height: auto !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+  resize: vertical !important;
+}
+/* (wins over the theme's rounded header wells) */
+.neu header :is(div, button).topbar-chip.topbar-chip.topbar-chip { border-radius: 8px !important; }

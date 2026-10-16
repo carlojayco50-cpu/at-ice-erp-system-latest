@@ -14,6 +14,8 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -147,6 +149,8 @@ export default function HolidaysPage({ admin = false }) {
       && (!filter.type || h.type === filter.type));
   }, [data, filter]);
 
+  const pager = usePagination(shown);
+
   return (
     <Layout pageTitle="Holidays" breadcrumb="HRIS / Holidays">
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
@@ -198,7 +202,7 @@ export default function HolidaysPage({ admin = false }) {
               <th className="px-[18px] py-2.5 font-medium">Date</th><th className="px-3 py-2.5 font-medium">Name</th>
               <th className="px-3 py-2.5 font-medium">Type</th><th className="px-3 py-2.5 font-medium text-right">Actions</th></tr></thead>
             <tbody>
-              {shown.map((h) => (
+              {pager.pageItems.map((h) => (
                 <tr key={h.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                   <td className="px-[18px] py-2.5 whitespace-nowrap text-slate-700">{fmt(h.date)}</td>
                   <td className="px-3 py-2.5 text-slate-800 font-medium">{h.name}{h.is_double && <span className="ml-1.5 text-[9px] font-bold text-red-600">DOUBLE</span>}</td>
@@ -214,9 +218,7 @@ export default function HolidaysPage({ admin = false }) {
             </tbody>
           </table>
         )}
-        {data && filtering && shown.length > 0 && (
-          <div className="px-[18px] py-2 border-t border-black/[0.06] text-[11px] text-slate-400">Showing {shown.length} of {data.holidays.length} holidays in {year}.</div>
-        )}
+        {data && shown.length > 0 && <Pagination pager={pager} label={filtering ? `holidays (filtered from ${data.holidays.length})` : "holidays"} />}
       </div>
       {modal && <HolidayModal holiday={modal === "add" ? null : modal} onClose={closeModal} onSaved={saved} />}
     </Layout>

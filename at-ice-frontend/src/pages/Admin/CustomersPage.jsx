@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { CUSTOMER_TYPES, CHAIN_NAMES, typeForChain, chainFromName } from "../../lib/customerTypes";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import PhoneInput from "../../components/PhoneInput";
@@ -11,6 +12,8 @@ import AddressFields from "../../components/AddressFields";
 import LoginEmailChip from "../../components/LoginEmailChip";
 import DraftHint from "../../components/DraftHint";
 import { useDraft } from "../../lib/useDraft";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const API_BASE = "/api";
 
@@ -25,9 +28,9 @@ const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor
 const CheckIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
 
 // Customer type and chain/group (filters on the list). Keys match Customer::TYPES.
-const CUSTOMER_TYPES = { supermarket: "Supermarket / Mall", convenience_store: "Convenience Store", restaurant: "Restaurant / Food", dealer: "Dealer / Reseller", other: "Other" };
+// Customer types and their known chains: lib/customerTypes.js (same list as the backend).
 // Offered under Chain / Group next to the chains already saved.
-const CHAIN_SUGGESTIONS = ["SM", "Puregold", "WalterMart", "Robinsons", "Alfamart", "7-Eleven", "Ministop", "Independent"];
+const CHAIN_SUGGESTIONS = [...CHAIN_NAMES, "Independent"];
 const NOT_SET = "__none";
 
 // Create Login needs what Add Customer requires (CustomerController::LOGIN_REQUIRED).
@@ -106,6 +109,8 @@ export default function CustomersPage() {
   // once, never re-fetchable afterward (password is hashed server-side).
   const [newAccount, setNewAccount] = useState(null);
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);
+  // Why Create Login failed, shown under that customer's button: { id, message }
+  const [accountError, setAccountError] = useState(null);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -269,7 +274,7 @@ export default function CustomersPage() {
 
   async function createAccount(customer) {
     setCreatingAccountFor(customer.id);
-    setError("");
+    setAccountError(null);
     try {
       const res = await fetch(`${API_BASE}/customers/${customer.id}/create-account`, {
         method: "POST", headers: authHeaders(),
@@ -280,7 +285,7 @@ export default function CustomersPage() {
       toast.success(`Login account created for ${customer.name}.`);
       fetchCustomers();
     } catch (err) {
-      setError(err.message);
+      setAccountError({ id: customer.id, message: err.message });
     } finally {
       setCreatingAccountFor(null);
     }
@@ -305,6 +310,8 @@ export default function CustomersPage() {
   const filtering = !!(search || typeFilter || chainFilter);
   const filterCls = "bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500";
 
+  const pager = usePagination(filtered);
+
   return (
     <AdminLayout pageTitle="Customers" breadcrumb="CRM / Customers">
       <div className="bg-white border border-black/[0.09] rounded-xl">
@@ -318,7 +325,7 @@ export default function CustomersPage() {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
               <option value="">All types</option>
-              {Object.entries(CUSTOMER_TYPES).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+              {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label}</option>)}
               <option value={NOT_SET}>Type not set</option>
             </select>
             <select value={chainFilter} onChange={(e) => setChainFilter(e.target.value)} className={filterCls} aria-label="Filter by chain or group">
@@ -372,7 +379,7 @@ export default function CustomersPage() {
                   {filtering ? "No customers match your search or filters." : "No customers found."}
                 </td></tr>
               )}
-              {!loading && filtered.map((c) => (
+              {!loading && pager.pageItems.map((c) => (
                 <tr key={c.id} className="border-t border-black/[0.06]">
                   <td className="px-[18px] py-2.5">
                     <div className="font-medium text-slate-800">{c.name}</div>
@@ -395,7 +402,7 @@ export default function CustomersPage() {
                   <td className="px-[18px] py-2.5 text-slate-600">
                     {c.customer_type || c.chain ? (
                       <>
-                        <div>{CUSTOMER_TYPES[c.customer_type] || <span className="text-slate-300">—</span>}</div>
+                        <div>{CUSTOMER_TYPES[c.customer_type]?.label || <span className="text-slate-300">—</span>}</div>
                         {c.chain && <div className="text-[11px] text-slate-400">{c.chain}</div>}
                       </>
                     ) : <span className="text-slate-300">—</span>}
@@ -406,7 +413,7 @@ export default function CustomersPage() {
                     ) : (() => {
                       const missing = missingForLogin(c);
                       return (
-                        <div>
+                        <div className="create-login mx-auto flex w-full max-w-[190px] flex-col items-center gap-1">
                           <button
                             onClick={() => createAccount(c)}
                             disabled={missing.length > 0 || creatingAccountFor === c.id}
@@ -417,6 +424,9 @@ export default function CustomersPage() {
                             {creatingAccountFor === c.id ? "Creating…" : "Create Login"}
                           </button>
                           {missing.length > 0 && <MissingBadge missing={missing} />}
+                          {accountError?.id === c.id && (
+                            <div role="alert" className="w-full text-center text-[11px] leading-snug text-red-600">{accountError.message}</div>
+                          )}
                         </div>
                       );
                     })()}
@@ -444,6 +454,7 @@ export default function CustomersPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
       </div>
 
       {/* Add / Edit Customer modal */}
@@ -469,7 +480,26 @@ export default function CustomersPage() {
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <Field label="Branch / Business Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="e.g. Alfamart Muzon" required />
+                  <Field
+                    label="Branch / Business Name"
+                    value={form.name}
+                    onChange={(v) => setForm((f) => {
+                      // Chain and type follow the name while they are blank or
+                      // still what was filled in from it (_auto*); one typed by
+                      // hand is kept.
+                      const chainIsAuto = !f.chain || f.chain === f._autoChain;
+                      const chain = chainIsAuto ? chainFromName(v) : f.chain;
+                      const typeIsAuto = !f.customer_type || f.customer_type === f._autoType;
+                      const type = typeIsAuto ? typeForChain(chain, v) : f.customer_type;
+                      return {
+                        ...f, name: v, chain, customer_type: type,
+                        _autoChain: chainIsAuto ? chain : f._autoChain,
+                        _autoType: typeIsAuto ? type : f._autoType,
+                      };
+                    })}
+                    placeholder="e.g. Alfamart Muzon"
+                    required
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
@@ -479,8 +509,11 @@ export default function CustomersPage() {
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   >
                     <option value="">Not set</option>
-                    {Object.entries(CUSTOMER_TYPES).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                    {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label}</option>)}
                   </select>
+                  <p className="mt-1 text-[11px] text-slate-400 leading-snug">
+                    {form.customer_type ? `e.g. ${CUSTOMER_TYPES[form.customer_type]?.examples}` : "Sets the reference prices. Filled in from a known chain."}
+                  </p>
                 </div>
                 <div>
                   <label className="text-[11px] text-slate-500 mb-1 block">Chain / Group</label>
@@ -488,7 +521,7 @@ export default function CustomersPage() {
                     type="text"
                     list="customer-chains"
                     value={form.chain}
-                    onChange={(e) => setForm((f) => ({ ...f, chain: e.target.value }))}
+                    onChange={(e) => setForm((f) => ({ ...f, chain: e.target.value, customer_type: typeForChain(e.target.value) || f.customer_type }))}
                     placeholder="e.g. SM, Alfamart, Independent"
                     maxLength={100}
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -863,20 +896,12 @@ function Req() {
   return <span className="text-red-500"> *</span>;
 }
 
-// "Needs email +2 more" under Create Login; hovering (or focusing) it lists
-// every field still missing.
+// What Create Login still needs, listed under the button.
 function MissingBadge({ missing }) {
+  // Shown right under Create Login (no floating tooltip, so nothing is covered).
   return (
-    <div className="relative mt-1 inline-block group">
-      <span tabIndex={0} className="text-[11px] text-amber-600 underline decoration-dotted underline-offset-2 cursor-help outline-none">
-        Needs {missing.includes("email") ? "email" : missing[0]}{missing.length > 1 ? ` +${missing.length - 1} more` : ""}
-      </span>
-      <div role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-max max-w-[220px] rounded-md border border-black/[0.09] bg-white px-2.5 py-2 text-[11px] text-slate-600 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity">
-        <div className="font-medium text-slate-700 mb-1">Fill in on Edit before Create Login:</div>
-        <ul className="list-disc pl-4 space-y-0.5">
-          {missing.map((m) => <li key={m} className="capitalize">{m}</li>)}
-        </ul>
-      </div>
+    <div role="status" className="w-full text-center text-[11px] leading-snug text-amber-700">
+      Fill in on Edit first: <span className="font-medium">{missing.join(", ")}</span>
     </div>
   );
 }

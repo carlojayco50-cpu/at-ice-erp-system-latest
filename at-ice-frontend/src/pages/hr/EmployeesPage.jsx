@@ -19,6 +19,8 @@ import { useDraft } from "../../lib/useDraft";
 import { filledFrom } from "../../lib/scanDocument";
 import { formatLicense, licenseError, expiryError, tomorrowStr } from "../../lib/license";
 import { formatDateTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const API_BASE = "/api";
 
@@ -462,6 +464,8 @@ export default function EmployeesPage() {
       )}
     </Field>
   );
+  const pager = usePagination(filtered);
+
   return (
     <HrLayout pageTitle="Employees" breadcrumb="HRIS / Employees">
       <div className="bg-white border border-black/[0.09] rounded-xl">
@@ -564,7 +568,7 @@ export default function EmployeesPage() {
                   {search || roleFilter !== "all" ? "No employees match your search or filter." : "No employees yet. Use Add Employee to create one."}
                 </td></tr>
               ) : (
-                filtered.map((emp) => (
+                pager.pageItems.map((emp) => (
                   <tr key={emp.id} className="border-b border-black/[0.06] last:border-0 hover:bg-slate-50/60">
                     <td className="px-5 py-3">
                       <div className="font-medium text-slate-800">{fullName(emp)}</div>
@@ -651,6 +655,7 @@ export default function EmployeesPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
       </div>
 
       {/* ── ADD / EDIT MODAL ── */}

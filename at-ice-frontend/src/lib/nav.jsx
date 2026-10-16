@@ -34,13 +34,13 @@ export const ADMIN_NAV = [
       { label: "Invoices", to: "/admin/receipts" },
       { label: "Support Inbox", to: "/admin/support-inbox" },
     ] },
-  // Sections of the one Settings page (ids set in SettingsPage and SystemSettings).
+  // One page per Settings item (pages/Admin/SettingsPage.jsx).
   // "Rates and rules" also holds the holiday and overtime pay rates.
   { icon: SettingsIcon, label: "Settings", children: [
-      { label: "Account", to: "/admin/settings#settings-account" },
-      { label: "Rates and rules", to: "/admin/settings#settings-rates" },
-      { label: "Admin PIN", to: "/admin/settings#settings-admin-pin" },
-      { label: "Old records", to: "/admin/settings#settings-retention" },
+      { label: "Account", to: "/admin/settings/account" },
+      { label: "Rates and rules", to: "/admin/settings/rates" },
+      { label: "Admin PIN", to: "/admin/settings/admin-pin" },
+      { label: "Old records", to: "/admin/settings/old-records" },
     ] },
 ];
 

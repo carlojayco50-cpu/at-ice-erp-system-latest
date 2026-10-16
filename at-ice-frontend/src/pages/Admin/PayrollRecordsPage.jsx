@@ -21,6 +21,8 @@ import { useLiveTick } from "../../lib/live";
 import { payPeriodLabel } from "../../lib/payPeriod";
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import { COMPANY } from "../../lib/company";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -240,6 +242,8 @@ export default function PayrollRecordsPage() {
   };
 
   const period = data?.period;
+  const pager = usePagination(rows);
+
   return (
     <AdminLayout pageTitle="Payroll" breadcrumb="HRIS / Payroll">
       <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl self-start" role="group" aria-label="View">
@@ -300,7 +304,7 @@ export default function PayrollRecordsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => {
+                    {pager.pageItems.map((r) => {
                       const p = r.payroll;
                       return (
                         <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
@@ -344,6 +348,7 @@ export default function PayrollRecordsPage() {
                     })}
                   </tbody>
                 </table>
+                <Pagination pager={pager} />
               </div>
             )}
           </div>

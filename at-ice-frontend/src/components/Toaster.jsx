@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { subscribeToasts } from "../lib/toast";
 
-const DURATION = 3500;
+const DURATION = 3000; // shown 3 seconds, the last 300ms fading out
+const FADE = 300;
 const MAX_SHOWN = 3;
 
 const ICONS = {
@@ -20,6 +21,7 @@ export default function Toaster() {
     () =>
       subscribeToasts((t) => {
         setItems((list) => [...list, t].slice(-MAX_SHOWN));
+        setTimeout(() => setItems((list) => list.map((x) => (x.id === t.id ? { ...x, leaving: true } : x))), DURATION - FADE);
         setTimeout(() => setItems((list) => list.filter((x) => x.id !== t.id)), DURATION);
       }),
     []
@@ -32,7 +34,7 @@ export default function Toaster() {
   return createPortal(
     <div className={`soft-toasts ${dark ? "neu-dark" : ""}`} aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} role={t.type === "error" ? "alert" : "status"} className={`soft-toast is-${t.type}`}>
+        <div key={t.id} role={t.type === "error" ? "alert" : "status"} className={`soft-toast is-${t.type}${t.leaving ? " is-leaving" : ""}`}>
           <span className="soft-toast-icon" aria-hidden="true">
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               {ICONS[t.type]}

@@ -1,70 +1,51 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Navigate, NavLink, useLocation, useParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import AccountSettings from "../../components/AccountSettings";
 import SystemSettings from "../../components/SystemSettings";
 
-// One page; this nav jumps to each section (ids set in SystemSettings), the
-// same "#id" links as the sidebar, and the section in view is highlighted.
-// "Rates and rules" holds the holiday and overtime pay rates too.
-const SECTIONS = [
-  ["settings-account", "Account"],
-  ["settings-rates", "Rates and rules"],
-  ["settings-admin-pin", "Admin PIN"],
-  ["settings-retention", "Old records"],
+// Admin > Settings: one page per item of the Settings sub-menu
+// (/admin/settings/account, /rates, /admin-pin, /old-records), with the same
+// items as tabs on top. "Rates and rules" holds the holiday and overtime pay
+// rates too.
+const PAGES = [
+  { key: "account", label: "Account", hint: "Your name, login email and password." },
+  { key: "rates", label: "Rates and rules", hint: "Payroll, attendance, leave, kiosk and delivery rules, with holiday and overtime pay." },
+  { key: "admin-pin", label: "Admin PIN", hint: "The 6-digit PIN that unlocks a locked Attendance Station kiosk." },
+  { key: "old-records", label: "Old records", hint: "Inactive employees and old attendance past the retention period." },
 ];
 
-// The section whose top has passed the top bar (the last one at the bottom of the page)
-function sectionInView() {
-  let current = SECTIONS[0][0];
-  for (const [id] of SECTIONS) {
-    const el = document.getElementById(id);
-    if (el && el.getBoundingClientRect().top <= 140) current = id;
-  }
-  const main = document.querySelector(".ice-main");
-  if (main && main.scrollTop > 0 && main.scrollTop + main.clientHeight >= main.scrollHeight - 4) current = SECTIONS[SECTIONS.length - 1][0];
-  return current;
-}
+// Old links used one long page with #sections.
+const OLD_HASH = {
+  "#settings-account": "account",
+  "#settings-rates": "rates",
+  "#settings-admin-pin": "admin-pin",
+  "#settings-retention": "old-records",
+};
 
 export default function SettingsPage() {
-  const [active, setActive] = useState(SECTIONS[0][0]);
+  const { section } = useParams();
+  const { hash } = useLocation();
 
-  useEffect(() => {
-    let frame = 0;
-    const update = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setActive(sectionInView()));
-    };
-    update();
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
+  if (!section) return <Navigate to={`/admin/settings/${OLD_HASH[hash] || "account"}`} replace />;
+  const page = PAGES.find((p) => p.key === section);
+  if (!page) return <Navigate to="/admin/settings/account" replace />;
 
   return (
-    <AdminLayout pageTitle="Settings" breadcrumb="Settings">
-      <div className="flex flex-col gap-6">
-        <nav aria-label="Settings sections" className="-mb-2 flex flex-wrap gap-1.5 max-w-4xl">
-          {SECTIONS.map(([id, label]) => {
-            const on = active === id;
-            return (
-              <Link
-                key={id}
-                to={`/admin/settings#${id}`}
-                aria-current={on ? "location" : undefined}
-                className={`px-3 py-1.5 rounded-md text-[12px] font-medium cursor-pointer transition-colors ${on ? "bg-cyan-500 text-white" : "border border-black/[0.09] bg-white text-slate-600 hover:text-cyan-700"}`}
-              >
-                {label}
-              </Link>
-            );
-          })}
+    <AdminLayout pageTitle={`Settings · ${page.label}`} breadcrumb={`Settings / ${page.label}`}>
+      <div className="flex flex-col gap-5 max-w-4xl">
+        <nav aria-label="Settings pages" className="flex flex-wrap gap-1.5">
+          {PAGES.map((p) => (
+            <NavLink
+              key={p.key}
+              to={`/admin/settings/${p.key}`}
+              className={({ isActive }) => `px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${isActive ? "bg-cyan-500 text-white" : "border border-black/[0.09] bg-white text-slate-600 hover:text-cyan-700"}`}
+            >
+              {p.label}
+            </NavLink>
+          ))}
         </nav>
-        <div id="settings-account" className="scroll-mt-20"><AccountSettings /></div>
-        <SystemSettings />
+        <p className="-mt-2 text-[12px] text-slate-500">{page.hint}</p>
+        {section === "account" ? <AccountSettings /> : <SystemSettings section={section} />}
       </div>
     </AdminLayout>
   );

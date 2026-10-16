@@ -85,7 +85,7 @@
 }
 
 /* Every white surface takes the base color (round knobs and dots excepted). */
-.neu :is(div, form, section, aside, header, nav, footer, table, label):is(.bg-white, [class*="bg-white/"]):not(.rounded-full) {
+.neu :is(div, form, section, article, aside, header, nav, footer, table, label):is(.bg-white, [class*="bg-white/"]):not(.rounded-full) {
   background-color: var(--neu-bg) !important;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -132,7 +132,7 @@
 }
 
 /* Cards: white boxes with a border, and the big tappable card buttons */
-:is(.neu .ice-main, .neu.ice-scope) :is(div, form, section):is(.bg-white, [class*="bg-white/"]).border:is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl),
+:is(.neu .ice-main, .neu.ice-scope) :is(div, form, section, article):is(.bg-white, [class*="bg-white/"]).border:is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl),
 :is(.neu .ice-main, .neu.ice-scope) button:is(.bg-white, [class*="bg-white/"]):is(.rounded-2xl, .rounded-3xl) {
   border-color: transparent !important;
   border-radius: var(--neu-radius) !important;

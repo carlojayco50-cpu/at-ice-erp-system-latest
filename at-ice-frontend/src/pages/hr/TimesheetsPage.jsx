@@ -13,6 +13,8 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { payPeriodLabel } from "../../lib/payPeriod";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -91,6 +93,8 @@ export default function TimesheetsPage() {
     }
   };
 
+  const pager = usePagination(rows);
+
   return (
     <HrLayout pageTitle="Timesheets" breadcrumb="HRIS / Timesheets">
       <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
@@ -144,7 +148,7 @@ export default function TimesheetsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {pager.pageItems.map((r) => (
                   <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                     <td className="px-[18px] py-2.5"><input type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
                     <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
@@ -173,6 +177,7 @@ export default function TimesheetsPage() {
                 ))}
               </tbody>
             </table>
+            <Pagination pager={pager} />
           </div>
         )}
       </div>

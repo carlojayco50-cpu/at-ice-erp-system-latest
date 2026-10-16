@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 import CustomerLayout from "../../components/CustomerLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
@@ -9,6 +10,8 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import FileField from "../../components/FileField";
 import { PROOF_ACCEPT, PROOF_MAX_BYTES, PROOF_METHODS, PROOF_STATUS, openProofFile } from "../../lib/paymentProof";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -33,12 +36,6 @@ const PRODUCT_LABEL = {
   big_sack: "Big Sack (50kg)",
 };
 
-const PAY_LABEL = { paid: "Paid", unpaid: "Unpaid", overdue: "Overdue" };
-const PAY_BADGE = {
-  paid: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  unpaid: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  overdue: "bg-red-500/10 text-red-600 border-red-500/20",
-};
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -47,10 +44,12 @@ const FILTERS = [
   { key: "paid", label: "Paid" },
 ];
 
-function Badge({ status }) {
+// The invoice's one payment badge (lib/paymentStatus.js): Paid only when paid.
+function Badge({ receipt }) {
+  const b = PAYMENT_BADGE[paymentState(receipt)];
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${PAY_BADGE[status] || ""}`}>
-      {PAY_LABEL[status] || status}
+    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${b.cls}`}>
+      {b.label}
     </span>
   );
 }
@@ -117,6 +116,8 @@ export default function CustomerReceipts() {
   }, [receipts]);
 
   const visible = receipts.filter((r) => filter === "all" || r.payment_status === filter);
+
+  const pager = usePagination(visible);
 
   return (
     <CustomerLayout pageTitle="Invoices & Balance" breadcrumb="Billing">
@@ -190,22 +191,18 @@ export default function CustomerReceipts() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/[0.06]">
-                    {visible.map((r) => (
+                    {pager.pageItems.map((r) => (
                       <tr key={r.id} className="hover:bg-slate-50">
                         <td className="px-5 py-3 font-medium text-slate-800">{r.receipt_no}</td>
                         <td className="px-3 py-3 text-slate-600 hidden sm:table-cell">{fmtDate(r.created_at)}</td>
                         <td className="px-3 py-3 text-slate-800 text-right">{peso(r.total_amount)}</td>
                         <td className="px-3 py-3">
                           <div className="inline-flex flex-col items-center gap-1">
-                            <Badge status={r.payment_status} />
-                            {r.payment_proofs?.[0] && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedId(r.id)}
-                                title="See your payment proof"
-                                className={`px-2 py-0.5 rounded-full border text-[10px] font-medium hover:underline ${PROOF_STATUS[r.payment_proofs[0].status]?.cls || ""}`}
-                              >
-                                Proof {PROOF_STATUS[r.payment_proofs[0].status]?.label.toLowerCase()}
+                            <Badge receipt={r} />
+                            {paymentState(r) === "rejected" && (
+                              <button type="button" onClick={() => setSelectedId(r.id)}
+                                className="px-2.5 py-0.5 rounded-full border border-red-200 bg-white text-[11px] font-semibold text-red-800 hover:bg-red-50 cursor-pointer">
+                                Upload a new proof
                               </button>
                             )}
                           </div>
@@ -219,6 +216,7 @@ export default function CustomerReceipts() {
                     ))}
                   </tbody>
                 </table>
+                <Pagination pager={pager} />
               </div>
             )}
           </div>
@@ -232,7 +230,7 @@ export default function CustomerReceipts() {
             <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-slate-800">{selected.receipt_no}</div>
-                <div className="mt-1"><Badge status={selected.payment_status} /></div>
+                <div className="mt-1"><Badge receipt={selected} /></div>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => printReceipt(selected)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]">

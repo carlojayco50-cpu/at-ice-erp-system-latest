@@ -9,7 +9,10 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { PROOF_STATUS, openProofFile } from "../../lib/paymentProof";
+import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 import { formatDateTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 window.Pusher = Pusher;
 const echo = new Echo({
@@ -25,13 +28,6 @@ const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor
 const EyeIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
 const CheckIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
 const BellIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
-
-// Board colors (lib/boardTones.js, monday.com style): a solid status cell.
-const STATUS_STYLE = {
-  unpaid:   { bg: "bg-[#fdab3d]", text: "text-white" },
-  overdue:  { bg: "bg-[#e2445c]", text: "text-white" },
-  paid:     { bg: "bg-[#00c875]", text: "text-white" },
-};
 
 const FILTERS = [
   { key: "all",     label: "All" },
@@ -173,6 +169,8 @@ export default function ReceiptsPage() {
     return haystack.includes(q);
   });
 
+  const pager = usePagination(filtered);
+
   return (
     <AdminLayout pageTitle="Invoices" breadcrumb="CRM / Invoices">
       {liveNotice && (
@@ -300,8 +298,9 @@ export default function ReceiptsPage() {
                   {search || filter !== "all" ? "No invoices match your filters." : "No invoices yet."}
                 </td></tr>
               )}
-              {!loading && filtered.map((r) => {
-                const style = STATUS_STYLE[r.payment_status] || STATUS_STYLE.unpaid;
+              {!loading && pager.pageItems.map((r) => {
+                const state = paymentState(r, !!proofByReceipt[r.id]);
+                const badge = PAYMENT_BADGE[state];
                 return (
                   <tr key={r.id} className="border-t border-black/[0.06]">
                     <td className="px-[18px] py-2.5 font-mono text-slate-700">{r.receipt_no}</td>
@@ -309,22 +308,14 @@ export default function ReceiptsPage() {
                     <td className="px-[18px] py-2.5 text-slate-600">{r.salesman?.name || <span className="text-slate-300">—</span>}</td>
                     <td className="px-[18px] py-2.5 font-mono text-slate-700">{peso(r.total_amount)}</td>
                     <td className="px-[18px] py-2.5">
+                      {/* one badge per row (lib/paymentStatus.js): Paid only when paid */}
                       <div className="inline-flex flex-col items-center gap-1">
-                        <span className={`inline-flex items-center justify-center min-w-[88px] px-2 py-1 rounded-sm text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
-                          {r.payment_status}
-                        </span>
-                        {proofByReceipt[r.id] ? (
-                          <span className="text-[10px] font-medium text-sky-700">Proof sent, to review</span>
-                        ) : r.payment_proofs?.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setViewing(r)}
-                            title="See the payment proofs"
-                            className={`px-2 py-0.5 rounded-full border text-[10px] font-medium hover:underline ${PROOF_STATUS[r.payment_proofs[0].status]?.cls || ""}`}
-                          >
-                            Proof {PROOF_STATUS[r.payment_proofs[0].status]?.label.toLowerCase()}
-                            {r.payment_proofs.length > 1 ? ` · ${r.payment_proofs.length} sent` : ""}
-                          </button>
+                        <button type="button" onClick={() => setViewing(r)} title="See the invoice and its payment proofs"
+                          className={`inline-flex items-center justify-center min-w-[96px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold cursor-pointer ${badge.cls}`}>
+                          {badge.label}
+                        </button>
+                        {state === "rejected" && (
+                          <span className="text-[10px] text-red-800">Proof rejected. Waiting for the customer to re-upload.</span>
                         )}
                       </div>
                     </td>
@@ -354,6 +345,7 @@ export default function ReceiptsPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
       </div>
 
       {/* View receipt modal */}
@@ -375,7 +367,7 @@ export default function ReceiptsPage() {
               <Row label="Customer" value={viewing.customer?.name || "—"} />
               <Row label="Salesman" value={viewing.salesman?.name || "—"} />
               <Row label="Delivery" value={viewing.delivery?.delivery_no || "—"} />
-              <Row label="Status" value={<span className="capitalize">{viewing.payment_status}</span>} />
+              <Row label="Status" value={(() => { const b = PAYMENT_BADGE[paymentState(viewing, !!proofByReceipt[viewing.id])]; return <span className={`inline-flex px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${b.cls}`}>{b.label}</span>; })()} />
               {viewing.payment_status === "paid" && (
                 <>
                   <Row label="Paid Via" value={MOP_LABELS[viewing.payment_method] || viewing.payment_method || "—"} />

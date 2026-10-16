@@ -29,7 +29,11 @@ class CustomerPrice extends Model
         $row = static::where('customer_id', $customerId)
             ->where('product_type', $productType)
             ->first();
+        if ($row) {
+            return (float) $row->unit_price;
+        }
 
-        return $row ? (float) $row->unit_price : null;
+        // No price of its own: the reference price of the customer's type.
+        return ReferencePrice::for(Customer::whereKey($customerId)->value('customer_type'), $productType);
     }
 }

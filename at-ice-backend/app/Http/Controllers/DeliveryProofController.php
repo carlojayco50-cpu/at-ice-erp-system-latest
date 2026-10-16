@@ -210,6 +210,9 @@ class DeliveryProofController extends Controller
             ]);
         }
 
+        // The Driver is free again: a queued delivery may go to them now.
+        \App\Support\DeliveryDispatch::assignQueued();
+
         return response()->json([
             'message' => 'Delivery confirmed successfully!',
             'proof' => $proof,
@@ -224,6 +227,8 @@ class DeliveryProofController extends Controller
         // Open deliveries still waiting for a confirmation...
         $open = Delivery::with(['customer', 'items.product', 'driver:id,name'])
             ->whereIn('status', ['pending', 'in_transit'])
+            // contracts schedule weeks ahead: only today's and older ones
+            ->whereDate('scheduled_date', '<=', \App\Support\DriverAvailability::today())
             ->whereDoesntHave('proofs')
             ->orderBy('created_at', 'desc')
             ->get();

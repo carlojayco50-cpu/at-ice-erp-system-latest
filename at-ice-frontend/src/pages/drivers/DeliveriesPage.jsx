@@ -342,6 +342,11 @@ export function DeliveriesPage() {
                     <span className="text-[10px] text-slate-300">·</span>
                     <span className="text-[10px] font-mono text-slate-400">{d.delivery_no}</span>
                   </div>
+                  {d.reassigned_from && (
+                    <span className="inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                      Reassigned from {d.reassigned_from.name}
+                    </span>
+                  )}
                 </div>
                 <span className={`text-slate-300 flex-shrink-0 mt-1 transition-transform duration-200 ${open ? "rotate-90" : ""}`}>
                   <ChevronRightIcon />

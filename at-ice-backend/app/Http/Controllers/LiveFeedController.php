@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\LiveEvent;
 use App\Support\ArchiveExpiry;
+use App\Support\DeliveryDispatch;
 use App\Support\PayrollCalendar;
 use Illuminate\Http\Request;
 
@@ -23,6 +24,12 @@ class LiveFeedController extends Controller
         if (in_array($user->role, ['hr', 'admin'], true)) {
             PayrollCalendar::notifyCutoff();
             ArchiveExpiry::daily();
+        }
+
+        // Driver leaves, the delivery queue and store delay notices
+        // (App\Support\DeliveryDispatch, at most every 15 seconds).
+        if (in_array($user->role, ['admin', 'hr', 'driver', 'employee'], true)) {
+            DeliveryDispatch::run();
         }
 
         if ($after === null || $after === '') {

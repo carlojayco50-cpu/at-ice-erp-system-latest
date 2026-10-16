@@ -7,7 +7,6 @@ import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import { formatTime } from "../../lib/time";
 
-const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -104,14 +103,6 @@ export default function HRDashboard() {
     <HrLayout
       pageTitle="HR Dashboard"
       breadcrumb="HR Dashboard"
-      headerActions={
-        <button
-          onClick={fetchAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 cursor-pointer hover:border-cyan-400 hover:text-cyan-500 transition-colors"
-        >
-          <RefreshIcon /> Refresh
-        </button>
-      }
     >
       {/* STAT CARDS — plain text, no decorative icons/colors */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

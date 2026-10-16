@@ -136,6 +136,9 @@ function timeAgo(iso) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [chartMode, setChartMode] = useState("bar");
+  // A stat card that opens a panel in place (Inventory Alerts): it is shown
+  // selected and the other cards step back.
+  const [activeCard, setActiveCard] = useState(null);
   // Sales Overview: Day / Month / Year, and a past date picked on the calendar
   // that is compared with the present (GET /api/bi/sales-chart). Empty value =
   // the period just before the present. Nothing after today can be picked.
@@ -344,14 +347,6 @@ export default function Dashboard() {
     <AdminLayout
       pageTitle="Dashboard"
       breadcrumb="Dashboard"
-      headerActions={
-        <button
-          onClick={fetchBI}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 cursor-pointer hover:border-cyan-400 hover:text-cyan-500 transition-colors"
-        >
-          <RefreshIcon /> Refresh
-        </button>
-      }
     >
       {biError && (
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[12px] text-amber-700">
@@ -367,7 +362,7 @@ export default function Dashboard() {
         <div
           onClick={() => navigate("/admin/receipts")}
           title="Open Invoices"
-          className="col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150"
+          className={`col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${activeCard ? "opacity-60" : ""}`}
         >
           <span className="text-[11px] font-medium tracking-[0.02em] text-slate-400">Total Sales (This Month)</span>
           <div className="text-[26px] font-semibold tracking-tight leading-tight text-slate-800 tabular-nums">
@@ -399,6 +394,7 @@ export default function Dashboard() {
             up: false,
             delta: `${inventory.out_of_stock || 0} out of stock`,
             context: `${inventory.low_stock || 0} low stock items`,
+            panel: "inventory",
           },
           {
             label: "Attendance Today",
@@ -416,12 +412,21 @@ export default function Dashboard() {
             isAlert: true,
             to: "/admin/receipts",
           },
-        ].map((card) => (
+        ].map((card) => {
+          const clickable = card.to || card.panel;
+          const selected = card.panel && activeCard === card.panel;
+          const open = () => (card.panel ? setActiveCard((a) => (a === card.panel ? null : card.panel)) : navigate(card.to));
+          return (
           <div
             key={card.label}
-            onClick={card.to ? () => navigate(card.to) : undefined}
-            title={card.to ? "Open details" : undefined}
-            className={`bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 transition-all duration-150 ${card.to ? "cursor-pointer hover:shadow-md hover:-translate-y-px" : ""}`}
+            onClick={clickable ? open : undefined}
+            onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } } : undefined}
+            role={clickable ? "button" : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            aria-expanded={card.panel ? selected : undefined}
+            data-selected={selected || undefined}
+            title={card.panel ? (selected ? "Hide the stock alerts" : "Show the stock alerts") : card.to ? "Open details" : undefined}
+            className={`stat-card bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 transition-all duration-150 ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-px" : ""} ${activeCard && !selected ? "opacity-60" : ""}`}
           >
             <span className={`text-[11px] font-medium tracking-[0.02em] ${card.isAlert ? "text-red-400" : "text-slate-400"}`}>
               {card.label}
@@ -438,8 +443,41 @@ export default function Dashboard() {
             )}
             {card.up !== null && <div className="text-[11px] text-slate-400">{card.context}</div>}
           </div>
-        ))}
+          );
+        })}
       </div>
+
+      {activeCard === "inventory" && (
+        <div className="bg-white border border-black/[0.09] rounded-xl p-[18px]" role="region" aria-label="Stock alerts">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-[13px] font-semibold text-slate-800">Stock alerts</div>
+              <div className="text-[11px] text-slate-400">{inventory.out_of_stock || 0} out of stock · {inventory.low_stock || 0} low stock</div>
+            </div>
+            <button type="button" onClick={() => navigate("/admin/stock-limits")} className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-[12px] text-slate-600 hover:bg-slate-50 cursor-pointer">Open Stock Limits</button>
+          </div>
+          {(inventory.critical_items || []).length === 0 ? (
+            <div className="text-[12px] text-slate-400">Every supply is above its minimum stock.</div>
+          ) : (
+            <ul className="divide-y divide-black/[0.06]">
+              {inventory.critical_items.map((it) => (
+                <li key={it.id} className="flex items-center justify-between gap-3 py-2 text-[12px]">
+                  <span className="min-w-0">
+                    <span className="text-slate-800 font-medium">{it.name}</span>
+                    <span className="text-slate-400"> · {it.product_code}</span>
+                  </span>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    <span className="tabular-nums text-slate-600">{it.current_stock} / min {it.minimum_stock} {it.unit || ""}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${it.status === "out_of_stock" ? "bg-[#fde8ec] text-[#9f1239] border-[#fbcfd8]" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                      {it.status === "out_of_stock" ? "Out of stock" : "Low stock"}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* LEFT: sales, inventory, delivery, attendance. RIGHT: AI summary,
           notifications, overdue receivables. Each column stacks on its own,

@@ -1,414 +1,226 @@
-import { useState, useEffect, useMemo } from "react";
-import logo from "../../assets/logo.png";
-import { useNavigate } from "react-router-dom";
-import { SkeletonList } from "../../components/Skeleton";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import RoleShell from "../../components/RoleShell";
+import { StatusBadge, LoadingButton, BottomSheet, Stepper, ErrorBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
+import { CARD, CARD_BUTTON, FIELD, LABEL } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
-import EmptyState from "../../components/EmptyState";
-import { ScopeStatusRow } from "../../components/NightMode";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { formatDateTime } from "../../lib/time";
 
-// Icons
-const ChevronLeftIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
-const PlusIcon = () => (
-  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-const TruckIcon = () => (
-  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8zM5.5 21a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM18.5 21a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-  </svg>
-);
-const ClockIcon = () => (
-  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-const UserIcon = () => (
-  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
-
 const token = () => localStorage.getItem("token") || "";
-
 const PRODUCT_TYPES = [
   { key: "bags", label: "Bags", sub: "5kg" },
   { key: "small_sack", label: "Small Sack", sub: "30kg" },
   { key: "big_sack", label: "Big Sack", sub: "50kg" },
 ];
+const PRODUCT_LABELS = { bags: "Bags (5kg)", small_sack: "Small Sack (30kg)", big_sack: "Big Sack (50kg)" };
+const EMPTY_QTY = { bags: "", small_sack: "", big_sack: "" };
 
-const PRODUCT_LABELS = {
-  bags: "Bags (5kg)",
-  small_sack: "Small Sack (30kg)",
-  big_sack: "Big Sack (50kg)",
-};
+// Now as a datetime-local value in the phone's time.
+function nowLocal() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
+// Checker > Loading: today's deliveries as a checklist. Tap one that is not
+// counted yet, count the sacks per type with the big - / + buttons (they
+// start from what Admin booked), and save. Each delivery is counted once.
 export default function CheckerIceLoadingPage() {
-  const navigate = useNavigate();
-
   const [loadings, setLoadings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [deliveries, setDeliveries] = useState([]);
+  const [status, setStatus] = useState("loading"); // loading | ready | error
   const [loadError, setLoadError] = useState("");
+  const timedIn = useTimedIn();
 
-  // The count form is kept as a draft while open, so a refresh keeps it.
+  // The count is kept as a draft while open, so a refresh keeps it.
   const draft = useDraft("checker:ice-loading", {
-    showForm: false, deliveryId: "", loadedAt: "", quantities: { bags: "", small_sack: "", big_sack: "" },
+    showForm: false, deliveryId: "", loadedAt: "", quantities: EMPTY_QTY,
   }, { when: (v) => v.showForm });
   const { showForm, deliveryId, loadedAt, quantities } = draft.values;
   const { showForm: setShowForm, deliveryId: setDeliveryId, loadedAt: setLoadedAt, quantities: setQuantities } = draft.set;
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  // Deliveries to count; one already counted (by either Checker) is disabled.
-  const [deliveries, setDeliveries] = useState([]);
-  const timedIn = useTimedIn();
-
-  const total = useMemo(() => {
-    return PRODUCT_TYPES.reduce((sum, p) => sum + (Number(quantities[p.key]) || 0), 0);
-  }, [quantities]);
-
-  const fetchLoadings = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
     setLoadError("");
     try {
-      const res = await fetch("/api/ice-loadings", {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token()}` },
-      });
-      if (!res.ok) throw new Error("Failed to load ice loading counts.");
-      const data = await res.json();
-      setLoadings(Array.isArray(data) ? data : data.data || []);
+      const h = { Accept: "application/json", Authorization: `Bearer ${token()}` };
+      const [l, d] = await Promise.all([fetch("/api/ice-loadings", { headers: h }), fetch("/api/ice-loadings/deliveries", { headers: h })]);
+      if (!l.ok || !d.ok) throw new Error("Could not load the deliveries and counts.");
+      const [ld, dd] = await Promise.all([l.json(), d.json()]);
+      setLoadings(Array.isArray(ld) ? ld : ld.data || []);
+      setDeliveries(Array.isArray(dd) ? dd : []);
+      setStatus("ready");
     } catch (err) {
-      setLoadError(err.message || "Could not load ice loading counts.");
-    } finally {
-      setLoading(false);
+      setLoadError(err.message);
+      setStatus("error");
     }
-  };
-
-  const fetchDeliveries = async () => {
-    try {
-      const res = await fetch("/api/ice-loadings/deliveries", {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token()}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setDeliveries(Array.isArray(data) ? data : []);
-    } catch {
-      /* the list stays as it was */
-    }
-  };
-
-  // reload when a live notice for this page arrives (lib/live.js)
+  }, []);
   const live = useLiveTick(["deliveries"]);
-  useEffect(() => {
-    fetchLoadings();
-    fetchDeliveries();
-  }, [live]);
+  useEffect(() => { load(); }, [load, live]);
 
   const chosen = deliveries.find((d) => String(d.id) === String(deliveryId));
+  const total = useMemo(() => PRODUCT_TYPES.reduce((s, p) => s + (Number(quantities[p.key]) || 0), 0), [quantities]);
 
-  const resetForm = () => {
-    setDeliveryId("");
-    setLoadedAt("");
-    setQuantities({ bags: "", small_sack: "", big_sack: "" });
+  function openCount(d) {
+    if (d.loaded) return;
+    setDeliveryId(String(d.id));
+    setLoadedAt(nowLocal());
+    setQuantities(Object.fromEntries(PRODUCT_TYPES.map((p) => [p.key, d.booked?.[p.key] != null ? String(d.booked[p.key]) : ""])));
     setFormError("");
-  };
+    setShowForm(true);
+  }
 
-  const handleQuantityChange = (key, value) => {
-    setQuantities((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleSubmit = async (e) => {
+  async function handleSubmit(e) {
     e.preventDefault();
+    if (submitting) return;
     setFormError("");
-
-    if (timedIn === false) {
-      setFormError("Time in at the Attendance Station first. Saving is turned off until your Time In is recorded.");
-      return;
-    }
-    if (!deliveryId || !loadedAt) {
-      setFormError("Please choose the delivery and the loaded-at time.");
-      return;
-    }
-    if (chosen?.loaded) {
-      setFormError(`This delivery was already counted${chosen.loaded_by ? ` by ${chosen.loaded_by}` : ""}. A delivery can only be counted once.`);
-      return;
-    }
-    if (total <= 0) {
-      setFormError("Enter at least one quantity greater than zero.");
-      return;
-    }
-
-    const items = PRODUCT_TYPES.map((p) => ({
-      product_type: p.key,
-      quantity: Number(quantities[p.key]) || 0,
-    }));
+    if (timedIn === false) return setFormError("Time in at the Attendance Station first. Saving is turned off until your Time In is recorded.");
+    if (!deliveryId || !loadedAt) return setFormError("Choose the delivery and the loaded-at time.");
+    if (chosen?.loaded) return setFormError(`This delivery was already counted${chosen.loaded_by ? ` by ${chosen.loaded_by}` : ""}.`);
+    if (total <= 0) return setFormError("Enter at least one quantity greater than zero.");
 
     setSubmitting(true);
     try {
       const res = await fetch("/api/ice-loadings", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token()}`,
-        },
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token()}` },
         body: JSON.stringify({
           delivery_id: Number(deliveryId),
           loaded_at: loadedAt,
-          items,
+          items: PRODUCT_TYPES.map((p) => ({ product_type: p.key, quantity: Number(quantities[p.key]) || 0 })),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // 409: the other Checker counted this delivery first.
-        if (data.already_loaded) {
-          toast.error("Already counted by the other Checker.");
-          fetchDeliveries();
-          fetchLoadings();
-        }
-        setFormError(data.message || "Failed to record ice loading. Please try again.");
-        setSubmitting(false);
+        if (data.already_loaded) toast.error("Already counted by the other Checker.");
+        setFormError(data.message || "Failed to record the count. Please try again.");
+        load();
         return;
       }
+      // the checklist turns to Counted at once
+      setDeliveries((list) => list.map((d) => (String(d.id) === String(deliveryId) ? { ...d, loaded: true, loaded_by: "you" } : d)));
       toast.success("Ice loading was recorded.");
-      resetForm();
-      setShowForm(false);
-      fetchLoadings();
-      fetchDeliveries();
+      draft.clear();
+      load();
     } catch {
-      setFormError("Network error. Please check your connection.");
+      setFormError("Network error. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
-  };
+  }
 
-  // Group individual rows (one per product type) into one card per
-  // delivery_id + loaded_at "loading event", matching how they were submitted.
-  const grouped = useMemo(() => {
+  // One card per delivery + time, newest first.
+  const history = useMemo(() => {
     const map = new Map();
     for (const rec of loadings) {
       const key = `${rec.delivery_id}__${rec.loaded_at}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          delivery_id: rec.delivery_id,
-          loaded_at: rec.loaded_at,
-          checkerName: rec.checker?.name,
-          items: [],
-          total: 0,
-        });
-      }
-      const group = map.get(key);
-      group.items.push(rec);
-      group.total += rec.quantity_loaded;
+      if (!map.has(key)) map.set(key, { key, delivery: rec.delivery, delivery_id: rec.delivery_id, loaded_at: rec.loaded_at, checker: rec.checker?.name, items: [], total: 0 });
+      const g = map.get(key);
+      g.items.push(rec);
+      g.total += rec.quantity_loaded;
     }
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(b.loaded_at) - new Date(a.loaded_at)
-    );
+    return [...map.values()].sort((a, b) => new Date(b.loaded_at) - new Date(a.loaded_at)).slice(0, 20);
   }, [loadings]);
 
+  const toCount = deliveries.filter((d) => !d.loaded).length;
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <RoleShell role="checker" title="Ice loading">
+      <TimeInNotice timedIn={timedIn} />
 
-      {/* ── Top Bar ── */}
-      <header className="bg-white border-b border-black/[0.09] flex-shrink-0 sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => navigate("/checker/dashboard")}
-            className="text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-            aria-label="Back to dashboard"
-          >
-            <ChevronLeftIcon />
-          </button>
-          <span className="brand-logo w-11 h-11 flex-shrink-0 rounded-lg flex items-center justify-center overflow-hidden"><img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" /></span>
-          <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-semibold text-slate-800 leading-tight">Ice Loading Count</div>
-            <div className="text-[12px] text-slate-400 leading-tight">Count sacks loaded per delivery truck, by product type.</div>
-          </div>
-        </div>
-        <ScopeStatusRow className="px-4 pb-3" />
-        <div className="px-4 pb-4">
+      {status === "loading" && <CardSkeleton rows={4} />}
+      {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
 
-        <TimeInNotice timedIn={timedIn} className="mt-3" />
-
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="w-full mt-3 py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-        >
-          <PlusIcon />
-          {showForm ? "Cancel" : "New Loading Count"}
-        </button>
-        </div>
-      </header>
-
-      {/* ── New Loading Count Form ── */}
-      {showForm && (
-        <div className="bg-white border-b border-black/[0.08] px-4 py-4">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <DraftHint draft={draft} onDiscard={() => setFormError("")} />
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="ice-delivery" className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                Delivery
-              </label>
-              <select
-                id="ice-delivery"
-                value={deliveryId}
-                onChange={(e) => { setDeliveryId(e.target.value); setFormError(""); }}
-                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
-              >
-                <option value="">Choose a delivery…</option>
+      {status === "ready" && (
+        <>
+          <section aria-label="Deliveries to count" className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-slate-900">Today's trucks</h2>
+              <StatusBadge tone={toCount ? "pending" : "done"}>{toCount ? `${toCount} to count` : "All counted"}</StatusBadge>
+            </div>
+            {deliveries.length === 0 ? (
+              <EmptyCard icon="truck" title="No trucks to count">No pending or in-transit deliveries today.</EmptyCard>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
                 {deliveries.map((d) => (
-                  <option key={d.id} value={d.id} disabled={d.loaded}>
-                    {d.delivery_no || `DEL-${String(d.id).padStart(4, "0")}`}
-                    {d.customer ? ` · ${d.customer}` : ""}
-                    {d.loaded ? ` · already counted${d.loaded_by ? ` by ${d.loaded_by}` : ""}` : ""}
-                  </option>
+                  <button key={d.id} type="button" onClick={() => openCount(d)} disabled={d.loaded}
+                    aria-label={`${d.delivery_no} ${d.customer || ""}${d.loaded ? ", counted" : ", tap to count"}`}
+                    className={`${CARD_BUTTON} flex items-center gap-3 ${d.loaded ? "!opacity-100 border-emerald-200 bg-emerald-50/40" : ""}`}>
+                    <span className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${d.loaded ? "bg-emerald-100 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                      <Icon name={d.loaded ? "check" : "truck"} size={20} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[15px] font-semibold text-slate-900 truncate">{d.customer || "Delivery"}</span>
+                      <span className="block text-[13px] text-slate-500 truncate">
+                        {d.delivery_no}{d.driver ? ` · ${d.driver}` : ""}{d.loaded && d.loaded_by ? ` · counted by ${d.loaded_by}` : ""}
+                      </span>
+                    </span>
+                    <StatusBadge tone={d.loaded ? "done" : "pending"}>{d.loaded ? "Counted" : "To count"}</StatusBadge>
+                  </button>
                 ))}
-              </select>
-              <span className="text-[11px] text-slate-400 px-0.5">
-                {deliveries.length === 0
-                  ? "No pending or in-transit deliveries right now."
-                  : "Each delivery is counted once. Deliveries already counted by either Checker cannot be chosen."}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                Loaded At
-              </label>
-              <input
-                type="datetime-local"
-                value={loadedAt}
-                onChange={(e) => setLoadedAt(e.target.value)}
-                className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[13px] text-slate-800 transition-all"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                Sacks Loaded, per type
-              </label>
-              <div className="flex flex-col gap-2">
-                {PRODUCT_TYPES.map((p) => (
-                  <div
-                    key={p.key}
-                    className="flex items-center justify-between gap-3 px-4 py-2.5 border border-black/[0.12] rounded-xl bg-slate-50/80"
-                  >
-                    <div>
-                      <div className="text-[13px] font-medium text-slate-700">{p.label}</div>
-                      <div className="text-[10px] text-slate-400">{p.sub}</div>
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      value={quantities[p.key]}
-                      onChange={(e) => handleQuantityChange(p.key, e.target.value)}
-                      className="w-20 text-right px-3 py-2 border border-black/[0.1] rounded-lg bg-white focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between px-4 py-3 bg-cyan-50 border border-cyan-100 rounded-xl">
-              <span className="text-[12px] font-medium text-cyan-700">Total Loaded</span>
-              <span className="text-[16px] font-semibold font-mono text-cyan-700">{total} sacks</span>
-            </div>
-
-            {formError && (
-              <div className="text-[12px] text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-center">
-                {formError}
               </div>
             )}
+          </section>
 
-            <button
-              type="submit"
-              disabled={submitting || timedIn === false || !!chosen?.loaded}
-              className="w-full py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {submitting ? "Saving…" : "Save Count"}
-            </button>
-          </form>
-        </div>
+          <section aria-label="Recorded counts" className="space-y-3">
+            <h2 className="text-[15px] font-semibold text-slate-900">Recorded counts</h2>
+            {history.length === 0 ? (
+              <EmptyCard icon="clipboard" title="No counts yet">Counts you save show here.</EmptyCard>
+            ) : history.map((g) => (
+              <article key={g.key} className={CARD}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-[15px] font-semibold text-slate-900 truncate">{g.delivery?.customer?.name || g.delivery?.delivery_no || `Delivery #${g.delivery_id}`}</h3>
+                    <div className="text-[13px] text-slate-500">{g.delivery?.delivery_no || `#${g.delivery_id}`}</div>
+                  </div>
+                  <StatusBadge tone="done">{g.total} sacks</StatusBadge>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {g.items.filter((i) => i.quantity_loaded > 0).map((i) => (
+                    <span key={i.id} className="text-[13px] text-slate-600 bg-slate-100 rounded-full px-2.5 py-0.5">{i.quantity_loaded} {PRODUCT_LABELS[i.product_type] || i.product_type}</span>
+                  ))}
+                </div>
+                <div className="text-[12px] text-slate-400 mt-2">{formatDateTime(g.loaded_at, { year: false })}{g.checker ? ` · ${g.checker}` : ""}</div>
+              </article>
+            ))}
+          </section>
+        </>
       )}
 
-      {/* ── Loading Count List (grouped by delivery + time) ── */}
-      <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
-        {loading && (
-          <SkeletonList />
-        )}
-
-        {!loading && loadError && (
-          <div className="text-center text-[13px] text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3 mt-4">
-            {loadError}
-          </div>
-        )}
-
-        {!loading && !loadError && grouped.length === 0 && (
-          <EmptyState icon="snow">No ice loading counts recorded yet.</EmptyState>
-        )}
-
-        {!loading &&
-          grouped.map((group) => (
-            <div
-              key={`${group.delivery_id}__${group.loaded_at}`}
-              className="bg-white border border-black/[0.08] rounded-2xl overflow-hidden shadow-sm px-4 py-4"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[13px] font-semibold text-slate-800 truncate">
-                  DEL-{String(group.delivery_id).padStart(4, "0")}
-                </span>
-                <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600">
-                  {group.total} total
-                </span>
+      <BottomSheet
+        open={showForm}
+        onClose={() => !submitting && setShowForm(false)}
+        title={chosen ? `Count ${chosen.customer || chosen.delivery_no}` : "Count sacks"}
+        footer={
+          <LoadingButton type="submit" form="ice-count-form" loading={submitting} disabled={timedIn === false || !!chosen?.loaded}>
+            {submitting ? "Saving…" : `Save count · ${total} sacks`}
+          </LoadingButton>
+        }
+      >
+        <form id="ice-count-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <DraftHint draft={draft} onDiscard={() => setFormError("")} />
+          <ErrorBanner>{formError}</ErrorBanner>
+          {chosen && <div className="text-[14px] text-slate-500">{chosen.delivery_no}{chosen.driver ? ` · Driver ${chosen.driver}` : ""}</div>}
+          {PRODUCT_TYPES.map((p) => (
+            <div key={p.key}>
+              <div className="flex items-baseline justify-between mb-1.5">
+                <label htmlFor={`qty-${p.key}`} className="text-[15px] font-semibold text-slate-800">{p.label} <span className="text-[13px] font-normal text-slate-400">{p.sub}</span></label>
+                {chosen?.booked?.[p.key] != null && <span className="text-[13px] text-slate-400">booked {chosen.booked[p.key]}</span>}
               </div>
-
-              <div className="flex items-center gap-1 mt-1.5 text-[11px] text-slate-400">
-                <TruckIcon />
-                <span>Delivery #{group.delivery_id}</span>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {group.items.map((item) => (
-                  <span
-                    key={item.id}
-                    className="text-[11px] text-slate-600 bg-slate-100 rounded-full px-2.5 py-1"
-                  >
-                    {item.quantity_loaded} {PRODUCT_LABELS[item.product_type] || item.product_type || "Unspecified"}
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-3 mt-2.5 border-t border-black/[0.06] pt-2">
-                {group.loaded_at && (
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <ClockIcon />
-                    {formatDateTime(group.loaded_at, { year: false })}
-                  </span>
-                )}
-                {group.checkerName && (
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <UserIcon />
-                    {group.checkerName}
-                  </span>
-                )}
-              </div>
+              <Stepper id={`qty-${p.key}`} label={p.label} value={quantities[p.key]} onChange={(v) => setQuantities((q) => ({ ...q, [p.key]: v }))} />
             </div>
           ))}
-      </div>
-    </div>
+          <div>
+            <label htmlFor="ice-loaded-at" className={LABEL}>Loaded at</label>
+            <input id="ice-loaded-at" type="datetime-local" value={loadedAt} onChange={(e) => setLoadedAt(e.target.value)} className={FIELD} />
+          </div>
+        </form>
+      </BottomSheet>
+    </RoleShell>
   );
 }

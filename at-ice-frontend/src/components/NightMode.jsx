@@ -19,7 +19,7 @@ export function NightToggle({ dark, onToggle, alwaysLabel = false }) {
       onClick={onToggle}
       title={dark ? "Switch to light mode" : "Switch to night mode"}
       aria-label={dark ? "Switch to light mode" : "Switch to night mode"}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+      className="topbar-chip inline-flex items-center justify-center gap-1.5 h-10 px-3 bg-white border border-black/[0.09] rounded-lg text-xs font-medium leading-none text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
     >
       {dark ? <SunIcon /> : <MoonIcon />}
       <span className={alwaysLabel ? "" : "hidden sm:inline"}>{dark ? "Light" : "Night"}</span>

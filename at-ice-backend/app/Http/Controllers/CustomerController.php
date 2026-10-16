@@ -77,6 +77,16 @@ class CustomerController extends Controller
         if (array_key_exists('customer_type', $data) && $data['customer_type'] === '') {
             $data['customer_type'] = null;
         }
+        // A known chain (or a name that starts with one) fills in the chain
+        // and the type when they were left blank (Customer::KNOWN_CHAINS).
+        // A food word in the name ("Mi Ma Grill") makes it Restaurant / Food.
+        $known = Customer::knownChain($data['chain'] ?? null, $data['name'] ?? null);
+        if ($known && array_key_exists('chain', $data) && empty($data['chain'])) {
+            $data['chain'] = $known;
+        }
+        if (array_key_exists('customer_type', $data) && empty($data['customer_type'])) {
+            $data['customer_type'] = Customer::guessType($data['chain'] ?? null, $data['name'] ?? null);
+        }
         if (array_key_exists('mop', $data) && $data['mop'] === null) {
             unset($data['mop']);
         }

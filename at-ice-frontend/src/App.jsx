@@ -21,6 +21,7 @@ import CustomerPriceManagement from './pages/Admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import StockLimitsPage from './pages/Admin/StockLimitsPage'
 import ProjectsPage from './pages/Admin/ProjectsPage'
+import MaintenanceProjectsPage from './pages/employees/MaintenanceProjectsPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 import CustomersPage from './pages/Admin/CustomersPage'
 import DeliveriesPage from './pages/Admin/DeliveriesPage'
@@ -275,7 +276,7 @@ function App() {
           }
         />
         <Route
-          path="/admin/settings"
+          path="/admin/settings/:section?"
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <SettingsPage />
@@ -462,6 +463,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
               <NightScope><MaintenanceStockOutRequestPage /></NightScope>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/maintenance/projects"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
+              <NightScope><MaintenanceProjectsPage /></NightScope>
             </ProtectedRoute>
           }
         />

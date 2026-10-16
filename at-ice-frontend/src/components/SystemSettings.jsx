@@ -16,6 +16,7 @@ const GROUPS = [
   ["attendance.", "Attendance"],
   ["leave.", "Leave"],
   ["kiosk.", "Kiosk"],
+  ["delivery.", "Deliveries"],
   ["thirteenth.", "13th month"],
   ["retention.", "Records"],
 ];
@@ -275,7 +276,15 @@ function RetentionReview() {
   );
 }
 
-export default function SystemSettings() {
+// One Settings page at a time (Admin > Settings > Rates and rules, Admin PIN,
+// Old records); "section" is the page.
+export default function SystemSettings({ section = "rates" }) {
+  if (section === "admin-pin") return <div className="max-w-4xl"><OverridePinForm /></div>;
+  if (section === "old-records") return <div className="max-w-4xl"><RetentionReview /></div>;
+  return <RatesAndRules />;
+}
+
+function RatesAndRules() {
   const [settings, setSettings] = useState(null);
   const [error, setError] = useState("");
 
@@ -309,8 +318,6 @@ export default function SystemSettings() {
         })}
         <PayRates />
       </div>
-      <div id="settings-admin-pin" className="scroll-mt-20"><OverridePinForm /></div>
-      <div id="settings-retention" className="scroll-mt-20"><RetentionReview /></div>
     </div>
   );
 }

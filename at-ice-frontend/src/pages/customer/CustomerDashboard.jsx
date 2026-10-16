@@ -14,6 +14,7 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
+import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -55,7 +56,7 @@ const PhoneIcon = () => <svg width="13" height="13" fill="none" stroke="currentC
 function CompanyCard() {
   const navigate = useNavigate();
   return (
-    <div className={`${ICE_CARD} p-5`}>
+    <div className={`${ICE_CARD} p-5 h-full flex flex-col`}>
       <div className="flex items-center gap-2 text-[14px] font-semibold text-slate-800">
         <span className="text-cyan-600"><ShieldIcon /></span> {COMPANY.name}
       </div>
@@ -149,7 +150,9 @@ export default function CustomerDashboard() {
 
   return (
     <CustomerLayout pageTitle="Dashboard" breadcrumb="Overview">
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+      {/* Left: profile, counts and the two recent lists, stretched to the
+          height of the company card on the right, so there is no dead space */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-stretch">
         <div className="flex flex-col gap-4 min-w-0">
           {/* Profile card */}
           <div className={`${ICE_CARD} px-5 py-4`}>
@@ -172,64 +175,61 @@ export default function CustomerDashboard() {
               sub={overdueCount > 0 ? `${overdueCount} overdue` : "All current"}
             />
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
+            {/* Recent deliveries */}
+            <div className={`${ICE_CARD} overflow-hidden h-full flex flex-col`}>
+              <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
+                Recent Deliveries
+              </div>
+              {recentDeliveries.length === 0 ? (
+                <EmptyState icon="truck" compact>No deliveries yet.</EmptyState>
+              ) : (
+                <div className="divide-y divide-black/[0.06]">
+                  {recentDeliveries.map((d) => (
+                    <div key={d.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-slate-800">{d.delivery_no}</div>
+                        <div className="text-[11px] text-slate-400">{d.driver_name || "Driver not yet assigned"}</div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${STATUS_BADGE[d.status] || ""}`}>
+                        {STATUS_LABEL[d.status] || d.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recent receipts */}
+            <div className={`${ICE_CARD} overflow-hidden h-full flex flex-col`}>
+              <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
+                Recent Receipts
+              </div>
+              {recentReceipts.length === 0 ? (
+                <EmptyState icon="receipt" compact>No invoices yet.</EmptyState>
+              ) : (
+                <div className="divide-y divide-black/[0.06]">
+                  {recentReceipts.map((r) => (
+                    <div key={r.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-slate-800">{r.receipt_no}</div>
+                        <div className="text-[11px] text-slate-400">{peso(r.total_amount)}</div>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${PAYMENT_BADGE[paymentState(r)].cls}`}>
+                        {PAYMENT_BADGE[paymentState(r)].label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <CompanyCard />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent deliveries */}
-        <div className={`${ICE_CARD} overflow-hidden`}>
-          <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
-            Recent Deliveries
-          </div>
-          {recentDeliveries.length === 0 ? (
-            <EmptyState icon="truck" compact>No deliveries yet.</EmptyState>
-          ) : (
-            <div className="divide-y divide-black/[0.06]">
-              {recentDeliveries.map((d) => (
-                <div key={d.id} className="px-5 py-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-medium text-slate-800">{d.delivery_no}</div>
-                    <div className="text-[11px] text-slate-400">{d.driver_name || "Driver not yet assigned"}</div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${STATUS_BADGE[d.status] || ""}`}>
-                    {STATUS_LABEL[d.status] || d.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Recent receipts */}
-        <div className={`${ICE_CARD} overflow-hidden`}>
-          <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
-            Recent Receipts
-          </div>
-          {recentReceipts.length === 0 ? (
-            <EmptyState icon="receipt" compact>No invoices yet.</EmptyState>
-          ) : (
-            <div className="divide-y divide-black/[0.06]">
-              {recentReceipts.map((r) => (
-                <div key={r.id} className="px-5 py-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-medium text-slate-800">{r.receipt_no}</div>
-                    <div className="text-[11px] text-slate-400">{peso(r.total_amount)}</div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-                    r.payment_status === "paid" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                    : r.payment_status === "overdue" ? "bg-red-500/10 text-red-600 border-red-500/20"
-                    : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                  }`}>
-                    {String(r.payment_status || "unpaid").charAt(0).toUpperCase() + String(r.payment_status || "unpaid").slice(1)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </CustomerLayout>
   );
 }

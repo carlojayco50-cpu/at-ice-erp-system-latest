@@ -6,6 +6,8 @@ import EmptyState from "../../components/EmptyState";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { useDraft } from "../../lib/useDraft";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 // Minimum and maximum stock of each supply item. Only the Admin sets them
 // (owner, 2026-10-16); the Checker sees them read-only on Inventory.
@@ -105,6 +107,8 @@ export default function StockLimitsPage() {
     }
   }
 
+  const pager = usePagination(rows);
+
   return (
     <AdminLayout pageTitle="Stock Limits" breadcrumb="Inventory / Stock Limits">
       <div className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-4">
@@ -156,7 +160,7 @@ export default function StockLimitsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((p) => (
+                {pager.pageItems.map((p) => (
                   <tr key={p.id} className="border-b border-black/[0.04] last:border-0">
                     <td className="py-2 pr-3 text-slate-800 font-medium">{p.name}</td>
                     <td className="py-2 pr-3 text-slate-500">{p.category || "—"}</td>
@@ -201,6 +205,7 @@ export default function StockLimitsPage() {
                 ))}
               </tbody>
             </table>
+            <Pagination pager={pager} />
           </div>
         )}
       </div>

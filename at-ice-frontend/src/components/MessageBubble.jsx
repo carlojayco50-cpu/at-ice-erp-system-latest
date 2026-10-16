@@ -19,7 +19,7 @@ export default function MessageBubble({ from, role, at, mine = false, tag, child
       >
         {initialsOf(from, "?")}
       </div>
-      <div className={`min-w-0 max-w-[85%] flex flex-col ${mine ? "items-end" : "items-start"}`}>
+      <div className={`min-w-0 max-w-[85%] sm:max-w-[560px] flex flex-col ${mine ? "items-end" : "items-start"}`}>
         <div className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mb-1 text-[11px] ${mine ? "justify-end" : ""}`}>
           <span className="font-semibold text-slate-700">{from || "Unknown"}</span>
           {role && <span className="text-slate-400">· {role}</span>}

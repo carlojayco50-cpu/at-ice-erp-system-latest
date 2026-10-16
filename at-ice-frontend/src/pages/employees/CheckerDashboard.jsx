@@ -1,113 +1,87 @@
-import { useNavigate } from "react-router-dom";
-import logo from "../../assets/logo.png";
-import { clearSession } from "../../lib/auth";
-import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
-import LeaveRequestButton from "../../components/LeaveRequestButton";
-import HeaderAvatar from "../../components/HeaderAvatar";
-import { ScopeStatusRow } from "../../components/NightMode";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import RoleShell from "../../components/RoleShell";
+import { Icon, StatusBadge, ErrorBanner, CardSkeleton } from "../../components/MobileUi";
+import { CARD_BUTTON } from "../../lib/mobileUi";
+import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
-import { initialsOf } from "../../lib/initials";
 
-// Functional UI icons only: navigation + actions, not decoration
-const ChevronRightIcon = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
+const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
+const list = (d) => (Array.isArray(d) ? d : d?.data || []);
 
-// Stock-out release is not listed here: the Admin approves and releases
-// Maintenance stock-out requests. The Pickup Log card was removed (owner).
-const MODULES = [
-  {
-    title: "Ice Loading Count",
-    description: "Count sacks loaded per delivery truck.",
-    route: "/checker/ice-loading",
-  },
-  {
-    title: "Inventory Management",
-    description: "View stock levels and low stock alerts.",
-    route: "/checker/inventory",
-  },
-  {
-    title: "Stock In / Stock Out",
-    description: "Log stock movement with double-entry confirmation.",
-    route: "/checker/stock-movements",
-  },
-  {
-    title: "Supplier Management",
-    description: "Manage supplier records and details.",
-    route: "/checker/suppliers",
-  },
-];
-
+// Checker home: what needs doing now (trucks to count, low stock, stock
+// movements waiting for the second Checker), each a tap away.
 export default function CheckerDashboard() {
-  const navigate = useNavigate();
   const timedIn = useTimedIn();
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [data, setData] = useState({ trucks: [], products: [], movements: [] });
+  const [status, setStatus] = useState("loading");
+  const [error, setError] = useState("");
 
-  const handleLogout = () => {
-    clearSession();
-    navigate("/login");
-  };
-  const [askLogout, logoutDialog] = useLogoutConfirm(handleLogout);
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const [t, p, m] = await Promise.all(["ice-loadings/deliveries", "products", "stock-movements"].map((u) => fetch(`/api/${u}`, { headers: headers() })));
+      if (!t.ok || !p.ok || !m.ok) throw new Error("Could not load today's work.");
+      const [td, pd, md] = await Promise.all([t.json(), p.json(), m.json()]);
+      setData({ trucks: list(td), products: list(pd), movements: list(md) });
+      setStatus("ready");
+    } catch (err) {
+      setError(err.message);
+      setStatus("error");
+    }
+  }, []);
+  const live = useLiveTick(["deliveries", "inventory", "stock"]);
+  useEffect(() => { load(); }, [load, live]);
+
+  const toCount = data.trucks.filter((d) => !d.loaded).length;
+  const low = data.products.filter((p) => p.is_active !== false && Number(p.current_stock) <= Number(p.minimum_stock || 0));
+  const waiting = data.movements.filter((m) => m.status === "pending").length;
+
+  const tiles = [
+    { to: "/checker/ice-loading", icon: "truck", title: "Ice loading", text: "Count sacks loaded per truck", badge: toCount ? [`${toCount} to count`, "pending"] : ["All counted", "done"] },
+    { to: "/checker/inventory", icon: "box", title: "Inventory", text: "Stock levels and low stock alerts", badge: low.length ? [`${low.length} low`, "urgent"] : ["Stock OK", "done"] },
+    { to: "/checker/stock-movements", icon: "swap", title: "Stock in / out", text: "Double-entry stock movements", badge: waiting ? [`${waiting} to confirm`, "pending"] : ["Up to date", "done"] },
+    { to: "/checker/suppliers", icon: "users", title: "Suppliers", text: "Supplier records and contacts", badge: null },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {logoutDialog}
-
-      {/* Top Bar */}
-      <header className="bg-white border-b border-black/[0.08] px-5 pt-4 pb-4 flex-shrink-0 sticky top-0 z-20">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <div className="brand-logo w-11 h-11 flex-shrink-0 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
-              <img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold text-slate-800 leading-tight">
-                {user?.name || "Checker"}
-              </div>
-              <div className="text-[11px] text-slate-400 tracking-wide">Checker</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <LeaveRequestButton />
-            <HeaderAvatar initials={initialsOf(user?.name, "CH")} name={user?.name || "Checker"} subtitle={user?.email || "Checker"} onSignOut={askLogout} mobileSignOut />
-          </div>
-        </div>
-
-        <ScopeStatusRow />
-        <TimeInNotice timedIn={timedIn} className="mt-3" />
-        <div className="mt-3">
-          <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">Checker Dashboard</div>
-          <div className="text-[12px] text-slate-400 mt-0.5">
-            {new Date().toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-          </div>
-        </div>
-      </header>
-
-      {/* Module List: plain text, no decorative icons or color dots */}
-      <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
-        {MODULES.map((mod) => (
-          <button
-            key={mod.title}
-            onClick={() => navigate(mod.route)}
-            className="w-full text-left bg-white border border-black/[0.08] rounded-2xl overflow-hidden shadow-sm px-4 py-4 flex items-center justify-between gap-3 cursor-pointer active:bg-slate-50 transition-colors"
-          >
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-semibold text-slate-800">
-                {mod.title}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1 leading-snug">
-                {mod.description}
-              </div>
-            </div>
-            <span className="text-slate-300 flex-shrink-0">
-              <ChevronRightIcon />
-            </span>
-          </button>
-        ))}
+    <RoleShell role="checker" title="Checker">
+      <TimeInNotice timedIn={timedIn} />
+      <div className="text-[14px] text-slate-500">
+        {new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
       </div>
-    </div>
+
+      {status === "loading" && <CardSkeleton rows={4} />}
+      {status === "error" && <ErrorBanner onRetry={load}>{error}</ErrorBanner>}
+
+      {status === "ready" && (
+        <>
+          {low.length > 0 && (
+            <Link to="/checker/inventory?filter=low" className={`${CARD_BUTTON} block border-rose-200`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[15px] font-semibold text-slate-900">Low stock</div>
+                  <div className="text-[14px] text-rose-700 mt-1 truncate">{low.slice(0, 3).map((p) => p.name).join(", ")}{low.length > 3 ? ` +${low.length - 3} more` : ""}</div>
+                </div>
+                <StatusBadge tone="urgent">{low.length}</StatusBadge>
+              </div>
+            </Link>
+          )}
+          <div className="grid grid-cols-1 gap-3">
+            {tiles.map((t) => (
+              <Link key={t.to} to={t.to} className={`${CARD_BUTTON} flex items-center gap-3`}>
+                <span className="w-11 h-11 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center flex-shrink-0"><Icon name={t.icon} /></span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[15px] font-semibold text-slate-900">{t.title}</span>
+                  <span className="block text-[14px] text-slate-500">{t.text}</span>
+                </span>
+                {t.badge ? <StatusBadge tone={t.badge[1]}>{t.badge[0]}</StatusBadge> : <Icon name="chevron" className="text-slate-300" />}
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </RoleShell>
   );
 }

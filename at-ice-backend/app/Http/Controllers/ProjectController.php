@@ -10,8 +10,18 @@ use Illuminate\Validation\Rule;
 // Each project shows the supplies its stock-out requests used (released ones
 // count as used, with their cost from the item's unit price), and Maintenance
 // picks the project when filing a stock-out request.
+//
+// Maintenance adds a project (name, description, location: the job itself);
+// Admin then only sets what comes below them on the form: owner, budget,
+// dates, status and priority (owner, 2026-10-17).
 class ProjectController extends Controller
 {
+    // Fields only Maintenance sets (when adding the project).
+    private const MAINTENANCE_FIELDS = ['name', 'description', 'location', 'latitude', 'longitude'];
+
+    // Fields Admin edits.
+    private const ADMIN_FIELDS = ['status', 'priority', 'owner', 'start_date', 'due_date', 'budget', 'geofence_radius_m'];
+
     private function rules(bool $creating): array
     {
         $req = $creating ? 'required' : 'sometimes|required';
@@ -59,17 +69,47 @@ class ProjectController extends Controller
         );
     }
 
+    // Maintenance: a new project. It starts as Planned; Admin fills in the rest.
     public function store(Request $request)
     {
-        $data = $request->validate($this->rules(true), self::MESSAGES);
-        $project = Project::create($data + ['created_by' => $request->user()->id]);
+        $rules = array_intersect_key($this->rules(true), array_flip(self::MAINTENANCE_FIELDS));
+        $rules['description'] = 'required|string|max:2000';
+        $rules['location'] = 'required|string|max:500';
+        $data = $request->validate($rules, self::MESSAGES + [
+            'description.required' => 'Describe the job.',
+            'location.required' => 'Enter where the job is.',
+        ]);
+        $project = Project::create($data + ['status' => 'planned', 'priority' => 'medium', 'created_by' => $request->user()->id]);
 
         return response()->json($this->withTotals($project->load('stockOutRequests')), 201);
     }
 
+    // Maintenance: the projects this person added.
+    public function mine(Request $request)
+    {
+        $projects = Project::with('stockOutRequests')
+            ->where('created_by', $request->user()->id)
+            ->latest()
+            ->get();
+
+        return response()->json($projects->map(fn ($p) => $this->withTotals($p)));
+    }
+
+    // Admin: only the fields below name, description and location. Those
+    // three are what Maintenance wrote and cannot be changed here.
     public function update(Request $request, Project $project)
     {
-        $data = $request->validate($this->rules(false), self::MESSAGES);
+        if ($request->hasAny(self::MAINTENANCE_FIELDS)) {
+            $locked = collect(self::MAINTENANCE_FIELDS)->filter(fn ($f) => $request->has($f) && (string) $request->input($f) !== (string) $project->{$f});
+            if ($locked->isNotEmpty()) {
+                return response()->json([
+                    'message' => 'The project name, description and location are set by Maintenance and cannot be changed here.',
+                    'errors' => $locked->mapWithKeys(fn ($f) => [$f => ['Set by Maintenance.']])->all(),
+                ], 422);
+            }
+        }
+        $rules = array_intersect_key($this->rules(false), array_flip(self::ADMIN_FIELDS));
+        $data = $request->validate($rules, self::MESSAGES);
         $project->update($data);
 
         return response()->json($this->withTotals($project->fresh()->load('stockOutRequests.product')));

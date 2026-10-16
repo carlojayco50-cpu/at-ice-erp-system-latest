@@ -23,7 +23,7 @@ const STATUS = {
 };
 const PRIORITY = {
   critical: { label: "Critical", tone: "stuck" },
-  high: { label: "High", tone: "working" },
+  high: { label: "High", tone: "high" },
   medium: { label: "Medium", tone: "purple" },
   low: { label: "Low", tone: "idle" },
 };
@@ -143,7 +143,6 @@ export default function ProjectsPage() {
     }
   };
 
-  const openNew = () => { setForm(EMPTY); setFormErrors({}); setEditing({}); };
   const openEdit = (p) => {
     setForm({
       name: p.name || "", description: p.description || "", location: p.location || "", status: p.status, priority: p.priority,
@@ -156,29 +155,22 @@ export default function ProjectsPage() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return setFormErrors({ name: ["Enter the project name."] });
     if (form.start_date && form.due_date && form.due_date < form.start_date) {
       return setFormErrors({ due_date: ["The due date cannot be before the start date."] });
     }
+    // Name, description and location are Maintenance's and are not sent.
     const body = JSON.stringify({
-      ...form,
-      name: form.name.trim(),
+      status: form.status,
+      priority: form.priority,
       start_date: form.start_date || null,
       due_date: form.due_date || null,
       budget: form.budget === "" ? null : Number(form.budget),
       owner: form.owner.trim() || null,
-      description: form.description.trim() || null,
-      location: form.location.trim() || null,
     });
     setSaving(true);
     try {
-      if (editing.id) {
-        await api(`/api/projects/${editing.id}`, { method: "PUT", body });
-        toast.success("Project was updated.");
-      } else {
-        await api("/api/projects", { method: "POST", body });
-        toast.success("Project was added.");
-      }
+      await api(`/api/projects/${editing.id}`, { method: "PUT", body });
+      toast.success("Project was updated.");
       setEditing(null);
       load();
     } catch (err) {
@@ -228,9 +220,8 @@ export default function ProjectsPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-[13px] font-semibold text-slate-800">Project board</div>
-            <div className="text-[11px] text-slate-400">Change a status or priority right on the board. Click a project to see the supplies it used.</div>
+            <div className="text-[11px] text-slate-400">Maintenance adds projects from their portal. Set the owner, budget, dates, status and priority here. Click a project to see the supplies it used.</div>
           </div>
-          {/* + New project sits right beside the search (owner, 2026-10-16) */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <input
               type="search"
@@ -240,13 +231,6 @@ export default function ProjectsPage() {
               aria-label="Search project or owner"
               className="px-3 py-2 border border-black/[0.09] rounded-md text-xs flex-1 min-w-0 sm:flex-none sm:w-56 outline-none focus:border-cyan-400"
             />
-            <button
-              type="button"
-              onClick={openNew}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium rounded-lg transition-colors cursor-pointer whitespace-nowrap"
-            >
-              + New project
-            </button>
           </div>
         </div>
 
@@ -255,7 +239,7 @@ export default function ProjectsPage() {
           const rows = filtered.filter((p) => p.status === key);
           if (key === "done" && !rows.length) return null;
           return (
-            <BoardGroup key={key} title={s.label} tone={s.tone} count={rows.length} columns={columns} empty={key === "planned" ? "No planned projects. Add one with + New project." : "None."}>
+            <BoardGroup key={key} title={s.label} tone={s.tone} count={rows.length} columns={columns} empty={key === "planned" ? "No planned projects. Maintenance adds them from their portal." : "None."}>
               {rows.map((p) => (
                 <Fragment key={p.id}>
                   <BoardRow
@@ -279,7 +263,7 @@ export default function ProjectsPage() {
                       <Timeline key="t" p={p} />,
                       <span key="r" className="text-[11px]">
                         <b className="text-slate-800">{p.requests_released}</b> used
-                        {p.requests_waiting > 0 && <span className="text-[#d4861c]"> · {p.requests_waiting} waiting</span>}
+                        {p.requests_waiting > 0 && <span className="text-[#9f1239]"> · {p.requests_waiting} waiting</span>}
                       </span>,
                       <span key="c" className="text-[11px] font-mono">
                         <b className="text-slate-800">{peso(p.materials_cost)}</b>
@@ -325,14 +309,21 @@ export default function ProjectsPage() {
       {editing && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !saving && setEditing(null)}>
           <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl border border-black/[0.09] w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="px-5 py-3.5 border-b border-black/[0.09] text-[14px] font-semibold text-slate-800">{editing.id ? "Edit project" : "New project"}</div>
+            <div className="px-5 py-3.5 border-b border-black/[0.09] text-[14px] font-semibold text-slate-800">Edit project</div>
             <div className="p-5 grid grid-cols-2 gap-3">
               <DraftHint draft={formDraft} className="col-span-2" />
               {formErrors._general && <div className="col-span-2 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-[12px] text-red-600">{formErrors._general[0]}</div>}
+              {/* Set by Maintenance when they added the project: shown, not edited */}
+              <div className="col-span-2 rounded-lg border border-black/[0.07] bg-slate-50 px-3 py-2.5 flex flex-col gap-1.5">
+                <div className="text-[10.5px] uppercase tracking-wider text-slate-400">From Maintenance</div>
+                {[["Project name", editing.name], ["Description", editing.description], ["Location", editing.location]].map(([label, value]) => (
+                  <div key={label} className="grid grid-cols-[100px_1fr] gap-2 text-[12.5px]">
+                    <span className="text-slate-500">{label}</span>
+                    <span className="text-slate-800 break-words">{value || "—"}</span>
+                  </div>
+                ))}
+              </div>
               {[
-                ["name", "Project name *", "text", "e.g. Ice plant compressor repair", true],
-                ["description", "Description", "text", "What the job is", true],
-                ["location", "Location", "text", "Address of the job site, e.g. Blk 5 Lot 2, Muzon, San Jose del Monte, Bulacan", true],
                 ["owner", "Owner", "text", "Who is in charge", false],
                 ["budget", "Budget (₱)", "number", "Optional", false],
                 ["start_date", "Start date", "date", "", false],
@@ -346,7 +337,6 @@ export default function ProjectsPage() {
                     min={type === "number" ? 0 : key === "due_date" ? form.start_date || undefined : undefined}
                     onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                     placeholder={ph}
-                    required={key === "name"}
                     className="px-2.5 py-2 border border-black/[0.09] rounded-md text-[13px] outline-none focus:border-cyan-400"
                   />
                   {formErrors[key] && <span className="text-[10px] text-red-500">{formErrors[key][0]}</span>}

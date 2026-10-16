@@ -266,7 +266,7 @@ export default function LeaveRequestPage() {
 
             <div>
               <label htmlFor="lv-reason" className="block text-[12px] font-semibold text-slate-600 mb-1">Reason</label>
-              <textarea id="lv-reason" rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Write the reason for your leave." className={inputCls} />
+              <textarea id="lv-reason" rows={4} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Write the reason for your leave." className={`${inputCls} leave-textarea`} />
             </div>
 
             <div>

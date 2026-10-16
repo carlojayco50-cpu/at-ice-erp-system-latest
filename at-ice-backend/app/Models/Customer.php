@@ -17,8 +17,9 @@ class Customer extends Model
         'mop', 'is_active', 'notes',
     ];
 
-    // Customer type (filter on Admin > Customers). The chain/group (SM,
-    // Alfamart, Independent...) is free text.
+    // Customer type (filter on Admin > Customers; picks the reference prices,
+    // App\Models\ReferencePrice). The chain/group (SM, Alfamart,
+    // Independent...) is free text. Same list as src/lib/customerTypes.js.
     public const TYPES = [
         'supermarket' => 'Supermarket / Mall',
         'convenience_store' => 'Convenience Store',
@@ -26,6 +27,70 @@ class Customer extends Model
         'dealer' => 'Dealer / Reseller',
         'other' => 'Other',
     ];
+
+    // Known chains and their type, used to fill in a blank chain and type
+    // from the chain or from the start of the customer's name.
+    public const KNOWN_CHAINS = [
+        // Supermarket / Mall
+        'SM' => 'supermarket', 'Savemore' => 'supermarket', 'Puregold' => 'supermarket', 'Robinsons' => 'supermarket',
+        'Shopwise' => 'supermarket', 'WalterMart' => 'supermarket', 'Landmark' => 'supermarket', 'Metro' => 'supermarket',
+        'Gaisano' => 'supermarket', 'S&R' => 'supermarket', 'Ever' => 'supermarket', 'Super8' => 'supermarket',
+        'AllDay' => 'supermarket', "Rustan's" => 'supermarket', 'Unimart' => 'supermarket',
+        // Convenience Store
+        '7-Eleven' => 'convenience_store', 'Alfamart' => 'convenience_store', 'Ministop' => 'convenience_store',
+        'Lawson' => 'convenience_store', 'FamilyMart' => 'convenience_store', "Uncle John's" => 'convenience_store',
+        'Dali' => 'convenience_store', 'Puregold Jr.' => 'convenience_store',
+        // Restaurant / Food
+        'Jollibee' => 'restaurant', "McDonald's" => 'restaurant', 'Chowking' => 'restaurant', 'Mang Inasal' => 'restaurant',
+        'Greenwich' => 'restaurant', 'Red Ribbon' => 'restaurant', 'KFC' => 'restaurant', "Max's" => 'restaurant',
+        "Shakey's" => 'restaurant', 'Bonchon' => 'restaurant', 'Army Navy' => 'restaurant', 'Potato Corner' => 'restaurant',
+        'Zagu' => 'restaurant', 'Fruitas' => 'restaurant', 'Dunkin' => 'restaurant', 'Goto ni Juan' => 'restaurant',
+        'Siomai House' => 'restaurant', 'Zarks Burger' => 'restaurant', 'Chooks to Go' => 'restaurant', 'Cabalen' => 'restaurant',
+        "Giligan's" => 'restaurant', 'Kyu Kyu Ramen' => 'restaurant', 'Hongkong Noodles' => 'restaurant', 'Paotsin' => 'restaurant',
+        'Rice N Box' => 'restaurant', 'Buko Juan' => 'restaurant', 'Infinitea' => 'restaurant', 'Jessie Cane' => 'restaurant',
+        'Coco Shake' => 'restaurant', 'Samgyeop Masarap' => 'restaurant', 'Gong Cha' => 'restaurant', 'Chatime' => 'restaurant',
+        'Starbucks' => 'restaurant', 'Yellow Cab' => 'restaurant', 'Pizza Hut' => 'restaurant', "Angel's Burger" => 'restaurant',
+        'Savory' => 'restaurant',
+    ];
+
+    // Words in a name that say it is a food business (when no chain matches).
+    public const FOOD_WORDS = '/\b(food|foods|kitchen|grill|grille|chicken|tea|coffee|cafe|caf\x{e9}|bakery|bakeshop|waffles?|lemon|lemonade|float|buko|juice|shake|bibingka|lechon|bbq|barbecue|pizza|burger|ramen|noodles?|siomai|eatery|carinderia|restaurant|resto|bistro|kainan|milk ?tea|halo-?halo|avocado\w*)\b/iu';
+
+    // The type a customer most likely is: its known chain's type, else
+    // Restaurant / Food for a food word in the name, else null.
+    public static function guessType(?string $chain, ?string $name): ?string
+    {
+        if ($known = self::knownChain($chain, $name)) {
+            return self::KNOWN_CHAINS[$known];
+        }
+
+        return preg_match(self::FOOD_WORDS, (string) $name) ? 'restaurant' : null;
+    }
+
+    private static function normChain(?string $v): string
+    {
+        return trim(preg_replace('/[^a-z0-9&]+/', ' ', mb_strtolower((string) $v)));
+    }
+
+    // The known chain this chain is, or that the name starts with (the
+    // longest match: "Puregold Jr. Muzon" is Puregold Jr.), or null.
+    public static function knownChain(?string $chain, ?string $name = null): ?string
+    {
+        foreach (array_keys(self::KNOWN_CHAINS) as $k) {
+            if ($chain && self::normChain($k) === self::normChain($chain)) {
+                return $k;
+            }
+        }
+        $n = ' '.self::normChain($name).' ';
+        $best = null;
+        foreach (array_keys(self::KNOWN_CHAINS) as $k) {
+            if (str_starts_with($n, ' '.self::normChain($k).' ') && strlen($k) > strlen((string) $best)) {
+                $best = $k;
+            }
+        }
+
+        return $best;
+    }
 
     // Invoice code: 2 to 5 capital letters that start each of the customer's
     // invoice numbers (PG-20261013-001), so an invoice shows at once whose it is.

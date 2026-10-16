@@ -98,8 +98,10 @@ export default function SupportInboxPage() {
         ) : (
           <div className="divide-y divide-black/[0.06]">
             {messages.map((m) => (
-              <div key={m.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex-1 min-w-0">
+              // compact card: the message (avatar, name, badges, bubble, details)
+              // with its action right beside it, no wide gap across the page
+              <div key={m.id} className="support-card px-5 py-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="min-w-0 w-full sm:w-auto sm:max-w-[640px]">
                   <MessageBubble
                     from={m.customer?.name || "Customer"}
                     role="Customer"
@@ -126,7 +128,7 @@ export default function SupportInboxPage() {
                 <button
                   disabled={busyId === m.id}
                   onClick={() => setStatus(m, m.status === "resolved" ? "reopen" : "resolve")}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-md text-[12px] font-medium cursor-pointer disabled:opacity-50 ${
+                  className={`flex-shrink-0 self-center px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer disabled:opacity-50 ${
                     m.status === "resolved"
                       ? "border border-black/[0.09] text-slate-600 hover:bg-slate-50"
                       : "bg-cyan-500 hover:bg-cyan-600 text-white"

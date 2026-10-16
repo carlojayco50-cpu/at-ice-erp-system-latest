@@ -40,6 +40,25 @@ class CustomerPortalController extends Controller
         ]);
     }
 
+    // GET /api/my-delivery-notices: "may be delayed" notices of the last 7 days
+    // (a delivery moved to another driver), App\Support\DeliveryDispatch.
+    public function myDeliveryNotices(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+        if (! $customer) {
+            return response()->json(['message' => 'No customer account linked to this login.'], 404);
+        }
+
+        return response()->json(
+            \App\Models\DeliveryNotification::where('customer_id', $customer->id)
+                ->where('channel', 'portal')
+                ->where('sent_at', '>=', now()->subDays(7))
+                ->with('delivery:id,delivery_no,scheduled_date,status')
+                ->latest('sent_at')
+                ->get(['id', 'delivery_id', 'message', 'sent_at'])
+        );
+    }
+
     // GET /api/my-delivery-history
     // Named to avoid colliding with the Salesman's own GET /api/my-deliveries,
     // which is a completely different endpoint (DeliveryProofController@myDeliveries).

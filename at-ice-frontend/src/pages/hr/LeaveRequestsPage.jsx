@@ -20,6 +20,8 @@ import { openProtectedFile } from "../../lib/openFile";
 import EmptyState from "../../components/EmptyState";
 import MessageBubble from "../../components/MessageBubble";
 import { formatDateTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const SearchIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
@@ -167,6 +169,8 @@ export default function LeaveRequestsPage() {
   const credit = dl?.credits?.available ?? 0;
   const dlDays = dl ? Number(dl.total_days) : 0; // EL is already in days (hours ÷ hours per day)
 
+  const pager = usePagination(filtered);
+
   return (
     <HrLayout pageTitle="Leave Requests" breadcrumb="HRIS / Leave Requests">
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
@@ -217,7 +221,7 @@ export default function LeaveRequestsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((l) => (
+                  {pager.pageItems.map((l) => (
                     <tr key={l.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                       <td className="px-[18px] py-2.5 font-mono text-slate-600">{empCode(l.employee) || "—"}</td>
                       <td className="px-[18px] py-2.5 text-slate-800 font-medium whitespace-nowrap">{empName(l.employee)}</td>
@@ -247,6 +251,7 @@ export default function LeaveRequestsPage() {
                   ))}
                 </tbody>
               </table>
+              <Pagination pager={pager} />
             </div>
           )}
         </div>

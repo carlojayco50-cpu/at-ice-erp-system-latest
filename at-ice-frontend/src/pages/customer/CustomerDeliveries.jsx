@@ -4,6 +4,8 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import { formatDateTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -74,6 +76,8 @@ export default function CustomerDeliveries() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  // "may be delayed" notices: the delivery went to another driver
+  const [notices, setNotices] = useState([]);
 
   // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["deliveries"]);
@@ -90,6 +94,10 @@ export default function CustomerDeliveries() {
       }
     };
     load();
+    fetch("/api/my-delivery-notices", { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((n) => setNotices(toList(n)))
+      .catch(() => {});
   }, [live]);
 
   const counts = useMemo(() => {
@@ -110,8 +118,19 @@ export default function CustomerDeliveries() {
     });
   }, [deliveries, filter, search]);
 
+  const pager = usePagination(visible);
+
   return (
     <CustomerLayout pageTitle="My Deliveries" breadcrumb="Deliveries">
+      {notices.length > 0 && (
+        <div className="mb-3 flex flex-col gap-1.5">
+          {notices.map((n) => (
+            <div key={n.id} className="px-3.5 py-2.5 rounded-md bg-amber-50 border border-amber-200 text-[13px] text-amber-800">
+              {n.message}
+            </div>
+          ))}
+        </div>
+      )}
       {loading ? (
         <SkeletonList card />
       ) : error ? (
@@ -160,7 +179,7 @@ export default function CustomerDeliveries() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/[0.06]">
-                    {visible.map((d) => (
+                    {pager.pageItems.map((d) => (
                       <tr key={d.id} className="hover:bg-slate-50">
                         <td className="px-5 py-3 font-medium text-slate-800">{d.delivery_no}</td>
                         <td className="px-3 py-3 text-slate-600">{fmtDate(d.scheduled_date)}</td>
@@ -178,6 +197,7 @@ export default function CustomerDeliveries() {
                     ))}
                   </tbody>
                 </table>
+                <Pagination pager={pager} />
               </div>
             )}
           </div>

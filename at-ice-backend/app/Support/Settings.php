@@ -45,6 +45,8 @@ class Settings
         'leave.credits_cap' => [15, 'number', 'Most leave credits an employee can hold'],
         'leave.sl_filing_window_days' => [1, 'int', 'Days after returning that sick leave can still be filed'],
         'leave.vl_notice_days' => [14, 'int', 'Days ahead that vacation leave must be filed'],
+        // Deliveries (App\Support\DeliveryDispatch)
+        'delivery.delay_notice_hours' => [2, 'int', 'Hours before a reassigned or queued delivery that the store is told it may be late'],
         // 13th month
         'thirteenth.credit_date' => ['12-01', 'month-day', 'Date the 13th month pay is credited (MM-DD; legal deadline 12-24)'],
         // Retention (nothing is deleted on its own; Admin reviews)

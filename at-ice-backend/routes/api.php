@@ -8,7 +8,9 @@ use App\Http\Controllers\BiController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\CustomerPriceController;
+use App\Http\Controllers\DeliveryContractController;
 use App\Http\Controllers\DeliveryController;
+use App\Http\Controllers\DriverAssignmentController;
 use App\Http\Controllers\DeliveryProofController;
 use App\Http\Controllers\DocumentScanController;
 use App\Http\Controllers\EmployeeController;
@@ -149,9 +151,26 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // Delivery Management (Admin assigns deliveries)
         Route::get('deliveries', [DeliveryController::class, 'index']);
         Route::get('deliveries/driver-availability', [DeliveryController::class, 'driverAvailability']);
+        // Driver View / Store View for one day (?date=)
+        Route::get('deliveries/board', [DeliveryController::class, 'board']);
         Route::post('deliveries', [DeliveryController::class, 'store']);
         Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
+        Route::put('deliveries/{id}', [DeliveryController::class, 'update']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
+
+        // Delivery contracts: Admin approves, the daily deliveries are generated
+        Route::get('delivery-contracts', [DeliveryContractController::class, 'index']);
+        Route::post('delivery-contracts', [DeliveryContractController::class, 'store']);
+        Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
+        Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
+
+        // Which Driver handles which stores, and Drivers who are off (reassigned at random)
+        Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
+        Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
+        Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
+        Route::get('driver-leaves', [DriverAssignmentController::class, 'leaves']);
+        Route::post('driver-leaves', [DriverAssignmentController::class, 'storeLeave']);
+        Route::delete('driver-leaves/{id}', [DriverAssignmentController::class, 'destroyLeave']);
 
         Route::get('products-summary', [ProductController::class, 'index']);
 
@@ -200,6 +219,11 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('customer-prices', [CustomerPriceController::class, 'index']);
         Route::get('customer-prices/{customer}', [CustomerPriceController::class, 'show']);
         Route::put('customer-prices/{customer}', [CustomerPriceController::class, 'update']);
+        Route::delete('customer-prices/{customer}', [CustomerPriceController::class, 'reset']);
+        // Reference prices per customer type (what a customer pays with no price of its own)
+        Route::get('reference-prices', [CustomerPriceController::class, 'referenceIndex']);
+        Route::put('reference-prices/{type}', [CustomerPriceController::class, 'referenceUpdate']);
+        Route::post('reference-prices/{type}/apply', [CustomerPriceController::class, 'referenceApply']);
 
         // Pickup Logs (Admin full access: Alexandra/J-Maxine plant pickups, no price/receipt)
         Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
@@ -214,7 +238,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // Projects board (monday.com style): maintenance and plant jobs and
         // the supplies their stock-out requests used.
         Route::get('projects', [ProjectController::class, 'index']);
-        Route::post('projects', [ProjectController::class, 'store']);
         Route::put('projects/{project}', [ProjectController::class, 'update']);
         Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
 
@@ -350,6 +373,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
         Route::get('stock-out-items', [StockOutRequestController::class, 'items']);
         Route::get('project-options', [ProjectController::class, 'options']);
+        // Maintenance adds projects (name, description, location); Admin sets the rest
+        Route::get('my-projects', [ProjectController::class, 'mine']);
+        Route::post('my-projects', [ProjectController::class, 'store'])->middleware('throttle:20,1');
 
         // Maintenance views its own requests (the controller filters by
         // requester). The Admin reaches these same two endpoints through the
@@ -382,6 +408,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // customer via customers.user_id (see CustomerPortalController).
         Route::get('my-profile', [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
+        Route::get('my-delivery-notices', [CustomerPortalController::class, 'myDeliveryNotices']);
         Route::get('my-receipts', [CustomerPortalController::class, 'myReceipts']);
         // Proof of payment for an unpaid invoice (Admin reviews it; it does not mark it paid)
         Route::post('my-receipts/{id}/payment-proofs', [PaymentProofController::class, 'myStore'])->middleware('throttle:10,1');
