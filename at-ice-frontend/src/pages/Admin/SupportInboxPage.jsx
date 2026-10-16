@@ -3,6 +3,7 @@ import AdminLayout from "../../components/AdminLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
 import MessageBubble from "../../components/MessageBubble";
+import { formatDateTime } from "../../lib/time";
 
 // Dispatch room inbox: messages customers send from Contact Support.
 // Only the Admin receives them.
@@ -19,7 +20,7 @@ const FILTERS = [
 ];
 
 const fmtDateTime = (s) =>
-  s ? new Date(s).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  s ? formatDateTime(s) : "";
 
 export default function SupportInboxPage() {
   const [filter, setFilter] = useState("open");

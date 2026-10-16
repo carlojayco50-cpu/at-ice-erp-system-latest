@@ -162,7 +162,7 @@ class EmployeeAttendanceKioskTest extends TestCase
         $lines = array_values(array_filter(explode("\n", $csv)));
         $this->assertCount(4, $lines);
         $this->assertStringStartsWith('"Employee ID",Name,Position,Date', $lines[0]);
-        $this->assertStringStartsWith('EMP-0001,"Ana Reyes",Checker,2026-10-14,09:03:10', $lines[1]);
+        $this->assertStringStartsWith('EMP-0001,"Ana Reyes",Checker,2026-10-14,"9:03:10 AM"', $lines[1]);
     }
 
     public function test_settings_change_the_kiosk_lock_count(): void

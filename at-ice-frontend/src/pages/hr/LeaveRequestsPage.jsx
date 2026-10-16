@@ -13,10 +13,13 @@ import { useSearchParams } from "react-router-dom";
 import HrLayout from "../../components/HrLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import { openProtectedFile } from "../../lib/openFile";
 import EmptyState from "../../components/EmptyState";
 import MessageBubble from "../../components/MessageBubble";
+import { formatDateTime } from "../../lib/time";
 
 const SearchIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
@@ -47,7 +50,7 @@ const TABS = [["pending", "Pending"], ["approved", "Approved"], ["rejected", "Re
 const empName = (e) => (e ? [e.first_name, e.middle_initial ? `${e.middle_initial}.` : "", e.last_name, e.suffix].filter(Boolean).join(" ") : "—");
 const empCode = (e) => (typeof e?.employee_id === "string" ? e.employee_id : "");
 const fmtDate = (d) => (d ? new Date(`${String(d).slice(0, 10)}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—");
-const fmtDateTime = (d) => (d ? new Date(d).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
+const fmtDateTime = (d) => (d ? formatDateTime(d) : "—");
 const num = (n) => { const v = Number(n); return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0$/, ""); };
 const length = (l) => (l.hours ? `${num(l.hours)} h` : l.is_half_day ? "0.5 day" : `${num(l.total_days)} day${Number(l.total_days) === 1 ? "" : "s"}`);
 const dates = (l) => (String(l.start_date).slice(0, 10) === String(l.end_date).slice(0, 10) ? fmtDate(l.start_date) : `${fmtDate(l.start_date)} – ${fmtDate(l.end_date)}`);
@@ -75,10 +78,10 @@ export default function LeaveRequestsPage() {
   const [tab, setTab] = useState("pending");
   const [search, setSearch] = useState("");
 
-  const [decision, setDecision] = useState(null); // { leave, status }
-  const [remarks, setRemarks] = useState("");
-  const [rejectReason, setRejectReason] = useState("");
-  const [slPaid, setSlPaid] = useState(true);
+  // Approve/Reject modal: reopens after a refresh with what was typed.
+  const decisionDraft = useDraft("leave:decision", { decision: null, remarks: "", rejectReason: "", slPaid: true }, { when: (v) => !!v.decision });
+  const { decision, remarks, rejectReason, slPaid } = decisionDraft.values; // decision: { leave, status }
+  const { decision: setDecision, remarks: setRemarks, rejectReason: setRejectReason, slPaid: setSlPaid } = decisionDraft.set;
   const [deciding, setDeciding] = useState(false);
   const [decisionError, setDecisionError] = useState("");
   const [viewing, setViewing] = useState(null);
@@ -253,6 +256,7 @@ export default function LeaveRequestsPage() {
       {decision && (
         <Modal title={decision.status === "approved" ? "Approve leave" : "Reject leave"} onClose={() => !deciding && setDecision(null)}>
           <div className="p-5 flex flex-col gap-3 text-xs">
+            <DraftHint draft={decisionDraft} />
             <div className="text-slate-700">
               <b>{empName(dl.employee)}</b> <span className="font-mono text-slate-400">{empCode(dl.employee)}</span> · {typeLabel(dl.leave_type)} · {dates(dl)} · {length(dl)}
             </div>

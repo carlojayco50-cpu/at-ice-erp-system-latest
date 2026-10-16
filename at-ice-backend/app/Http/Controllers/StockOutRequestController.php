@@ -88,6 +88,7 @@ class StockOutRequestController extends Controller
         ], [
             'project_id.exists' => 'That project is closed or no longer exists. Choose another one.',
             'product_id.required' => 'Choose the item you need.',
+            'purpose.required' => 'Enter the purpose. Choosing a project fills it from the project description.',
             'product_id.exists' => 'That item is no longer in the inventory.',
         ]);
 

@@ -21,6 +21,7 @@ import { fullName } from "../../lib/names";
 import { payPeriodLabel } from "../../lib/payPeriod";
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import { toast } from "../../lib/toast";
+import { formatDateTime, formatTime } from "../../lib/time";
 
 const SearchIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 
@@ -30,15 +31,7 @@ const todayLocal = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, 
 const addDays = (ymd, n) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
 // "08:05:00" -> "8:05:00 AM" (seconds kept: late is counted from them)
-const fmtTime = (t) => {
-  if (!t) return "—";
-  const m = String(t).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  if (!m) return String(t);
-  let h = Number(m[1]);
-  const ap = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return `${h}:${m[2]}${m[3] ? `:${m[3]}` : ""} ${ap}`;
-};
+const fmtTime = (t) => formatTime(t, { seconds: true });
 const fmtHours = (h) => { const n = Number(h); return !h || Number.isNaN(n) || n === 0 ? "—" : n.toFixed(2); };
 // A record's date as YYYY-MM-DD in Philippine time
 const recordDay = (d) => (d ? new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }) : "");
@@ -194,7 +187,7 @@ export default function AttendancePage() {
       th, td { border-bottom: 1px solid #e2e8f0; padding: 5px 6px; text-align: left; } th { background: #f1f5f9; }
     </style></head><body><div class="sheet">
       <h1>Attendance ${exactEmployee ? `· ${esc(exactEmployee.code)} ${esc(exactEmployee.name)}` : "· All employees"}</h1>
-      <div class="sub">${esc(payPeriodLabel(range))} · ${shown.length} record${shown.length === 1 ? "" : "s"} · ${esc(activeCard?.label || "")} · printed ${new Date().toLocaleString("en-PH")}</div>
+      <div class="sub">${esc(payPeriodLabel(range))} · ${shown.length} record${shown.length === 1 ? "" : "s"} · ${esc(activeCard?.label || "")} · printed ${formatDateTime(new Date())}</div>
       <table><thead><tr><th>Employee ID</th><th>Name</th><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th><th>Late (min)</th><th>Status</th><th>Notes</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No records.</td></tr>'}</tbody></table>
     </div></body></html>`);
   };

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatTime } from "../lib/time";
 
 // Live date and time for the top bars of every portal, updated every second.
 // "Wed, Oct 8, 2026 · 9:41:05 AM" (the date part hides on narrow screens when
@@ -12,7 +13,7 @@ export default function LiveClock({ compact = false, className = "" }) {
   }, []);
 
   const date = now.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-  const time = now.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  const time = formatTime(now, { seconds: true });
 
   return (
     <div

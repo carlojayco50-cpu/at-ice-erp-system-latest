@@ -75,6 +75,14 @@
   box-shadow: inset 0 0 0 9999px var(--neu-veil) !important;
 }
 .neu.ice-scope > .min-h-screen:is(.bg-slate-50, .bg-white) { background-color: transparent !important; }
+/* The phone screens (Checker, Salesman, Maintenance, Driver) keep a readable
+   width on a desktop monitor instead of stretching edge to edge. */
+@media (min-width: 1024px) {
+  .neu.ice-scope > :not(style, .fixed) {
+    max-width: 1120px;
+    margin-inline: auto;
+  }
+}
 
 /* Every white surface takes the base color (round knobs and dots excepted). */
 .neu :is(div, form, section, aside, header, nav, footer, table, label):is(.bg-white, [class*="bg-white/"]):not(.rounded-full) {
@@ -198,7 +206,7 @@
 }
 
 /* Wells: search boxes, read-only rows and segmented tabs are pressed in */
-:is(.neu .ice-main, .neu.ice-scope) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):not(.min-h-screen) {
+:is(.neu .ice-main, .neu.ice-scope) :is(div, a, span):is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl):not(.min-h-screen) {
   background-color: var(--neu-bg) !important;
   border-color: transparent !important;
   box-shadow: var(--neu-inset-sm);
@@ -226,21 +234,34 @@
 
 /* Search boxes: an icon and a field inside one bordered row. The row is the
    dent; the field inside it stays flat, so there is never a box in a box. */
-:is(.neu .ice-main, .neu.ice-scope) div.flex.items-center.border:has(> :is(input, select)) {
+/* #search-row never matches; it lifts this rule above the card-in-card rule */
+:is(.neu .ice-main, .neu.ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)):not(#search-row) {
   background-color: var(--neu-bg) !important;
   border-color: transparent !important;
   border-radius: var(--neu-radius-sm) !important;
-  box-shadow: var(--neu-inset-sm);
+  /* !important: a white search row is also a "card" to the card rules above */
+  box-shadow: var(--neu-inset-sm) !important;
 }
-:is(.neu .ice-main, .neu.ice-scope) div.flex.items-center.border:has(> :is(input, select)) > :is(input, select),
-:is(.neu .ice-main, .neu.ice-scope) div.flex.items-center.border:has(> :is(input, select)) > :is(input, select):focus {
+:is(.neu .ice-main, .neu.ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) > :is(input, select),
+:is(.neu .ice-main, .neu.ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) > :is(input, select):focus {
   box-shadow: none !important;
   background-color: transparent !important;
 }
 /* ...except a bare field that sits inside a well (search boxes): the well is the dent */
-:is(.neu .ice-main, .neu.ice-scope) div:is(.bg-slate-50, .bg-slate-100) > :is(input, select) {
+:is(.neu .ice-main, .neu.ice-scope) div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl) > :is(input, select) {
   box-shadow: none !important;
   background-color: transparent !important;
+}
+/* Section bars (a card's filter bar or sub-header, square, tinted slate-50):
+   the card's own material, never a lighter stripe; the fields on it stay
+   pressed in like every other field. */
+:is(.neu .ice-main, .neu.ice-scope) :is(div, form, section, header):is(.bg-slate-50, .bg-slate-100, .bg-gray-50, [class*="bg-slate-50/"]):not(.rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl, .rounded-full, .min-h-screen) {
+  background-color: transparent !important;
+}
+
+/* Pill filters (All, Pending, Paid...) are one height on every page */
+:is(.neu .ice-main, .neu.ice-scope) button.rounded-full:is([class*=" px-3"], [class^="px-3"], [class*=" px-4"], [class^="px-4"]) {
+  min-height: 32px;
 }
 /* A clicked field shows no cyan ring; it stays the same dent. */
 
@@ -248,6 +269,7 @@
    padding (Cancel, Close in dialogs) are the same raised button, so a dialog's
    actions all look alike. */
 .neu button:is(.bg-white, [class*="bg-white/"], .bg-slate-50, .bg-slate-100),
+.neu a:is(.bg-white, [class*="bg-white/"]):is(.border, [class*=" px-"], [class^="px-"]):not(.rounded-full),
 :is(.neu .ice-main, .neu.ice-scope) button.border:not([class^="bg-"], [class*=" bg-"]),
 :is(.neu .ice-main, .neu.ice-scope) button:is([class*=" px-3"], [class^="px-3"], [class*=" px-4"], [class^="px-4"]):not([class^="bg-"], [class*=" bg-"], .border, .text-left) {
   background-color: var(--neu-bg) !important;
@@ -539,6 +561,10 @@
   background: var(--neu-bg); color: var(--neu-text); box-shadow: var(--neu-inset-sm); font: inherit;
 }
 .soft-cal-time input::-webkit-calendar-picker-indicator { display: none; }
+.soft-cal-time select {
+  flex: 1; height: 36px; padding: 0 8px; border: 0; border-radius: 10px; outline: none;
+  background: var(--neu-bg); color: var(--neu-text); box-shadow: var(--neu-inset-sm); font: inherit;
+}
 .soft-cal-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
 .soft-link { padding: 6px 10px; border-radius: 10px; color: var(--neu-accent); font-weight: 600; font-size: 12px; }
 .soft-link:hover { box-shadow: var(--neu-raised-sm); }

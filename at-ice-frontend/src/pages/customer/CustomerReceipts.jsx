@@ -4,6 +4,11 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import { printReceipt } from "../../lib/printReceipt";
+import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
+import FileField from "../../components/FileField";
+import { PROOF_ACCEPT, PROOF_MAX_BYTES, PROOF_METHODS, PROOF_STATUS, openProofFile } from "../../lib/paymentProof";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -65,7 +70,11 @@ export default function CustomerReceipts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
-  const [selected, setSelected] = useState(null);
+  // The open invoice comes back after a refresh (with its payment proof draft).
+  const openDraft = useDraft("receipts:open", { selectedId: null }, { when: (v) => v.selectedId != null });
+  const { selectedId } = openDraft.values;
+  const setSelectedId = openDraft.set.selectedId;
+  const [reload, setReload] = useState(0);
 
   // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["receipts"]);
@@ -82,7 +91,10 @@ export default function CustomerReceipts() {
       }
     };
     load();
-  }, [live]);
+  }, [live, reload]);
+
+  // Taken from the list, so a sent proof shows at once after the reload.
+  const selected = receipts.find((r) => r.id === selectedId) || null;
 
   const summary = useMemo(() => {
     const sum = (list) => list.reduce((s, r) => s + Number(r.total_amount || 0), 0);
@@ -135,9 +147,9 @@ export default function CustomerReceipts() {
           <div className="bg-white border border-black/[0.09] rounded-xl px-5 py-4">
             <div className="text-[13px] font-semibold text-slate-800">How to pay</div>
             <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              Pay Bella Erin directly using the payment method agreed in your contract. Once your payment is received,
-              the Bella Erin office marks the receipt as Paid and it will update here. This page does not accept payments
-              or change a receipt's status.
+              Pay Bella Erin directly using the payment method agreed in your contract. After paying, open the invoice
+              and send a photo or PDF of your bank or GCash receipt as proof. The Bella Erin office checks it and marks
+              the invoice as Paid; until then it stays unpaid. This page does not accept payments.
             </p>
             <p className="text-xs text-slate-400 mt-1.5">
               Questions about a receipt? See Contact Support in the menu.
@@ -183,9 +195,23 @@ export default function CustomerReceipts() {
                         <td className="px-5 py-3 font-medium text-slate-800">{r.receipt_no}</td>
                         <td className="px-3 py-3 text-slate-600 hidden sm:table-cell">{fmtDate(r.created_at)}</td>
                         <td className="px-3 py-3 text-slate-800 text-right">{peso(r.total_amount)}</td>
-                        <td className="px-3 py-3"><Badge status={r.payment_status} /></td>
+                        <td className="px-3 py-3">
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <Badge status={r.payment_status} />
+                            {r.payment_proofs?.[0] && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedId(r.id)}
+                                title="See your payment proof"
+                                className={`px-2 py-0.5 rounded-full border text-[10px] font-medium hover:underline ${PROOF_STATUS[r.payment_proofs[0].status]?.cls || ""}`}
+                              >
+                                Proof {PROOF_STATUS[r.payment_proofs[0].status]?.label.toLowerCase()}
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-3 text-right">
-                          <button onClick={() => setSelected(r)} className="text-cyan-600 hover:text-cyan-700 font-medium">
+                          <button onClick={() => setSelectedId(r.id)} className="text-cyan-600 hover:text-cyan-700 font-medium">
                             View
                           </button>
                         </td>
@@ -201,7 +227,7 @@ export default function CustomerReceipts() {
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-950/60" onClick={() => setSelected(null)} />
+          <div className="fixed inset-0 bg-slate-950/60" onClick={() => setSelectedId(null)} />
           <div className="relative bg-white rounded-xl border border-black/[0.09] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <div>
@@ -212,7 +238,7 @@ export default function CustomerReceipts() {
                 <button onClick={() => printReceipt(selected)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]">
                   <PrintIcon /> Print
                 </button>
-                <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700 text-lg leading-none px-2" aria-label="Close">
+                <button onClick={() => setSelectedId(null)} className="text-slate-400 hover:text-slate-700 text-lg leading-none px-2" aria-label="Close">
                   &times;
                 </button>
               </div>
@@ -251,10 +277,137 @@ export default function CustomerReceipts() {
                 <span className="text-slate-500">Total</span>
                 <span className="font-semibold text-slate-800">{peso(selected.total_amount)}</span>
               </div>
+              <PaymentProofSection key={selected.id} receipt={selected} onSent={() => setReload((n) => n + 1)} />
             </div>
           </div>
         </div>
       )}
     </CustomerLayout>
+  );
+}
+// Proof of payment for one invoice: past submissions with their status (and the
+// reason when rejected), and, for an unpaid or overdue invoice with nothing
+// under review, the form to send one. Sending it does not mark the invoice paid.
+function PaymentProofSection({ receipt, onSent }) {
+  const [file, setFile] = useState(null);
+  // Method and reference survive a refresh; the file has to be chosen again.
+  const draft = useDraft(`receipts:proof:${receipt.id}`, { method: "", referenceNo: "" });
+  const { method, referenceNo } = draft.values;
+  const { method: setMethod, referenceNo: setReferenceNo } = draft.set;
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  const proofs = receipt.payment_proofs || [];
+  const pending = proofs.some((p) => p.status === "pending");
+  const canSend = receipt.payment_status !== "paid" && !pending;
+  const lastRejected = proofs[0]?.status === "rejected";
+
+  const send = async (e) => {
+    e.preventDefault();
+    if (!file) { setError("Attach a photo or PDF of your payment receipt."); return; }
+    setSending(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      if (method) body.append("method", method);
+      if (referenceNo.trim()) body.append("reference_no", referenceNo.trim());
+      const res = await fetch(`/api/my-receipts/${receipt.id}/payment-proofs`, { method: "POST", headers: authHeaders(), body });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const first = data?.errors && Object.values(data.errors)[0]?.[0];
+        throw new Error(first || data?.message || "Couldn't send the payment proof.");
+      }
+      toast.success(`Payment proof for ${receipt.receipt_no} sent. We'll check it soon.`);
+      setFile(null); draft.clear();
+      onSent();
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const open = (p) => openProofFile(`/api/my-payment-proofs/${p.id}/file`, p.original_name).catch((err) => toast.error(err.message));
+  const field = "w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-xs outline-none focus:border-cyan-500";
+
+  if (!proofs.length && receipt.payment_status === "paid") return null;
+
+  return (
+    <div className="mt-5 pt-4 border-t border-black/[0.09]">
+      <div className="text-xs font-semibold text-slate-800">Payment proof</div>
+
+      {proofs.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-2">
+          {proofs.map((p) => {
+            const st = PROOF_STATUS[p.status] || PROOF_STATUS.pending;
+            return (
+              <li key={p.id} className="border border-black/[0.09] rounded-md px-3 py-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${st.cls}`}>{st.label}</span>
+                  <span className="text-slate-400">Sent {fmtDate(p.created_at)}</span>
+                </div>
+                <div className="mt-1.5 text-slate-600">
+                  {[p.method_label, p.reference_no && `Ref. ${p.reference_no}`].filter(Boolean).join(" · ") || "No method or reference given"}
+                </div>
+                {p.status === "rejected" && p.reject_reason && (
+                  <div className="mt-1.5 px-2 py-1.5 rounded bg-red-500/[0.06] text-red-600">Reason: {p.reject_reason}</div>
+                )}
+                <button type="button" onClick={() => open(p)} className="mt-1.5 text-cyan-600 hover:text-cyan-700 font-medium">
+                  View file{p.is_pdf ? " (PDF)" : ""}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {pending && (
+        <p className="mt-2 text-[11px] text-slate-500">
+          Your proof is being checked. The invoice stays unpaid until it is approved.
+        </p>
+      )}
+
+      {canSend && (
+        <form onSubmit={send} className="mt-3 flex flex-col gap-2.5">
+          <p className="text-[11px] text-slate-500">
+            {lastRejected ? "Send a new proof with the issue fixed." : "Already paid? Send a photo or PDF of your bank or GCash receipt."} It
+            does not mark the invoice paid; the office checks it first.
+          </p>
+          <DraftHint draft={draft} />
+          <div className="block">
+            <span className="text-[11px] text-slate-500">Receipt photo or PDF<span className="text-red-500"> *</span></span>
+            <FileField
+              className="mt-1"
+              file={file}
+              onChange={setFile}
+              accept={PROOF_ACCEPT}
+              maxBytes={PROOF_MAX_BYTES}
+              onError={setError}
+              label="Choose a photo or PDF"
+              hint="PNG, JPG, WEBP or PDF, up to 5 MB"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-[11px] text-slate-500">Method</span>
+              <select value={method} onChange={(e) => setMethod(e.target.value)} className={`mt-1 ${field}`}>
+                <option value="">Not set</option>
+                {Object.entries(PROOF_METHODS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[11px] text-slate-500">Reference No.</span>
+              <input value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} maxLength={100} placeholder="Optional" className={`mt-1 ${field}`} />
+            </label>
+          </div>
+          {error && <div className="text-[11px] text-red-600">{error}</div>}
+          <button type="submit" disabled={sending} className="self-end px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium disabled:opacity-50">
+            {sending ? "Sending…" : "Send payment proof"}
+          </button>
+        </form>
+      )}
+    </div>
   );
 }

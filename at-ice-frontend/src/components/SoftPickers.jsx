@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import TimeSelect from "./TimeSelect";
 
 // Soft UI popups for every dropdown (<select>) and date field (<input type=
 // "date" | "month" | "datetime-local">) in the app. The browser draws those
@@ -337,14 +338,7 @@ function Calendar({ el, close }) {
       {type === "datetime-local" && view === "days" && (
         <div className="soft-cal-time">
           <label htmlFor="soft-time">Time</label>
-          <input
-            id="soft-time"
-            type="time"
-            data-native
-            value={time}
-            step={300}
-            onChange={(e) => commitTime(e.target.value)}
-          />
+          <TimeSelect id="soft-time" value={time} step={5} onChange={(e) => commitTime(e.target.value)} className="flex-1" />
         </div>
       )}
 

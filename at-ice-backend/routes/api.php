@@ -22,6 +22,7 @@ use App\Http\Controllers\LiveFeedController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PaymentProofController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PickupLogController;
 use App\Http\Controllers\PlaceSearchController;
@@ -84,6 +85,10 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    // Whether the signed-in employee has timed in at the kiosk (Checker pages).
+    Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([
+        'timed_in' => \App\Support\OnShift::isTimedIn($request->user()),
+    ]));
 
     // Limits the forms share with the server (config/atice.php)
     Route::get('/limits', fn () => response()->json(['max_product_quantity' => config('atice.max_product_quantity')]));
@@ -146,6 +151,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
         // Delivery Management (Admin assigns deliveries)
         Route::get('deliveries', [DeliveryController::class, 'index']);
+        Route::get('deliveries/driver-availability', [DeliveryController::class, 'driverAvailability']);
         Route::post('deliveries', [DeliveryController::class, 'store']);
         Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
@@ -162,6 +168,12 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('receipts', [ReceiptController::class, 'index']);
         Route::get('receipts/{id}', [ReceiptController::class, 'show']);
         Route::patch('receipts/{id}/paid', [ReceiptController::class, 'markAsPaid']);
+
+        // Customer payment proofs: Admin opens the file, then approves (invoice paid) or rejects
+        Route::get('payment-proofs', [PaymentProofController::class, 'index']);
+        Route::get('payment-proofs/{id}/file', [PaymentProofController::class, 'file']);
+        Route::patch('payment-proofs/{id}/approve', [PaymentProofController::class, 'approve']);
+        Route::patch('payment-proofs/{id}/reject', [PaymentProofController::class, 'reject']);
 
         // CRM
         Route::get('customers', [CustomerController::class, 'index']);
@@ -296,7 +308,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     });
 
     // EMPLOYEE: CHECKER ROUTES
-    Route::middleware('role:employee,checker')->group(function () {
+    // timed.in: a Checker saves nothing until they have timed in at the kiosk
+    // today (reads still work). Admin passes.
+    Route::middleware(['role:employee,checker', 'timed.in'])->group(function () {
 
         Route::apiResource('products', ProductController::class);
 
@@ -317,8 +331,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('pickup-logs/{pickupLog}', [PickupLogController::class, 'show']);
 
         // Ice Loading Count (simple count log per delivery, NOT a stock deduction)
+        // One count per delivery: deliveries lists which are already counted.
         Route::get('ice-loadings', [IceLoadingController::class, 'index']);
-        Route::get('ice-loadings/deliveries', [IceLoadingController::class, 'todaysDeliveries']);
+        Route::get('ice-loadings/deliveries', [IceLoadingController::class, 'deliveries']);
         Route::post('ice-loadings', [IceLoadingController::class, 'store']);
         Route::get('ice-loadings/{iceLoading}', [IceLoadingController::class, 'show']);
 
@@ -373,6 +388,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('my-profile', [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
         Route::get('my-receipts', [CustomerPortalController::class, 'myReceipts']);
+        // Proof of payment for an unpaid invoice (Admin reviews it; it does not mark it paid)
+        Route::post('my-receipts/{id}/payment-proofs', [PaymentProofController::class, 'myStore'])->middleware('throttle:10,1');
+        Route::get('my-payment-proofs/{id}/file', [PaymentProofController::class, 'myFile']);
         Route::get('my-delivery-proofs', [CustomerPortalController::class, 'myDeliveryProofs']);
         Route::get('my-prices', [CustomerPortalController::class, 'myPrices']);
 

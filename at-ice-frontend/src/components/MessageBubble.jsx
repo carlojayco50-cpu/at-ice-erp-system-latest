@@ -1,11 +1,12 @@
 import { initialsOf } from "../lib/initials";
+import { formatDateTime } from "../lib/time";
 
 // One look for every written message in the system (support messages, leave
 // reasons, HR notes): a chat bubble with the sender's initials, name and time,
 // so it reads as a message at a glance. `mine` puts it on the right in cyan
 // (sent by the person viewing); otherwise it is on the left in grey.
 const fmtWhen = (v) =>
-  v ? new Date(v).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  v ? formatDateTime(v) : "";
 
 export default function MessageBubble({ from, role, at, mine = false, tag, children, footer, className = "" }) {
   return (

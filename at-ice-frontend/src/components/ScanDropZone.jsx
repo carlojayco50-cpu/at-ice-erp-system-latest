@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SCAN_ACCEPT, scanDocument } from "@/lib/scanDocument";
 import { toast } from "@/lib/toast";
 
@@ -8,17 +8,29 @@ import { toast } from "@/lib/toast";
 // what was read, { person: { first_name, middle_initial, last_name, suffix,
 // phone, email, license_number, license_expiry } | null, address: {...} | null }
 // (lib/scanDocument.js), and the file itself. The page fills its form; use filledFrom() so a value
-// the document does not show is left alone.
+// the document does not show is left alone. After a scan the file name shows
+// with ✕ Remove, which forgets the file (onRemove, e.g. drop an attached
+// resume) and resets the input so the same file can be chosen again; the
+// fields already filled in stay.
 const TEXT = {
   resume: { title: "Drop the resume or CV here", types: "PDF or Word .docx", label: "Scan a resume or CV" },
   license: { title: "Drop the driver's license here", types: "photo or PDF of the LTO license", label: "Scan a driver's license" },
 };
 
-export default function ScanDropZone({ onScan, kind = "resume", fills = "name, mobile number and address" }) {
+export default function ScanDropZone({ onScan, onRemove, kind = "resume", fills = "name, mobile number and address" }) {
   const text = TEXT[kind];
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
   const [over, setOver] = useState(false);
+  const inputRef = useRef(null);
+
+  const remove = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (inputRef.current) inputRef.current.value = "";
+    setDone("");
+    onRemove?.();
+  };
 
   const read = async (file) => {
     if (!file || busy) return;
@@ -55,6 +67,7 @@ export default function ScanDropZone({ onScan, kind = "resume", fills = "name, m
       }`}
     >
       <input
+        ref={inputRef}
         type="file"
         accept={SCAN_ACCEPT[kind]}
         disabled={busy}
@@ -75,6 +88,16 @@ export default function ScanDropZone({ onScan, kind = "resume", fills = "name, m
             ? `Filled in from ${done}. Check every field before saving. Drop another file to scan again.`
             : `or click to choose (${text.types}). Fills in the ${fills}.`}
       </span>
+      {done && !busy && (
+        <button
+          type="button"
+          onClick={remove}
+          aria-label={`Remove ${done}`}
+          className="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium text-red-600 bg-white/80 hover:bg-red-50 cursor-pointer"
+        >
+          ✕ Remove
+        </button>
+      )}
     </label>
   );
 }

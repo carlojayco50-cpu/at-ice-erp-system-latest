@@ -1,5 +1,6 @@
 import { COMPANY } from "./company";
 import { PRINT_BASE_CSS, printDocument } from "./printDocument";
+import { formatDateTime } from "./time";
 
 // Prints a delivery invoice (Admin > Invoices and Customer > Invoices & Balance).
 // It is a system copy for the customer, not a BIR official receipt, and says
@@ -105,7 +106,7 @@ export function printReceipt(receipt, customer) {
 
   <div class="notice">
     This is a system-generated delivery invoice for the customer's records. It is not an official receipt (BIR).<br>
-    Printed ${esc(new Date().toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }))} · AT-ICE ERP
+    Printed ${esc(formatDateTime(new Date()))} · AT-ICE ERP
   </div>
 </div></body></html>`;
 

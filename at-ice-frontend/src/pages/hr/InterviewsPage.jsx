@@ -5,15 +5,19 @@ import PhoneInput from "../../components/PhoneInput";
 import { MOBILE_REGEX, MOBILE_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
+import { previewProtectedFile } from "../../lib/preview";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import AddressFields from "../../components/AddressFields";
 import ScanDropZone from "../../components/ScanDropZone";
+import DraftHint from "../../components/DraftHint";
+import { useDraft } from "../../lib/useDraft";
 import { filledFrom } from "../../lib/scanDocument";
 import { fullName } from "../../lib/names";
 import { APPLICANT_POSITIONS, applyUrl, isLocalTesting } from "../../lib/positions";
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import QRCode from "qrcode";
+import { formatDateTime, formatTime } from "../../lib/time";
 
 const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
 const SearchIcon  = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
@@ -70,12 +74,12 @@ const parseLocal = (s) => {
 const fmtInterview = (s) => {
   const d = parseLocal(s);
   if (!d) return "Not scheduled";
-  return d.toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return formatDateTime(d, { tz: false });
 };
 const fmtDateTime = (s) => {
   if (!s) return "—";
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  return Number.isNaN(d.getTime()) ? String(s) : formatDateTime(d);
 };
 // Value for <input type="datetime-local">: "2026-10-05T09:00"
 const toInputValue = (s) => (s ? String(s).replace(" ", "T").slice(0, 16) : "");
@@ -111,7 +115,7 @@ const scheduleHint = (a) => {
 
 const ADDRESS_KEYS = ["block_lot", "street", "subdivision", "barangay", "barangay_code", "city", "province", "region", "postal_code"];
 const EMPTY_ADDRESS = Object.fromEntries(ADDRESS_KEYS.map((k) => [k, ""]));
-const EMPTY_FORM = { name: "", email: "", phone: "", position_applied: "", interview_date: "", interview_minutes: "30", notes: "", resumeFile: null, ...EMPTY_ADDRESS };
+const EMPTY_FORM = { name: "", email: "", phone: "", position_applied: "", interview_date: "", interview_minutes: "30", notes: "", resumeFile: null, removeResume: false, ...EMPTY_ADDRESS };
 
 // Interviews take 30 or 45 minutes and may not overlap (the server checks
 // too: ApplicantController@assertFreeSlot). The pending interview that
@@ -130,7 +134,7 @@ function interviewClash(applicants, startValue, minutes, exceptId) {
     return s < end && e > start;
   }) || null;
 }
-const fmtTime = (d) => d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+const fmtTime = (d) => formatTime(d, { tz: false });
 
 // "Blk 5 Lot 12, Rizal St, Brgy. Muzon, San Jose Del Monte, Bulacan"
 const addressLine = (a) =>
@@ -224,28 +228,14 @@ function ApplyQrModal({ onClose }) {
   );
 }
 
-// Opens the resume or CV an applicant attached (GET applicants/{id}/resume,
-// HR only): a PDF or picture in a new tab, a Word file is downloaded.
+// Shows the resume or CV an applicant attached (GET applicants/{id}/resume,
+// HR only) in the attachment preview: a PDF or picture is shown, a Word file
+// can be downloaded from there.
 async function openResume(applicant) {
-  const tab = window.open("", "_blank"); // opened now, so the pop-up blocker allows it
   try {
-    const res = await fetch(`/api/applicants/${applicant.id}/resume`, { headers: { Authorization: `Bearer ${token()}` } });
-    if (!res.ok) throw new Error(res.status === 404 ? "This resume file is missing." : "The resume could not be opened.");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    if (tab && /^(application\/pdf|image\/)/.test(blob.type)) {
-      tab.location.href = url;
-    } else {
-      tab?.close();
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = applicant.resume_name || "resume";
-      a.click();
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    await previewProtectedFile(`/api/applicants/${applicant.id}/resume`, applicant.resume_name || "resume");
   } catch (err) {
-    tab?.close();
-    toast.error(err.message);
+    toast.error(err.message === "The file is missing." ? "This resume file is missing." : "The resume could not be opened.");
   }
 }
 
@@ -270,11 +260,14 @@ export default function InterviewsPage() {
   const [showQr, setShowQr] = useState(false);
 
   // Add / edit
-  const [editing, setEditing] = useState(null); // null = closed, {} = new, applicant = edit
-  const [form, setForm] = useState(EMPTY_FORM);
+  // Kept as a draft while the modal is open, so a refresh reopens it as it was
+  // (the resume file itself cannot be kept and has to be attached again).
+  const formDraft = useDraft("applicants:form", { editing: null, form: EMPTY_FORM }, { when: (v) => !!v.editing });
+  const { editing, form } = formDraft.values; // editing: null = closed, {} = new, applicant = edit
+  const { editing: setEditing, form: setForm } = formDraft.set;
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), []);
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
   // Name, mobile number, email and address read from a PDF or Word resume.
   // The resume itself is attached to the applicant when it is saved.
   const handleScan = (result, file) => setForm((f) => ({
@@ -352,6 +345,7 @@ export default function InterviewsPage() {
       interview_minutes: String(a.interview_minutes || 30),
       notes: a.notes || "",
       resumeFile: null,
+      removeResume: false,
       ...Object.fromEntries(ADDRESS_KEYS.map((k) => [k, a[k] || ""])),
     });
     setFormError("");
@@ -393,6 +387,9 @@ export default function InterviewsPage() {
       payload.interview_date = form.interview_date || null;
       payload.interview_minutes = Number(form.interview_minutes) || 30;
     }
+
+    // The saved resume is removed only when no new one replaces it.
+    if (!isNew && form.removeResume && !form.resumeFile) payload.remove_resume = true;
 
     // With a resume attached the form goes as multipart (PUT is sent as POST + _method).
     const send = (url, method) => {
@@ -633,10 +630,23 @@ export default function InterviewsPage() {
       {editing && (
         <Modal title={isNew ? "Add Applicant" : "Edit Applicant"} onClose={() => !saving && setEditing(null)}>
           <form onSubmit={submitForm} className="p-5 flex flex-col gap-3.5">
-            <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, email and address. The resume is attached to the applicant" />
-            {form.resumeFile && (
-              <div className="text-[11px] text-slate-500 -mt-1">Resume to attach: <span className="font-medium text-slate-700">{form.resumeFile.name}</span> <button type="button" onClick={() => setForm((f) => ({ ...f, resumeFile: null }))} className="ml-1 text-red-600 hover:underline cursor-pointer">Remove</button></div>
-            )}
+            <DraftHint draft={formDraft} />
+            <ScanDropZone kind="resume" onScan={handleScan} onRemove={() => setForm((f) => ({ ...f, resumeFile: null }))} fills="name, mobile number, email and address. The resume is attached to the applicant" />
+            {form.resumeFile ? (
+              <div className="text-[11px] text-slate-500 -mt-1">
+                Resume to attach: <span className="font-medium text-slate-700">{form.resumeFile.name}</span>
+                {editing.resume_name && <> (replaces {editing.resume_name})</>}
+                <button type="button" onClick={() => setForm((f) => ({ ...f, resumeFile: null }))} aria-label="Remove the resume to attach" className="ml-1.5 text-red-600 hover:underline cursor-pointer">✕ Remove</button>
+              </div>
+            ) : editing.resume_name ? (
+              <div className="text-[11px] text-slate-500 -mt-1">
+                {form.removeResume ? (
+                  <>Saved resume <span className="line-through">{editing.resume_name}</span> will be removed when you save. <button type="button" onClick={() => setForm((f) => ({ ...f, removeResume: false }))} className="ml-1 text-cyan-700 hover:underline cursor-pointer">Undo</button></>
+                ) : (
+                  <>Saved resume: <button type="button" onClick={() => openResume(editing)} className="font-medium text-cyan-700 hover:underline cursor-pointer">{editing.resume_name}</button> <button type="button" onClick={() => setForm((f) => ({ ...f, removeResume: true }))} aria-label="Remove the saved resume" className="ml-1.5 text-red-600 hover:underline cursor-pointer">✕ Remove</button> <span className="text-slate-400">or drop a new file above to replace it.</span></>
+                )}
+              </div>
+            ) : null}
             <Field label="Full Name">
               <input type="text" maxLength={255} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder="Juan Dela Cruz" />
             </Field>

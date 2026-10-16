@@ -11,10 +11,20 @@ class Customer extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'user_id', 'customer_code', 'name', 'branch_code', 'invoice_code', 'address',
+        'user_id', 'customer_code', 'name', 'customer_type', 'chain', 'branch_code', 'invoice_code', 'address',
         'block_lot', 'street', 'subdivision', 'barangay', 'postal_code', 'city',
         'province', 'region', 'barangay_code', 'latitude', 'longitude', 'contact_person', 'contact_number', 'email',
         'mop', 'is_active', 'notes',
+    ];
+
+    // Customer type (filter on Admin > Customers). The chain/group (SM,
+    // Alfamart, Independent...) is free text.
+    public const TYPES = [
+        'supermarket' => 'Supermarket / Mall',
+        'convenience_store' => 'Convenience Store',
+        'restaurant' => 'Restaurant / Food',
+        'dealer' => 'Dealer / Reseller',
+        'other' => 'Other',
     ];
 
     // Invoice code: 2 to 5 capital letters that start each of the customer's

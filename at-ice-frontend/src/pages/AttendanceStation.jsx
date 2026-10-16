@@ -5,6 +5,7 @@ import logo from "../assets/logo.png";
 import { clearKioskToken, kioskHeaders } from "../lib/kiosk";
 import { playKioskSound, primeKioskSound } from "../lib/kioskSound";
 import { STEP_TEXT, advance, currentStep, failure, isDone, loadLivenessModels, newChallenge, readFrame } from "../lib/liveness";
+import { formatTime } from "../lib/time";
 
 const ScanIcon = () => (
   <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -382,7 +383,7 @@ export default function AttendanceStation() {
             </div>
             <div className="text-right flex-shrink-0">
               <div className="text-[15px] font-semibold text-slate-800 font-mono">
-                {clock.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                {formatTime(clock, { seconds: true })}
               </div>
               <div className="text-[11px] text-[var(--neu-faint)]">
                 {clock.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
@@ -503,7 +504,7 @@ export default function AttendanceStation() {
                 )}
                 <div className="mt-2 flex items-baseline gap-2 flex-wrap">
                   <span className="text-[17px] font-semibold font-mono tracking-tight text-slate-800 leading-none">
-                    {result.at.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    {formatTime(result.at, { seconds: true })}
                   </span>
                   <span className="text-[12px] text-[var(--neu-muted)]">
                     {result.at.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}

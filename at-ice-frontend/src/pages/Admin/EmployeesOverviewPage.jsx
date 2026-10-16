@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { fullName, shiftLabel } from "../../lib/names";
@@ -25,11 +25,24 @@ function displayRole(emp) {
   return user.sub_role || null;
 }
 
+const ROLE_LABEL = (r) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : "No role");
+
+// "day" or "night" like App\Support\Lateness::label: night when the shift ends the next day.
+function shiftKind(emp) {
+  const start = String(emp?.shift_start || "").slice(0, 5);
+  const end = String(emp?.shift_end || "").slice(0, 5);
+  if (start && end) return end <= start ? "night" : "day";
+  return emp?.shift === "night" ? "night" : emp?.shift ? "day" : "";
+}
+
+const NO_FILTER = { q: "", position: "", role: "", shift: "" };
+const selectCls = "px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60";
+
 export default function EmployeesOverviewPage() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
-  const [search, setSearch]       = useState("");
+  const [filter, setFilter]       = useState(NO_FILTER);
 
   const token = localStorage.getItem("token");
   const authHeaders = {
@@ -59,11 +72,20 @@ export default function EmployeesOverviewPage() {
   const live = useLiveTick(["employees"]);
   useEffect(() => { fetchEmployees(); }, [fetchEmployees, live]);
 
+  // Dropdown options come from the list itself, so they match what is shown.
+  const positions = useMemo(() => [...new Set(employees.map((e) => e.position).filter(Boolean))].sort(), [employees]);
+  const roles = useMemo(() => [...new Set(employees.map((e) => displayRole(e) || ""))].sort(), [employees]);
+  const shiftRanges = useMemo(() => [...new Set(employees.map((e) => shiftLabel(e)).filter((l) => l && l !== "—"))].sort(), [employees]);
+
+  const filtering = Boolean(filter.q.trim() || filter.position || filter.role || filter.shift);
   const filtered = employees.filter((e) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    const haystack = `${fullName(e)} ${e.position}`.toLowerCase();
-    return haystack.includes(q);
+    const q = filter.q.trim().toLowerCase();
+    if (q && !`${e.employee_id || ""} ${fullName(e)}`.toLowerCase().includes(q)) return false;
+    if (filter.position && e.position !== filter.position) return false;
+    if (filter.role !== "" && (displayRole(e) || "none") !== filter.role) return false;
+    if (filter.shift === "day" || filter.shift === "night") return shiftKind(e) === filter.shift;
+    if (filter.shift && shiftLabel(e) !== filter.shift) return false;
+    return true;
   });
 
   return (
@@ -76,15 +98,42 @@ export default function EmployeesOverviewPage() {
               Registered staff. Account creation and edits are managed by HR.
             </div>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-black/[0.09] rounded-md text-xs text-slate-500 w-[220px]">
+          {!loading && <div className="text-[11px] text-slate-400">{filtering ? `${filtered.length} of ${employees.length}` : employees.length} employee{employees.length === 1 ? "" : "s"}</div>}
+        </div>
+
+        <div role="search" aria-label="Filter employees" className="px-5 py-3 bg-slate-50 border-b border-black/[0.09] flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-500 flex-1 min-w-[200px] max-w-[280px] focus-within:border-cyan-500/60">
             <SearchIcon />
             <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search employee..."
-              className="bg-transparent outline-none w-full placeholder:text-slate-400"
+              type="search"
+              value={filter.q}
+              onChange={(e) => setFilter({ ...filter, q: e.target.value })}
+              placeholder="Employee ID or name"
+              aria-label="Search by employee ID or name"
+              className="bg-transparent outline-none w-full text-slate-700 placeholder:text-slate-500"
             />
           </div>
+          <select aria-label="Position" value={filter.position} onChange={(e) => setFilter({ ...filter, position: e.target.value })} className={selectCls}>
+            <option value="">All positions</option>
+            {positions.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select aria-label="Role" value={filter.role} onChange={(e) => setFilter({ ...filter, role: e.target.value })} className={selectCls}>
+            <option value="">All roles</option>
+            {roles.map((r) => <option key={r || "none"} value={r || "none"}>{ROLE_LABEL(r)}</option>)}
+          </select>
+          <select aria-label="Shift" value={filter.shift} onChange={(e) => setFilter({ ...filter, shift: e.target.value })} className={selectCls}>
+            <option value="">All shifts</option>
+            <option value="day">Day shift</option>
+            <option value="night">Night shift</option>
+            {shiftRanges.length > 0 && (
+              <optgroup label="Shift hours">
+                {shiftRanges.map((r) => <option key={r} value={r}>{r}</option>)}
+              </optgroup>
+            )}
+          </select>
+          {filtering && (
+            <button type="button" onClick={() => setFilter(NO_FILTER)} className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">Clear filters</button>
+          )}
         </div>
 
         {error && (
@@ -108,7 +157,7 @@ export default function EmployeesOverviewPage() {
                 <SkeletonTableRows cols={4} />
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-400 text-xs">
-                  {search ? "No employees match your search." : "No employees registered yet."}
+                  {filtering ? "No employees match these filters." : "No employees registered yet."}
                 </td></tr>
               ) : (
                 filtered.map((emp) => (

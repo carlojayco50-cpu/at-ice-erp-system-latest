@@ -5,10 +5,14 @@ import PhoneInput from "../../components/PhoneInput";
 import { ANY_REGEX, ANY_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import AddressFields from "../../components/AddressFields";
 import { ScopeStatusRow } from "../../components/NightMode";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 
 const ChevronLeftIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
@@ -40,20 +44,22 @@ const emptyForm = {
 
 export default function CheckerSupplierManagementPage() {
   const navigate = useNavigate();
+  const timedIn = useTimedIn();
   const token = localStorage.getItem("token");
 
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null); // null = creating new
-  const [form, setForm] = useState(emptyForm);
+  // Kept as a draft while the form is open, so a refresh reopens it as it was.
+  const formDraft = useDraft("checker:supplier", { showForm: false, editingId: null, form: emptyForm }, { when: (v) => v.showForm });
+  const { showForm, editingId, form } = formDraft.values; // editingId null = creating new
+  const { showForm: setShowForm, editingId: setEditingId, form: setForm } = formDraft.set;
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [notice, setNotice] = useState("");
-  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), []);
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
 
   useEffect(() => {
     if (!notice) return;
@@ -199,6 +205,7 @@ export default function CheckerSupplierManagementPage() {
           </div>
         </div>
         <ScopeStatusRow className="px-4 pb-3" />
+        <TimeInNotice timedIn={timedIn} className="mx-4 mb-3" />
 
         {!showForm && (
           <div className="px-4 pb-3 flex">
@@ -217,6 +224,7 @@ export default function CheckerSupplierManagementPage() {
               {editingId ? "Edit Supplier" : "Add Supplier"}
               {!editingId && <span className="ml-2 text-[11px] font-normal text-slate-400">Code is assigned automatically</span>}
             </div>
+            <DraftHint draft={formDraft} />
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -274,7 +282,7 @@ export default function CheckerSupplierManagementPage() {
             <div className="flex gap-2">
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || timedIn === false}
                 className="flex-1 text-[13px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg py-2 transition-colors disabled:opacity-50"
               >
                 {submitting ? "Saving…" : editingId ? "Save changes" : "Add supplier"}
@@ -336,7 +344,7 @@ export default function CheckerSupplierManagementPage() {
                       <span className="text-[12px] text-slate-500">Remove?</span>
                       <button
                         onClick={() => remove(s.id)}
-                        disabled={deletingId === s.id}
+                        disabled={deletingId === s.id || timedIn === false}
                         className="text-[12px] font-semibold text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
                       >
                         {deletingId === s.id ? "Removing…" : "Yes"}

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Applicant;
 use App\Services\AddressFormatter;
 use App\Services\PhoneFormatter;
+use App\Support\Audit;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -249,6 +250,8 @@ class ApplicantController extends Controller
             'interview_minutes' => ['nullable', 'integer', 'in:'.implode(',', Applicant::INTERVIEW_MINUTES)],
             'notes' => 'nullable|string|max:1000',
             'resume' => Applicant::RESUME_RULE,
+            // HR removes the saved resume (ignored when a new one replaces it)
+            'remove_resume' => 'sometimes|boolean',
         ] + AddressFormatter::OPTIONAL_RULES, [
             'phone.regex' => self::PHONE_MESSAGE,
             'email.unique' => Applicant::EMAIL_TAKEN,
@@ -286,13 +289,23 @@ class ApplicantController extends Controller
             }
         }
 
-        // A new resume replaces the old file.
+        // A new resume replaces the old file; remove_resume drops it.
         $resume = $this->storeResume($request);
+        $removed = ! $resume && $request->boolean('remove_resume') && $applicant->resume_path
+            ? (string) $applicant->resume_name
+            : null;
+        if ($removed !== null) {
+            $resume = ['resume_path' => null, 'resume_name' => null];
+        }
         if ($resume && $applicant->resume_path) {
             Storage::disk('local')->delete($applicant->resume_path);
         }
 
         $applicant->update($data + $resume);
+
+        if ($removed !== null) {
+            Audit::log('applicant.resume_removed', $applicant, ['resume_name' => $removed], ['resume_name' => null]);
+        }
 
         return response()->json([
             'message' => 'Applicant updated successfully!',

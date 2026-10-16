@@ -3,9 +3,14 @@ import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import { ScopeStatusRow } from "../../components/NightMode";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
+import { formatDateTime } from "../../lib/time";
 
 const ChevronLeftIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
@@ -35,16 +40,12 @@ function firstError(data, fallback) {
 
 function fmtDate(d) {
   if (!d) return "";
-  return new Date(d).toLocaleString("en-PH", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatDateTime(d, { year: false });
 }
 
 export default function CheckerStockMovementsPage() {
   const navigate = useNavigate();
+  const timedIn = useTimedIn();
   const token = localStorage.getItem("token");
 
   const [movements, setMovements] = useState([]);
@@ -52,11 +53,10 @@ export default function CheckerStockMovementsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
-  const [productId, setProductId] = useState("");
-  const [type, setType] = useState("stock_in");
-  const [quantity, setQuantity] = useState("");
-  const [notes, setNotes] = useState("");
+  // The movement form is kept as a draft while open, so a refresh keeps it.
+  const draft = useDraft("checker:movement", { showForm: false, productId: "", type: "stock_in", quantity: "", notes: "" }, { when: (v) => v.showForm });
+  const { showForm, productId, type, quantity, notes } = draft.values;
+  const { showForm: setShowForm, productId: setProductId, type: setType, quantity: setQuantity, notes: setNotes } = draft.set;
   const [submitting, setSubmitting] = useState(false);
   const [actingOn, setActingOn] = useState(null); // id currently being confirmed/cancelled
 
@@ -121,11 +121,7 @@ export default function CheckerStockMovementsPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(firstError(data, "Could not log the movement."));
       toast.success(type === "stock_in" ? "Stock in was logged." : "Stock movement was logged.");
-      setProductId("");
-      setType("stock_in");
-      setQuantity("");
-      setNotes("");
-      setShowForm(false);
+      draft.clear();
       fetchMovements();
     } catch (e) {
       setError(e.message || "Request failed. Try again.");
@@ -175,6 +171,7 @@ export default function CheckerStockMovementsPage() {
           </div>
         </div>
         <ScopeStatusRow className="px-4 pb-3" />
+        <TimeInNotice timedIn={timedIn} className="mx-4 mb-3" />
 
         <div className="px-4 pb-3 flex">
           <button
@@ -189,6 +186,7 @@ export default function CheckerStockMovementsPage() {
 
         {showForm && (
           <form onSubmit={submitMovement} className="px-4 pb-4 flex flex-col gap-2.5 border-t border-black/[0.06] pt-3">
+            <DraftHint draft={draft} />
             <select
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
@@ -240,7 +238,7 @@ export default function CheckerStockMovementsPage() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || timedIn === false}
               className="text-[13px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg py-2 transition-colors disabled:opacity-50"
             >
               {submitting ? "Logging…" : "Log movement"}
@@ -287,14 +285,14 @@ export default function CheckerStockMovementsPage() {
                 <div className="flex gap-2 mt-3 pt-3 border-t border-black/[0.06]">
                   <button
                     onClick={() => act(m.id, "confirm")}
-                    disabled={actingOn === m.id}
+                    disabled={actingOn === m.id || timedIn === false}
                     className="flex-1 text-[13px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg py-1.5 transition-colors disabled:opacity-50"
                   >
                     Confirm
                   </button>
                   <button
                     onClick={() => act(m.id, "cancel")}
-                    disabled={actingOn === m.id}
+                    disabled={actingOn === m.id || timedIn === false}
                     className="flex-1 text-[13px] font-medium border border-black/[0.09] text-slate-500 hover:text-slate-800 rounded-lg py-1.5 transition-colors disabled:opacity-50"
                   >
                     Cancel

@@ -6,6 +6,7 @@ use App\Events\DeliveryStatusUpdated;
 use App\Models\Customer;
 use App\Models\CustomerPrice;
 use App\Models\Delivery;
+use App\Support\DriverAvailability;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -21,9 +22,20 @@ class DeliveryController extends Controller
         );
     }
 
+    // Admin: every Driver as available / in_transit / unavailable for the
+    // driver picker (App\Support\DriverAvailability). `enforced` is false for
+    // a later day, when any Driver may be picked.
+    public function driverAvailability(Request $request)
+    {
+        return response()->json([
+            'today' => DriverAvailability::today(),
+            'enforced' => DriverAvailability::enforcedFor($request->query('date')),
+            'drivers' => DriverAvailability::all(),
+        ]);
+    }
+
     public function store(Request $request)
     {
-
         $data = $request->validate([
             'driver_id' => 'required|exists:users,id',
             'customer_id' => 'required_if:delivery_type,outbound|nullable|exists:customers,id',
@@ -38,6 +50,11 @@ class DeliveryController extends Controller
             'customer_id.required_if' => 'Please select a customer.',
             'items.*.quantity_ordered.max' => 'Each product can have at most '.config('atice.max_product_quantity').' on one delivery. Add another delivery for more.',
         ]);
+
+        // Only an available Driver (timed in today, not in transit) can be assigned.
+        if ($why = DriverAvailability::refusal((int) $data['driver_id'], $data['scheduled_date'])) {
+            return response()->json(['message' => $why, 'errors' => ['driver_id' => [$why]]], 422);
+        }
 
         // Each product type only once per delivery
         $types = array_column($data['items'], 'product_type');

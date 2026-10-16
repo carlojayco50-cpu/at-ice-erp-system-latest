@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attendance;
 use App\Models\Customer;
 use App\Models\CustomerPrice;
+use App\Models\Employee;
 use App\Models\User;
+use App\Support\DriverAvailability;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -23,12 +26,15 @@ class QuantityLimitTest extends TestCase
     private function booking(int $quantity): array
     {
         $driver = User::create(['name' => 'Driver', 'email' => 'driver@atice.cloud', 'password' => 'secret-password', 'role' => 'driver']);
+        // Only a Driver who timed in today can be given a delivery
+        $emp = Employee::create(['user_id' => $driver->id, 'employee_id' => 'EMP-0001', 'first_name' => 'Driver', 'last_name' => 'Cruz', 'position' => 'Driver', 'daily_rate' => 600, 'date_hired' => '2026-01-01', 'is_active' => true]);
+        Attendance::create(['employee_id' => $emp->id, 'date' => DriverAvailability::today(), 'time_in' => '07:58:00', 'status' => 'present']);
         $customer = Customer::create(['name' => 'Starmall', 'customer_code' => 'CUST-STA-001', 'branch_code' => 'STA-SJDM-001', 'is_active' => true]);
         CustomerPrice::create(['customer_id' => $customer->id, 'product_type' => 'bags', 'unit_price' => 50]);
 
         return [
             'driver_id' => $driver->id, 'customer_id' => $customer->id, 'delivery_type' => 'outbound',
-            'scheduled_date' => now()->toDateString(),
+            'scheduled_date' => DriverAvailability::today(),
             'items' => [['product_type' => 'bags', 'quantity_ordered' => $quantity]],
         ];
     }

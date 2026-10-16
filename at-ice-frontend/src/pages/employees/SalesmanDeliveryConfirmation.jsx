@@ -6,6 +6,11 @@ import { toast } from "../../lib/toast";
 import CameraCapture from "../../components/CameraCapture";
 import { ScopeStatusRow } from "../../components/NightMode";
 import { useMaxQuantity } from "../../lib/limits";
+import { printDeliveryConfirmation } from "../../lib/printDelivery";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 
 // Icons
 const ArrowLeftIcon = () => (
@@ -71,7 +76,12 @@ export default function SalesmanDeliveryConfirmation() {
   const [delivery, setDelivery] = useState(null);
   const [prices, setPrices] = useState({ bags: null, small_sack: null, big_sack: null });
 
-  const [quantities, setQuantities] = useState({ bags: "", small_sack: "", big_sack: "" });
+  // Quantities the Salesman changed survive a refresh (per delivery); the
+  // photo has to be taken again. null until the delivery has loaded.
+  const draft = useDraft(`salesman:confirm:${id}`, { dirty: false, quantities: null }, { when: (v) => v.dirty });
+  const quantities = draft.values.quantities || { bags: "", small_sack: "", big_sack: "" };
+  const setQuantities = draft.set.quantities;
+  const editQuantities = (fn) => { draft.set.dirty(true); setQuantities(fn); };
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
 
@@ -101,7 +111,7 @@ export default function SalesmanDeliveryConfirmation() {
         setDelivery(found);
         // Start from what Admin booked on the delivery; the Salesman changes a
         // number only when fewer (or more) were actually delivered.
-        setQuantities(orderedQuantities(found, maxRef.current));
+        setQuantities((q) => q ?? orderedQuantities(found, maxRef.current));
 
         const customerId = found.customer?.id;
         if (customerId) {
@@ -120,7 +130,7 @@ export default function SalesmanDeliveryConfirmation() {
       }
     };
     load();
-  }, [id]);
+  }, [id, setQuantities]);
 
   // The limit may arrive after the prefill: keep every quantity within it
   useEffect(() => {
@@ -132,13 +142,13 @@ export default function SalesmanDeliveryConfirmation() {
       }
       return changed ? next : q;
     });
-  }, [MAX_QTY]);
+  }, [MAX_QTY, setQuantities]);
 
   // Whole numbers only, up to the per-product limit (the server checks the same)
   const handleQtyChange = (key, value) => {
     const digits = String(value).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-    if (digits === "") { setQuantities((q) => ({ ...q, [key]: "" })); return; }
-    setQuantities((q) => ({ ...q, [key]: String(Math.min(Number(digits), MAX_QTY)) }));
+    if (digits === "") { editQuantities((q) => ({ ...q, [key]: "" })); return; }
+    editQuantities((q) => ({ ...q, [key]: String(Math.min(Number(digits), MAX_QTY)) }));
   };
 
   // What the delivery asked for, per product
@@ -198,6 +208,7 @@ export default function SalesmanDeliveryConfirmation() {
       }
 
       toast.success("Delivery confirmed. The invoice was created.");
+      draft.clear();
       setSuccessResult(result);
       setStep("success");
     } catch (err) {
@@ -330,8 +341,21 @@ export default function SalesmanDeliveryConfirmation() {
           </div>
 
           <button
+            type="button"
+            onClick={() => printDeliveryConfirmation({
+              delivery,
+              proof: successResult.proof,
+              receipt,
+              photoUrl: successResult.proof?.photo_path ? `${BACKEND_URL}/storage/${successResult.proof.photo_path}` : null,
+            })}
+            className="w-full py-3.5 bg-white border border-black/[0.09] text-slate-700 text-[13px] font-semibold rounded-xl cursor-pointer mt-2"
+          >
+            Print delivery confirmation
+          </button>
+
+          <button
             onClick={() => navigate("/salesman/deliveries")}
-            className="w-full py-3.5 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl cursor-pointer mt-2"
+            className="w-full py-3.5 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl cursor-pointer"
           >
             Back to Deliveries
           </button>
@@ -453,6 +477,8 @@ export default function SalesmanDeliveryConfirmation() {
       </header>
 
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 overflow-y-auto pb-8">
+
+        <DraftHint draft={draft} onDiscard={() => setQuantities(orderedQuantities(delivery))} />
 
         {notStarted && (
           <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">

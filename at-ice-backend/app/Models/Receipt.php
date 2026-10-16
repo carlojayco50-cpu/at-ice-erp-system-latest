@@ -55,6 +55,12 @@ class Receipt extends Model
         return $this->hasMany(ReceiptItem::class);
     }
 
+    // Proofs of payment the customer sent for this invoice, newest first.
+    public function paymentProofs()
+    {
+        return $this->hasMany(PaymentProof::class)->latest('id');
+    }
+
     // An unpaid receipt becomes overdue this many days after it was made.
     public const OVERDUE_DAYS = 15;
 

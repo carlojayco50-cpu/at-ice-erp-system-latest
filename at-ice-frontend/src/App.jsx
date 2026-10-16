@@ -19,6 +19,7 @@ import LeaveRequestPage from './pages/LeaveRequestPage'
 import Dashboard from './pages/Admin/Dashboard'
 import CustomerPriceManagement from './pages/Admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
+import StockLimitsPage from './pages/Admin/StockLimitsPage'
 import ProjectsPage from './pages/Admin/ProjectsPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
 import CustomersPage from './pages/Admin/CustomersPage'
@@ -53,7 +54,6 @@ import KioskPinPage from './pages/hr/KioskPinPage'
 
 // -- Employee Module
 import CheckerDashboard from './pages/employees/CheckerDashboard'
-import CheckerPickupLogPage from './pages/employees/CheckerPickupLogPage'
 import CheckerIceLoadingPage from './pages/employees/CheckerIceLoadingPage'
 import CheckerInventoryManagementPage from './pages/employees/CheckerInventoryManagementPage'
 import CheckerStockMovementsPage from './pages/employees/CheckerStockMovementsPage'
@@ -187,6 +187,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <StockOutApprovalPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Minimum and maximum stock: Admin only (opened from Stock-Out Approvals). */}
+        <Route
+          path="/admin/stock-limits"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <StockLimitsPage />
             </ProtectedRoute>
           }
         />
@@ -387,14 +396,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/checker/pickup-log"
-          element={
-            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["checker"]}>
-              <NightScope><CheckerPickupLogPage /></NightScope>
-            </ProtectedRoute>
-          }
-        />
+        {/* The Checker's Pickup Log was removed (owner, 2026-10-16). */}
+        <Route path="/checker/pickup-log" element={<Navigate to="/checker/dashboard" replace />} />
         <Route
           path="/checker/ice-loading"
           element={

@@ -1,6 +1,8 @@
 // Employee names with the optional middle initial and suffix.
 // The API also sends `full_name` (built the same way in Employee::composeName).
 
+import { formatShift } from "./time";
+
 export const NAME_SUFFIXES = ["Jr.", "Sr.", "II", "III", "IV", "V"];
 
 const initial = (mi) => (mi ? `${String(mi).toUpperCase()}.` : "");
@@ -19,12 +21,9 @@ export function lastFirstName(e) {
   return [last, first].filter(Boolean).join(", ");
 }
 
-// A shift as hours: "09:00–18:00", or "21:00–06:00 (next day)" overnight.
+// A shift as hours: "9:00 AM – 6:00 PM", or "9:00 PM – 6:00 AM (next day)" overnight.
 export function shiftLabel(e) {
-  const start = String(e?.shift_start || "").slice(0, 5);
-  const end = String(e?.shift_end || "").slice(0, 5);
-  if (!start || !end) return e?.shift === "night" ? "Night" : e?.shift ? "Day" : "—";
-  return `${start}–${end}${end <= start ? " (next day)" : ""}`;
+  return formatShift(e?.shift_start, e?.shift_end) || (e?.shift === "night" ? "Night" : e?.shift ? "Day" : "—");
 }
 
 // Middle initial as typed: letters only, upper case, at most two ("d." -> "D")
