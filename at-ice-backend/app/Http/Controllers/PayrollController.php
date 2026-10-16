@@ -44,7 +44,7 @@ class PayrollController extends Controller
     public function records(Request $request)
     {
         $request->validate(['date' => 'nullable|date_format:Y-m-d', 'status' => 'nullable|in:unpaid,paid']);
-        $period = PayPeriod::for($request->input('date', now('Asia/Manila')->toDateString()));
+        $period = PayPeriod::for($request->input('date', now(config('atice.timezone'))->toDateString()));
 
         $payrolls = Payroll::with('adjustments')->whereDate('period_start', $period['start'])->get()->keyBy('employee_id');
         $employees = Employee::where(fn ($q) => $q->where('is_active', true)->whereDate('date_hired', '<=', $period['end']))
@@ -120,7 +120,7 @@ class PayrollController extends Controller
     // GET /api/thirteenth-month?year= (Admin): each employee's 13th month pay so far
     public function thirteenthMonth(Request $request)
     {
-        $year = (int) $request->input('year', now('Asia/Manila')->year);
+        $year = (int) $request->input('year', now(config('atice.timezone'))->year);
         $rows = Employee::where('is_active', true)->orderBy('employee_id')->get()->map(fn (Employee $e) => [
             'id' => $e->id,
             'employee_id' => $e->employee_id,

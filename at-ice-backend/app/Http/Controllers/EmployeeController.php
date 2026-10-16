@@ -116,7 +116,7 @@ class EmployeeController extends Controller
 
     public static function latestHireDate(): string
     {
-        return now('Asia/Manila')->addDays(self::HIRE_DAYS_AHEAD)->toDateString();
+        return now(config('atice.timezone'))->addDays(self::HIRE_DAYS_AHEAD)->toDateString();
     }
 
     // Middle initial: letters only, upper case ("d." -> "D"). Blank values are
@@ -475,7 +475,7 @@ class EmployeeController extends Controller
         // Made regular: leave credits count from this date (docs/REVIEW-DECISIONS.md).
         $regularized = ($data['employment_status'] ?? null) === 'regular' && $employee->employment_status !== 'regular';
         if ($regularized && empty($data['regularized_at'])) {
-            $data['regularized_at'] = now()->toDateString();
+            $data['regularized_at'] = now(config('atice.timezone'))->toDateString();
         }
 
         $employee->update($data);

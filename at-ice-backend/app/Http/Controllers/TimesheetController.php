@@ -23,7 +23,7 @@ class TimesheetController extends Controller
     public function index(Request $request)
     {
         $request->validate(['date' => 'nullable|date_format:Y-m-d']);
-        $period = PayPeriod::for($request->input('date', now('Asia/Manila')->toDateString()));
+        $period = PayPeriod::for($request->input('date', now(config('atice.timezone'))->toDateString()));
         $start = CarbonImmutable::parse($period['start']);
         $end = CarbonImmutable::parse($period['end']);
 
@@ -73,7 +73,7 @@ class TimesheetController extends Controller
         ]);
         $approveOt = $data['approve_ot_ids'] ?? [];
         $period = PayPeriod::for($data['date']);
-        if ($period['end'] > now('Asia/Manila')->toDateString()) {
+        if ($period['end'] > now(config('atice.timezone'))->toDateString()) {
             throw ValidationException::withMessages(['date' => ['A timesheet can be approved once its pay period has ended ('.$period['end'].').']]);
         }
 

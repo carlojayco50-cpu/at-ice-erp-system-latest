@@ -20,13 +20,11 @@ class PayrollCalendar
 {
     public const DAYS = 14;
 
-    private const TZ = 'Asia/Manila';
-
     // The pay period a date falls in: ['start', 'end', 'pay_day'] (Y-m-d).
     // The rule itself is AppSupportPayPeriod (anchor and length in Settings).
     public static function periodFor(Carbon|string $date): array
     {
-        $d = $date instanceof Carbon ? $date->copy()->setTimezone(self::TZ)->toDateString() : substr((string) $date, 0, 10);
+        $d = $date instanceof Carbon ? $date->copy()->setTimezone(config('atice.timezone'))->toDateString() : substr((string) $date, 0, 10);
 
         return PayPeriod::for($d);
     }
@@ -34,7 +32,7 @@ class PayrollCalendar
     // The current period and the ones before it, newest first.
     public static function recent(int $count = 6): array
     {
-        $today = Carbon::now(self::TZ);
+        $today = Carbon::now(config('atice.timezone'));
         $list = [];
         for ($i = 0; $i < $count; $i++) {
             $p = self::periodFor($today->copy()->subDays($i * self::DAYS));
@@ -64,7 +62,7 @@ class PayrollCalendar
     public static function notifyCutoff(): void
     {
         try {
-            $today = Carbon::now(self::TZ)->toDateString();
+            $today = Carbon::now(config('atice.timezone'))->toDateString();
             $current = self::periodFor($today);
             // The period that ends today, or else the one that just ended.
             $due = $current['end'] === $today ? $current : self::periodFor(Carbon::parse($current['start'])->subDay());

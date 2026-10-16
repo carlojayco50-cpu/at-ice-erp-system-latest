@@ -14,8 +14,6 @@ use Illuminate\Validation\ValidationException;
 
 class ApplicantController extends Controller
 {
-    private const LOCAL_TZ = 'Asia/Manila';
-
     // Philippine mobile number, stored as +639XXXXXXXXX (e.g. +639171234567)
     private const PHONE_REGEX = PhoneFormatter::MOBILE_REGEX;
 
@@ -23,7 +21,7 @@ class ApplicantController extends Controller
 
     private function nowLocal(): string
     {
-        return now(self::LOCAL_TZ)->format('Y-m-d H:i:s');
+        return now(config('atice.timezone'))->format('Y-m-d H:i:s');
     }
 
     private function normalizeDate($value): ?string

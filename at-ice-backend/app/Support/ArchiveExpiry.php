@@ -23,14 +23,14 @@ class ArchiveExpiry
 {
     public static function cutoff(): string
     {
-        return now('Asia/Manila')->subYears((int) Settings::get('retention.years'))->toDateString();
+        return now(config('atice.timezone'))->subYears((int) Settings::get('retention.years'))->toDateString();
     }
 
     // Inactive past the retention period, not kept by Admin, not anonymized yet.
     public static function expired()
     {
         $held = DB::table('retention_holds')->where('kind', 'employee')
-            ->whereDate('kept_until', '>=', now('Asia/Manila')->toDateString())->pluck('ref')->all();
+            ->whereDate('kept_until', '>=', now(config('atice.timezone'))->toDateString())->pluck('ref')->all();
 
         return Employee::where('is_active', false)
             ->whereNotNull('deactivated_at')
@@ -44,7 +44,7 @@ class ArchiveExpiry
     {
         try {
             if (Settings::get('archive.expiry_action') === 'REVIEW'
-                || ! Cache::add('archive-expiry:'.now('Asia/Manila')->toDateString(), true, now()->addDays(2))) {
+                || ! Cache::add('archive-expiry:'.now(config('atice.timezone'))->toDateString(), true, now()->addDays(2))) {
                 return;
             }
             self::run();

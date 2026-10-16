@@ -102,7 +102,7 @@ class Receipt extends Model
     // RCP-... numbers.
     public static function generateReceiptNo(?Customer $customer = null): string
     {
-        $date = now()->format('Ymd');
+        $date = now(config('atice.timezone'))->format('Ymd');
         $code = $customer?->invoice_code ?: 'INV';
         $prefix = "{$code}-{$date}-";
 

@@ -13,7 +13,7 @@ class HolidayController extends Controller
     // GET /api/holidays?year=2026
     public function index(Request $request)
     {
-        $year = (int) $request->input('year', now('Asia/Manila')->year);
+        $year = (int) $request->input('year', now(config('atice.timezone'))->year);
 
         return response()->json([
             'year' => $year,

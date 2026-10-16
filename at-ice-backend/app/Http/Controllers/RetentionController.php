@@ -27,7 +27,7 @@ class RetentionController extends Controller
 
     private function held(string $kind): array
     {
-        return DB::table('retention_holds')->where('kind', $kind)->whereDate('kept_until', '>=', now('Asia/Manila')->toDateString())->pluck('ref')->all();
+        return DB::table('retention_holds')->where('kind', $kind)->whereDate('kept_until', '>=', now(config('atice.timezone'))->toDateString())->pluck('ref')->all();
     }
 
     // GET /api/retention-review
@@ -70,7 +70,7 @@ class RetentionController extends Controller
     public function keep(Request $request)
     {
         $data = $this->target($request);
-        $until = now('Asia/Manila')->addYears((int) Settings::get('retention.years'))->toDateString();
+        $until = now(config('atice.timezone'))->addYears((int) Settings::get('retention.years'))->toDateString();
         DB::table('retention_holds')->updateOrInsert(
             ['kind' => $data['kind'], 'ref' => (string) $data['ref']],
             ['kept_until' => $until, 'kept_by' => $request->user()->id, 'updated_at' => now(), 'created_at' => now()]

@@ -36,7 +36,7 @@ class SettingsController extends Controller
     public function multipliers()
     {
         $rows = PayMultiplier::orderBy('key')->orderByDesc('effective_date')->get()->groupBy('key');
-        $today = now('Asia/Manila')->toDateString();
+        $today = now(config('atice.timezone'))->toDateString();
 
         return response()->json(collect(PayMultiplier::KEYS)->map(fn ($key) => [
             'key' => $key,

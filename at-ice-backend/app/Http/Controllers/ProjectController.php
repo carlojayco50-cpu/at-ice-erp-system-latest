@@ -97,7 +97,7 @@ class ProjectController extends Controller
             $progress = 100;
         } elseif ($p->start_date && $p->due_date) {
             $span = max(1, $p->start_date->diffInDays($p->due_date));
-            $progress = (int) max(0, min(100, round($p->start_date->diffInDays(now(), false) / $span * 100)));
+            $progress = (int) max(0, min(100, round($p->start_date->diffInDays(now(config('atice.timezone')), false) / $span * 100)));
         }
 
         return $p->toArray() + [
@@ -106,7 +106,7 @@ class ProjectController extends Controller
             'requests_waiting' => $reqs->whereIn('status', ['pending', 'approved'])->count(),
             'materials_cost' => round($cost, 2),
             'budget_left' => $p->budget !== null ? round((float) $p->budget - $cost, 2) : null,
-            'overdue' => $p->status !== 'done' && $p->due_date && $p->due_date->lt(now()->startOfDay()),
+            'overdue' => $p->status !== 'done' && $p->due_date && $p->due_date->lt(now(config('atice.timezone'))->startOfDay()),
             'progress' => $progress,
         ];
     }

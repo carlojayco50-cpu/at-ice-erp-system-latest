@@ -134,7 +134,7 @@ class AttendanceController extends Controller
     // POST /api/attendances (public, used by the Attendance Station kiosk)
     // The kiosk now sends which button was selected: "time_in" or
     // "time_out". Date and time always come from the server clock
-    // (Asia/Manila), never from the browser.
+    // (config('atice.timezone')), never from the browser.
     public function store(Request $request)
     {
         $request->validate([
@@ -151,7 +151,7 @@ class AttendanceController extends Controller
                 'This employee is no longer active. Please inform HR.');
         }
 
-        $now = now();
+        $now = now(config('atice.timezone'));
         $today = $now->toDateString();
 
         // A new hire whose start date has not come yet cannot time in.
@@ -172,7 +172,7 @@ class AttendanceController extends Controller
         $openIn = null;
         if ($open) {
             $openIn = Carbon::parse(
-                Carbon::parse($open->date)->toDateString().' '.$open->time_in
+                Carbon::parse($open->date)->toDateString().' '.$open->time_in, config('atice.timezone')
             );
             // Too long ago: treat as a missed Time Out, not an open shift
             if ($openIn->diffInHours($now, true) > self::MAX_SHIFT_HOURS) {
@@ -207,7 +207,7 @@ class AttendanceController extends Controller
             $ot = 0;
             $emp = $faceData->employee_id ? Employee::find($faceData->employee_id) : null;
             if ($emp?->shift_end) {
-                $shiftEnd = Carbon::parse($openIn->toDateString().' '.$emp->shift_end);
+                $shiftEnd = Carbon::parse($openIn->toDateString().' '.$emp->shift_end, config('atice.timezone'));
                 if (Lateness::label((string) $emp->shift_start, (string) $emp->shift_end) === 'night') {
                     $shiftEnd->addDay();
                 }
@@ -338,7 +338,7 @@ class AttendanceController extends Controller
     public function roster(Request $request)
     {
         $request->validate(['date' => 'nullable|date']);
-        $date = $request->filled('date') ? Carbon::parse($request->date)->toDateString() : now()->toDateString();
+        $date = $request->filled('date') ? Carbon::parse($request->date)->toDateString() : now(config('atice.timezone'))->toDateString();
 
         // Active and already started (a future hire is not "not in yet")
         $employees = Employee::where('is_active', true)->whereDate('date_hired', '<=', $date)->get();
