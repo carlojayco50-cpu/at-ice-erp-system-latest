@@ -15,17 +15,31 @@ use Throwable;
 // App\Services\Nominatim (User-Agent, 1 request/sec), and are cached.
 class PlaceSearchController extends Controller
 {
-    // GET /api/places/reverse?lat=14.73&lng=121.04
+    // Only for the Photon store lookup; Nominatim calls go through App\Services\Nominatim.
+    private const USER_AGENT = 'AT-ICE-ERP/1.0 (STI SJDM Capstone Project)';
+
+    // GET /api/places/reverse?lat=14.73&lng=121.04[&with_name=1]
     // Name of the spot under the pin, e.g. "Makabud Street, Novaliches", plus
-    // its address split into the form's fields.
+    // its address split into the form's fields. With with_name=1 (coordinates
+    // pasted in Map Link) it also gives the nearest store's name and the other
+    // stores at the pin (`nearby`).
     public function reverse(Request $request)
     {
         $request->validate([
             'lat' => 'required|numeric|between:-90,90',
             'lng' => 'required|numeric|between:-180,180',
+            'with_name' => 'nullable|boolean',
         ]);
+        $lat = (float) $request->lat;
+        $lng = (float) $request->lng;
 
-        return response()->json($this->lookUp((float) $request->lat, (float) $request->lng) ?? ['label' => '', 'address' => null]);
+        $place = $this->lookUp($lat, $lng) ?? ['label' => '', 'address' => null];
+        if ($request->boolean('with_name')) {
+            $nearby = $this->storesNear($lat, $lng);
+            $place += ['name' => $nearby[0] ?? '', 'nearby' => $nearby];
+        }
+
+        return response()->json($place);
     }
 
     // GET /api/places/from-link?url=https://maps.app.goo.gl/...
@@ -48,9 +62,11 @@ class PlaceSearchController extends Controller
         }
 
         $place = $this->lookUp($pin['latitude'], $pin['longitude']);
+        // A link with only coordinates (?q=14.77,121.07) has no name: use the nearest store.
+        $name = $this->placeNameFromGoogleUrl($full) ?: ($this->storesNear($pin['latitude'], $pin['longitude'])[0] ?? '');
 
         return response()->json($pin + [
-            'name' => $this->placeNameFromGoogleUrl($full),
+            'name' => $name,
             'label' => $place['label'] ?? '',
             'address' => $place['address'] ?? null,
         ]);
@@ -134,6 +150,50 @@ class PlaceSearchController extends Controller
         $name = trim(urldecode(str_replace('+', ' ', $m[1])));
 
         return preg_match('/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/', $name) ? '' : $name;
+    }
+
+    // Not stores: never offered as the branch name.
+    private const NOT_STORES = [
+        'parking', 'parking_entrance', 'parking_space', 'bicycle_parking', 'motorcycle_parking', 'toilets', 'bench',
+        'waste_basket', 'waste_disposal', 'recycling', 'shelter', 'atm', 'telephone', 'vending_machine', 'drinking_water',
+    ];
+
+    // Names of the stores within 60 m of a spot, nearest first (Photon, OpenStreetMap
+    // data, free, no key), cached for a week. Empty when there are none or Photon fails.
+    private function storesNear(float $lat, float $lng): array
+    {
+        $lat = round($lat, 5);
+        $lng = round($lng, 5);
+
+        $key = "places:near1:$lat,$lng";
+        if (Cache::has($key)) {
+            return Cache::get($key);
+        }
+
+        try {
+            $response = Http::timeout(8)
+                ->withHeaders(['User-Agent' => self::USER_AGENT])
+                ->get('https://photon.komoot.io/reverse?'.http_build_query(['lat' => $lat, 'lon' => $lng, 'limit' => 8, 'radius' => 0.06])
+                    .'&osm_tag=shop&osm_tag=amenity&osm_tag=office');
+        } catch (Throwable) {
+            return [];
+        }
+        if (! $response->ok()) {
+            return [];
+        }
+
+        $names = collect($response->json('features') ?? [])
+            ->reject(fn ($f) => in_array($f['properties']['osm_value'] ?? '', self::NOT_STORES, true))
+            ->pluck('properties.name')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->values()
+            ->take(5)
+            ->all();
+        Cache::put($key, $names, now()->addWeek());
+
+        return $names;
     }
 
     // Label and address fields at a spot, cached for a week. Null when OpenStreetMap fails.

@@ -6,6 +6,7 @@ import AdminLayout from "../../components/AdminLayout";
 import EmptyState from "../../components/EmptyState";
 import { useLiveTick } from "../../lib/live";
 import { BoardGroup, BoardRow, StatusCell } from "../../components/Board";
+import { formatTime } from "../../lib/time";
 
 const DollarIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const AlertIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
@@ -18,10 +19,16 @@ const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="curren
 const fmt  = (n) => "₱" + Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const token = () => localStorage.getItem("token") || "";
 // "07:58:00" -> "7:58 AM"
-const clock = (t) => {
-  const [h, m] = String(t || "").split(":").map(Number);
-  if (!Number.isFinite(h)) return "—";
-  return `${((h + 11) % 12) + 1}:${String(m || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+const clock = (t) => formatTime(t);
+
+// AI summary time: "2:45 PM" today, "Oct 15, 2:45 PM" on another day
+const updatedAt = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const time = formatTime(d);
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : `${d.toLocaleDateString("en-PH", { month: "short", day: "numeric" })}, ${time}`;
 };
 
 // Chart axis: ₱0, ₱200, ₱1.2K, ₱15K (previously every value under ₱2,000 showed as ₱1K)
@@ -141,6 +148,7 @@ export default function Dashboard() {
   const [biError,   setBiError]   = useState("");
   const [aiSummary, setAiSummary] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiInfo,    setAiInfo]    = useState({ generatedAt: null, stale: false, message: "" });
   const [notifications, setNotifications] = useState([]);
 
   // Fetch BI Summary
@@ -161,11 +169,14 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Fetch Groq AI Summary
-  const fetchAI = useCallback(async () => {
+  // Fetch Groq AI Summary. The server keeps the last summary and asks Groq
+  // again only when the figures changed (Groq's free tier allows few calls a
+  // minute). refresh = the Refresh button: a new summary even with the same
+  // figures, at most once in 5 minutes (the server decides).
+  const fetchAI = useCallback(async (refresh = false) => {
     setAiLoading(true);
     try {
-      const res = await fetch("/api/bi/ai-summary", {
+      const res = await fetch(`/api/bi/ai-summary${refresh ? "?refresh=1" : ""}`, {
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token()}`,
@@ -173,8 +184,10 @@ export default function Dashboard() {
       });
       const data = await res.json();
       setAiSummary(data.summary || "No summary available.");
+      setAiInfo({ generatedAt: data.generated_at || null, stale: !!data.stale, message: data.message || "" });
     } catch {
       setAiSummary("AI summary unavailable at this time.");
+      setAiInfo({ generatedAt: null, stale: false, message: "" });
     } finally {
       setAiLoading(false);
     }
@@ -185,9 +198,19 @@ export default function Dashboard() {
     fetchBI();
   }, [fetchBI]);
 
+  // The figures the AI summary is written from. The dashboard reloads biData
+  // every 30 seconds; the summary is asked for only when these change.
+  const aiInputs = biData ? JSON.stringify([
+    biData.sales?.this_month_total, biData.sales?.mom_change_pct,
+    biData.deliveries?.total, biData.deliveries?.delivery_rate_pct,
+    biData.inventory?.out_of_stock, biData.inventory?.low_stock,
+    biData.attendance?.total_in, biData.attendance?.total_employees,
+    biData.overdue?.total_overdue_amount, biData.overdue?.overdue_customers,
+  ]) : null;
+
   useEffect(() => {
-    if (biData) fetchAI();
-  }, [biData, fetchAI]);
+    if (aiInputs) fetchAI();
+  }, [aiInputs, fetchAI]);
 
   // Recent Notifications: the latest events read from the database
   // (GET /api/bi/recent-activity), refreshed every 20 seconds. Entries from
@@ -766,16 +789,37 @@ export default function Dashboard() {
           <div className="bg-white border border-cyan-200 rounded-xl overflow-hidden">
             <div className="px-[18px] py-3.5 border-b border-cyan-100 flex items-center justify-between bg-cyan-500/[0.04]">
               <div className="text-[13px] font-semibold text-slate-800">AI Summary</div>
-              <span className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-500 rounded-full font-mono">Groq</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-500 rounded-full font-mono">Groq</span>
+                <button
+                  type="button"
+                  onClick={() => fetchAI(true)}
+                  disabled={aiLoading}
+                  title="Ask for a new summary (at most once in 5 minutes)"
+                  aria-label="Refresh AI summary"
+                  className="p-1 rounded-md text-slate-400 hover:text-cyan-600 hover:bg-cyan-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className={`block ${aiLoading ? "animate-spin" : ""}`}><RefreshIcon /></span>
+                </button>
+              </div>
             </div>
             <div className="p-[18px]">
-              {aiLoading ? (
+              {aiLoading && !aiSummary ? (
                 <div className="flex items-center gap-2 text-xs text-slate-400">
                   <span className="w-3 h-3 border-2 border-cyan-400/40 border-t-cyan-500 rounded-full animate-spin" />
                   Generating AI summary…
                 </div>
               ) : (
-                <p className="text-xs text-slate-500 leading-relaxed">{aiSummary || "No summary available."}</p>
+                <>
+                  <p className="text-xs text-slate-500 leading-relaxed">{aiSummary || "No summary available."}</p>
+                  {(aiInfo.generatedAt || aiInfo.message) && (
+                    <p className={`mt-1.5 text-[10px] ${aiInfo.stale ? "text-amber-600" : "text-slate-400"}`}>
+                      {aiInfo.generatedAt && `Updated ${updatedAt(aiInfo.generatedAt)}`}
+                      {aiInfo.stale && aiInfo.generatedAt && " (older figures)"}
+                      {aiInfo.message && `${aiInfo.generatedAt ? " · " : ""}${aiInfo.message}`}
+                    </p>
+                  )}
+                </>
               )}
               <div className="border-t border-black/[0.09] pt-2.5 mt-2.5 flex flex-col gap-1.5">
                 {[

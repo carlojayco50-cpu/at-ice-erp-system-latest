@@ -1,19 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
-import { fullName } from "../../lib/names";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { toList } from "../../lib/list";
 import { useMaxQuantity } from "../../lib/limits";
+import { formatDateTime as dateTime12 } from "../../lib/time";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 
 const API_BASE = "/api";
 // Proof photos are on Laravel's public disk, served by the backend at /storage/.
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 const photoUrl = (path) => (path ? `${BACKEND_URL}/storage/${path}` : null);
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const formatDateTime = (v) => (v ? new Date(v).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
+const formatDateTime = (v) => (v ? dateTime12(v) : "—");
 const PAYMENT_BADGE = {
   paid: "bg-emerald-50 text-emerald-700",
   unpaid: "bg-amber-50 text-amber-700",
@@ -61,12 +63,28 @@ const todayStr = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-// A function, not a constant, so the default date is today even if the page
-// stays open past midnight.
-const emptyForm = () => ({
+// One delivery block in the New Delivery form. A function, not a constant, so
+// the default date is today even if the page stays open past midnight.
+let blockSeq = 0;
+const emptyBlock = () => ({
+  key: `${Date.now()}-${++blockSeq}`, error: "", // unique after a restored draft too
   driver_id: "", customer_id: "", scheduled_date: todayStr(), notes: "",
   items: [{ ...EMPTY_ITEM }],
 });
+
+// Driver status from the backend (App\Support\DriverAvailability): available,
+// in_transit or unavailable. Worked out from attendance and deliveries.
+const DRIVER_STATUS = {
+  available:   { dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  in_transit:  { dot: "bg-amber-500",   pill: "bg-amber-50 text-amber-700 border-amber-200" },
+  unavailable: { dot: "bg-slate-400",   pill: "bg-slate-100 text-slate-600 border-slate-200" },
+};
+const DRIVER_ORDER = { available: 0, in_transit: 1, unavailable: 2 };
+function statusLabel(d) {
+  if (d.status === "available") return "Available";
+  if (d.status === "in_transit") return "In-Transit";
+  return `Unavailable (${(d.reason || "not timed in yet").toLowerCase()})`;
+}
 
 function token() { return localStorage.getItem("token") || ""; }
 function authHeaders() {
@@ -75,7 +93,8 @@ function authHeaders() {
 
 export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState([]);
-  const [drivers, setDrivers]       = useState([]);
+  const [availability, setAvailability] = useState({ today: "", drivers: [] });
+  const [availLoading, setAvailLoading] = useState(false);
   const [customers, setCustomers]   = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -83,11 +102,13 @@ export default function DeliveriesPage() {
   const [search, setSearch]   = useState("");
   const [customerFilter, setCustomerFilter] = useState(""); // customer id, "" = all
 
-  const maxQty = useMaxQuantity();
-  const [showForm, setShowForm]     = useState(false);
-  const [form, setForm]             = useState(emptyForm);
+  const maxQty = useMaxQuantity(); // same limit as Ice Loading and the Salesman confirmation
+  // New Delivery modal: kept as a draft while open, so a refresh reopens it as it was.
+  const formDraft = useDraft("deliveries:new", { showForm: false, blocks: null }, { when: (v) => v.showForm });
+  const { showForm } = formDraft.values;
+  const blocks = formDraft.values.blocks || [];
+  const { showForm: setShowForm, blocks: setBlocks } = formDraft.set;
   const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState("");
 
   const [viewing, setViewing]       = useState(null);
   // Salesman proofs (photo, quantities, receipt) keyed by delivery id, shown
@@ -102,25 +123,21 @@ export default function DeliveriesPage() {
     setLoading(true);
     setError("");
     try {
-      const [dRes, empRes, cRes, pRes] = await Promise.all([
+      const [dRes, cRes, pRes] = await Promise.all([
         fetch(`${API_BASE}/deliveries`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/employees-summary`, { headers: authHeaders() }),
         fetch(`${API_BASE}/customers`, { headers: authHeaders() }),
         fetch(`${API_BASE}/delivery-proofs`, { headers: authHeaders() }),
       ]);
       if (!dRes.ok) throw new Error(`Deliveries request failed (${dRes.status})`);
 
-      const [dData, empData, cData, pData] = await Promise.all([
-        dRes.json(), empRes.json(), cRes.json(), pRes.ok ? pRes.json() : [],
+      const [dData, cData, pData] = await Promise.all([
+        dRes.json(), cRes.json(), pRes.ok ? pRes.json() : [],
       ]);
       const byDelivery = {};
       toList(pData).forEach((p) => { if (p.delivery_id && !byDelivery[p.delivery_id]) byDelivery[p.delivery_id] = p; });
       setProofs(byDelivery);
 
       setDeliveries(Array.isArray(dData) ? dData : []);
-      // Drivers are Employees whose linked user has role "driver" — see
-      // EmployeeController@index()'s widened query.
-      setDrivers((Array.isArray(empData) ? empData : []).filter((e) => e.user?.role === "driver"));
       setCustomers(Array.isArray(cData) ? cData : []);
     } catch (err) {
       setError("Couldn't load deliveries. Check that the backend is running.");
@@ -134,79 +151,139 @@ export default function DeliveriesPage() {
   const live = useLiveTick(["deliveries"]);
   useEffect(() => { fetchAll(); }, [fetchAll, live]);
 
+  // Driver statuses for the picker; reloaded whenever the picker opens, so a
+  // Driver who just timed in at the kiosk shows up as Available.
+  const fetchAvailability = useCallback(async () => {
+    setAvailLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/deliveries/driver-availability`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Driver status request failed (${res.status})`);
+      const data = await res.json();
+      setAvailability({ today: data.today || "", drivers: Array.isArray(data.drivers) ? data.drivers : [] });
+    } catch (err) {
+      console.error("driver availability error:", err);
+    } finally {
+      setAvailLoading(false);
+    }
+  }, []);
+  useEffect(() => { if (showForm) fetchAvailability(); }, [showForm, fetchAvailability, live]);
+
   function openAddForm() {
-    setForm(emptyForm());
-    setFormError("");
+    setBlocks([emptyBlock()]);
     setShowForm(true);
   }
 
-  function updateItem(index, field, value) {
-    setForm((f) => {
-      const items = [...f.items];
+  function updateBlock(bi, patch) {
+    setBlocks((bs) => bs.map((b, i) => (i === bi ? { ...b, ...patch, error: "" } : b)));
+  }
+
+  function updateItem(bi, index, field, value) {
+    setBlocks((bs) => bs.map((b, i) => {
+      if (i !== bi) return b;
+      const items = [...b.items];
       items[index] = { ...items[index], [field]: value };
-      return { ...f, items };
-    });
+      return { ...b, items, error: "" };
+    }));
   }
 
-  function addItemRow() {
-    setForm((f) => ({ ...f, items: [...f.items, { ...EMPTY_ITEM }] }));
+  function addItemRow(bi) {
+    setBlocks((bs) => bs.map((b, i) => (i === bi ? { ...b, items: [...b.items, { ...EMPTY_ITEM }] } : b)));
   }
 
-  function removeItemRow(index) {
-    setForm((f) => ({ ...f, items: f.items.filter((_, i) => i !== index) }));
+  function removeItemRow(bi, index) {
+    setBlocks((bs) => bs.map((b, i) => (i === bi ? { ...b, items: b.items.filter((_, j) => j !== index) } : b)));
+  }
+
+  function addBlock() {
+    setBlocks((bs) => [...bs, emptyBlock()]);
+    toast.success(`Delivery ${blocks.length + 1} was added to the form.`);
+  }
+
+  function removeBlock(bi) {
+    setBlocks((bs) => bs.filter((_, i) => i !== bi));
+    toast.success(`Delivery ${bi + 1} was removed from the form.`);
+  }
+
+  // No double booking: a customer with a delivery that is not cancelled on
+  // that date (the backend refuses it too), or picked in another block of
+  // this form for the same date. Returns a short note, or "".
+  function bookedFor(customerId, date, bi) {
+    const existing = deliveries.find((d) => String(d.customer_id) === String(customerId)
+      && d.status !== "cancelled" && String(d.scheduled_date || "").slice(0, 10) === date);
+    if (existing) return `${existing.delivery_no}, ${existing.status.replace("_", " ")}`;
+    const other = blocks.findIndex((b, i) => i !== bi && String(b.customer_id) === String(customerId) && b.scheduled_date === date);
+    return other >= 0 ? `Delivery ${other + 1} in this form` : "";
+  }
+
+  // Why this block cannot be sent yet, or "".
+  function blockProblem(b, bi) {
+    if (!b.driver_id) return "Please select a driver.";
+    const enforced = !availability.today || b.scheduled_date <= availability.today;
+    const drv = availability.drivers.find((d) => String(d.id) === String(b.driver_id));
+    if (enforced && drv && drv.status !== "available") return `${drv.name} is ${statusLabel(drv).toLowerCase()}. Pick an available driver.`;
+    if (!b.customer_id) return "Please select a customer.";
+    if (!b.scheduled_date || b.scheduled_date < todayStr()) return "Scheduled date cannot be in the past.";
+    const booked = bookedFor(b.customer_id, b.scheduled_date, bi);
+    if (booked) return `This customer already has a delivery on this date (${booked}).`;
+    if (b.items.some((it) => !it.product_type || !(Number(it.quantity_ordered) >= 1))) return "Pick a product and a quantity of at least 1 for every item.";
+    if (b.items.some((it) => Number(it.quantity_ordered) > maxQty)) return `Each product can have at most ${maxQty} on one delivery. Add another delivery for more.`;
+    const types = b.items.map((it) => it.product_type);
+    if (new Set(types).size !== types.length) return "Each product can only be added once. Combine the quantities in one row.";
+    return "";
   }
 
   async function submitForm(e) {
     e.preventDefault();
-    setFormError("");
 
-    if (form.scheduled_date < todayStr()) {
-      setFormError("Scheduled date cannot be in the past.");
-      return;
-    }
-
-    if (form.items.some((it) => Number(it.quantity_ordered) > maxQty)) {
-      setFormError(`Each product can have at most ${maxQty} on one delivery. Add another delivery for more.`);
-      return;
-    }
-
-    // Each product type can only appear once per delivery
-    const types = form.items.map((it) => it.product_type);
-    if (new Set(types).size !== types.length) {
-      setFormError("Each product can only be added once. Combine the quantities in one row.");
+    const checked = blocks.map((b, bi) => ({ ...b, error: blockProblem(b, bi) }));
+    if (checked.some((b) => b.error)) {
+      setBlocks(checked);
       return;
     }
 
     setSaving(true);
-    try {
+    const failed = [];
+    let created = 0;
+    // One request per delivery, in order; the ones that fail stay in the form
+    // with the reason, the ones that were saved are taken out.
+    for (const b of blocks) {
       // Unit prices are not sent: the backend takes them from Customer Prices
-      // for the selected customer, the same prices the Salesman receipt uses.
+      // for the selected customer, the same prices the Salesman invoice uses.
       const payload = {
-        driver_id: form.driver_id,
-        customer_id: form.customer_id,
+        driver_id: b.driver_id,
+        customer_id: b.customer_id,
         delivery_type: "outbound",
-        scheduled_date: form.scheduled_date,
-        notes: form.notes || null,
-        items: form.items.map((it) => ({
+        scheduled_date: b.scheduled_date,
+        notes: b.notes || null,
+        items: b.items.map((it) => ({
           product_type: it.product_type,
           quantity_ordered: Number(it.quantity_ordered),
         })),
       };
-      const res = await fetch(`${API_BASE}/deliveries`, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || "Failed to create delivery.");
+      try {
+        const res = await fetch(`${API_BASE}/deliveries`, {
+          method: "POST", headers: authHeaders(), body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.message || "Failed to create delivery.");
+        }
+        created++;
+      } catch (err) {
+        failed.push({ ...b, error: err.message });
       }
-      toast.success("Delivery was added.");
-      setShowForm(false);
-      fetchAll();
-    } catch (err) {
-      setFormError(err.message);
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
+
+    if (created > 0) toast.success(created === 1 ? "Delivery was added." : `${created} deliveries were added.`);
+    if (failed.length) {
+      toast.error(failed.length === 1 ? "1 delivery was not added. See the form." : `${failed.length} deliveries were not added. See the form.`);
+      setBlocks(failed);
+    } else {
+      setShowForm(false);
+    }
+    fetchAll();
+    fetchAvailability();
   }
 
   async function confirmCancel() {
@@ -295,9 +372,12 @@ export default function DeliveriesPage() {
               role="tab"
               aria-selected={statusFilter === f.value}
               onClick={() => setStatusFilter(f.value)}
-              className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-colors cursor-pointer ${statusFilter === f.value ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-600 hover:bg-slate-50"}`}
+              className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border transition-colors cursor-pointer ${statusFilter === f.value ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-600 hover:bg-slate-50"}`}
             >
-              {f.label} <span className="opacity-70 font-mono">{counts[f.value]}</span>
+              {f.label}{" "}
+              <span className={`ml-1 inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full text-[11px] font-bold tabular-nums ${statusFilter === f.value ? "bg-white text-cyan-700" : counts[f.value] > 0 ? "bg-slate-800 text-white" : "bg-slate-200 text-slate-600"}`}>
+                {counts[f.value]}
+              </span>
             </button>
           ))}
         </div>
@@ -380,125 +460,164 @@ export default function DeliveriesPage() {
         </div>
       </div>
 
-      {/* New Delivery modal */}
+      {/* New Delivery modal: one or more delivery blocks, each with its own
+          driver, customer, date and items. "+ Add item" and "+ New delivery"
+          sit right under the blocks. */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
-              <h3 className="text-[14px] font-semibold text-slate-800">New Delivery</h3>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-2xl max-h-[88vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between sticky top-0 bg-white z-10">
+              <h3 className="text-[14px] font-semibold text-slate-800">
+                New Delivery{blocks.length > 1 ? ` (${blocks.length})` : ""}
+              </h3>
+              <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600" aria-label="Close">
                 <XIcon />
               </button>
             </div>
-            <form onSubmit={submitForm} className="p-5 flex flex-col gap-4">
-              {formError && (
-                <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">
-                  {formError}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Driver *</label>
-                  <select
-                    value={form.driver_id}
-                    onChange={(e) => setForm({ ...form, driver_id: e.target.value })}
-                    required
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  >
-                    <option value="">Select driver…</option>
-                    {drivers.map((d) => (
-                      <option key={d.user?.id} value={d.user?.id}>{fullName(d)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
-                  <select
-                    value={form.customer_id}
-                    onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
-                    required
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  >
-                    <option value="">Select customer…</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}{c.branch_code ? ` · ${c.branch_code}` : ""}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
-                  <input
-                    type="date"
-                    min={todayStr()}
-                    value={form.scheduled_date}
-                    onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
-                    required
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Notes</label>
-                  <input
-                    type="text"
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-[11px] text-slate-500">Items *</label>
-                  <button type="button" onClick={addItemRow} className="text-[11px] text-cyan-600 font-medium flex items-center gap-1">
-                    <PlusIcon /> Add item
-                  </button>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {form.items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-[1fr_110px_auto] gap-2 items-center">
-                      <select
-                        value={item.product_type}
-                        onChange={(e) => updateItem(idx, "product_type", e.target.value)}
-                        required
-                        className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                      >
-                        <option value="">Select product…</option>
-                        {PRODUCT_TYPES.map((p) => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="number" min="1" max={maxQty} placeholder={`Qty (max ${maxQty})`}
-                        aria-label={`Quantity, up to ${maxQty}`}
-                        value={item.quantity_ordered}
-                        onChange={(e) => updateItem(idx, "quantity_ordered", e.target.value)}
-                        required
-                        className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeItemRow(idx)}
-                        disabled={form.items.length === 1}
-                        className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <TrashIcon />
-                      </button>
+            <form onSubmit={submitForm} className="p-5 flex flex-col gap-4" noValidate>
+              <DraftHint draft={formDraft} />
+              {blocks.map((block, bi) => {
+                const enforced = !availability.today || block.scheduled_date <= availability.today;
+                const picked = availability.drivers.find((d) => String(d.id) === String(block.driver_id));
+                const pickedBlocked = enforced && picked && picked.status !== "available";
+                return (
+                  <div key={block.key} className="rounded-xl border border-black/[0.12] bg-white">
+                    <div className="px-4 py-2.5 border-b border-black/[0.09] bg-slate-50 rounded-t-xl flex items-center justify-between">
+                      <span className="text-[12px] font-semibold text-slate-700">Delivery {bi + 1}</span>
+                      {blocks.length > 1 && (
+                        <button type="button" onClick={() => removeBlock(bi)} className="flex items-center gap-1 text-[11px] text-red-600 hover:text-red-700 font-medium">
+                          <TrashIcon /> Remove
+                        </button>
+                      )}
                     </div>
-                  ))}
-                </div>
-                <p className="text-[11px] text-slate-400 mt-2">
-                  Unit prices are taken from Customer Prices for the selected customer.
-                </p>
-              </div>
+                    <div className="p-4 flex flex-col gap-3">
+                      {block.error && (
+                        <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{block.error}</div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-slate-500 mb-1 block">Driver *</label>
+                          <DriverPicker
+                            drivers={availability.drivers}
+                            loading={availLoading}
+                            enforced={enforced}
+                            value={block.driver_id}
+                            onOpen={fetchAvailability}
+                            onChange={(id) => updateBlock(bi, { driver_id: id })}
+                          />
+                          {pickedBlocked && (
+                            <p className="text-[11px] text-red-600 mt-1">{picked.name} is {statusLabel(picked).toLowerCase()} and cannot take a delivery today.</p>
+                          )}
+                          {!enforced && (
+                            <p className="text-[11px] text-slate-400 mt-1">Status is for today. Any driver can take a delivery on a later day.</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-500 mb-1 block">Customer *</label>
+                          <select
+                            value={block.customer_id}
+                            onChange={(e) => updateBlock(bi, { customer_id: e.target.value })}
+                            className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                          >
+                            <option value="">Select customer…</option>
+                            {customers.map((c) => {
+                              const booked = bookedFor(c.id, block.scheduled_date, bi);
+                              return (
+                                <option key={c.id} value={c.id} disabled={!!booked}>
+                                  {c.name}{c.branch_code ? ` · ${c.branch_code}` : ""}{booked ? ` — already booked (${booked})` : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <p className="text-[11px] text-slate-400 mt-1">Customers with a delivery on this date are greyed out.</p>
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-500 mb-1 block">Scheduled Date *</label>
+                          <input
+                            type="date"
+                            min={todayStr()}
+                            value={block.scheduled_date}
+                            onChange={(e) => updateBlock(bi, { scheduled_date: e.target.value })}
+                            className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-500 mb-1 block">Notes</label>
+                          <input
+                            type="text"
+                            value={block.notes}
+                            onChange={(e) => updateBlock(bi, { notes: e.target.value })}
+                            className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                      </div>
 
-              <div className="flex justify-end gap-2 mt-2">
+                      <div>
+                        <label className="text-[11px] text-slate-500 mb-2 block">Items *</label>
+                        <div className="flex flex-col gap-2">
+                          {block.items.map((item, idx) => (
+                            <div key={idx} className="grid grid-cols-[1fr_110px_auto] gap-2 items-center">
+                              <select
+                                value={item.product_type}
+                                onChange={(e) => updateItem(bi, idx, "product_type", e.target.value)}
+                                aria-label={`Product ${idx + 1}`}
+                                className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                              >
+                                <option value="">Select product…</option>
+                                {PRODUCT_TYPES.map((p) => (
+                                  <option key={p.value} value={p.value} disabled={block.items.some((o, j) => j !== idx && o.product_type === p.value)}>{p.label}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number" min="1" max={maxQty} placeholder={`Qty (max ${maxQty})`}
+                                aria-label={`Quantity ${idx + 1}`}
+                                value={item.quantity_ordered}
+                                onChange={(e) => updateItem(bi, idx, "quantity_ordered", e.target.value)}
+                                className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeItemRow(bi, idx)}
+                                disabled={block.items.length === 1}
+                                aria-label="Remove item"
+                                className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                <TrashIcon />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addItemRow(bi)}
+                          disabled={block.items.length >= PRODUCT_TYPES.length}
+                          className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border-2 border-dashed border-cyan-500 bg-cyan-50 text-cyan-700 text-[12px] font-semibold hover:bg-cyan-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <PlusIcon /> Add item
+                        </button>
+                        <p className="text-[11px] text-slate-400 mt-2">
+                          Unit prices are taken from Customer Prices for the selected customer.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={addBlock}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 border-dashed border-cyan-500/60 text-cyan-700 hover:bg-cyan-500/[0.06] text-[13px] font-semibold"
+              >
+                <PlusIcon /> New delivery
+              </button>
+
+              <div className="flex justify-end gap-2 mt-1 pt-3 border-t border-black/[0.09]">
                 <button type="button" onClick={() => setShowForm(false)} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
                   Cancel
                 </button>
                 <button type="submit" disabled={saving} className="px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
-                  {saving ? "Creating…" : "Create Delivery"}
+                  {saving ? "Creating…" : blocks.length > 1 ? `Create ${blocks.length} Deliveries` : "Create Delivery"}
                 </button>
               </div>
             </form>
@@ -635,6 +754,128 @@ function ProofSection({ proof }) {
               <span className="font-mono">{peso(receipt.total_amount)}</span>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Searchable driver dropdown: type a name or employee ID. Every Driver is
+// listed with a status (Available, In-Transit, Unavailable); for a delivery
+// today only an Available one can be picked. The backend checks the same.
+function DriverPicker({ drivers, loading, enforced, value, onChange, onOpen }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [active, setActive] = useState(0);
+  const boxRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const selected = drivers.find((d) => String(d.id) === String(value));
+  const needle = q.trim().toLowerCase();
+  const list = drivers
+    .filter((d) => !needle || `${d.name} ${d.employee_id || ""}`.toLowerCase().includes(needle))
+    .sort((a, b) => (DRIVER_ORDER[a.status] ?? 3) - (DRIVER_ORDER[b.status] ?? 3) || a.name.localeCompare(b.name));
+  const selectable = (d) => !enforced || d.status === "available";
+
+  function toggle() {
+    if (!open) {
+      setQ("");
+      setActive(0);
+      onOpen?.();
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+    setOpen(!open);
+  }
+
+  function pick(d) {
+    if (!selectable(d)) return;
+    onChange(String(d.id));
+    setOpen(false);
+  }
+
+  function onKeyDown(e) {
+    if (e.key === "Escape") { setOpen(false); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(i + 1, list.length - 1)); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const d = list[active] && selectable(list[active]) ? list[active] : list.find(selectable);
+      if (d) pick(d);
+    }
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] text-left outline-none focus:border-cyan-500"
+      >
+        {selected ? (
+          <span className="flex items-center gap-2 min-w-0">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DRIVER_STATUS[selected.status]?.dot}`} />
+            <span className="truncate text-slate-800">{selected.name}</span>
+            {selected.employee_id && <span className="text-[11px] font-mono text-slate-400">{selected.employee_id}</span>}
+          </span>
+        ) : (
+          <span className="text-slate-400">Select driver…</span>
+        )}
+        <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="text-slate-400 flex-shrink-0"><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-full min-w-[280px] bg-white border border-black/[0.12] rounded-lg shadow-lg">
+          <div className="p-2 border-b border-black/[0.07]">
+            <input
+              ref={inputRef}
+              type="text"
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setActive(0); }}
+              onKeyDown={onKeyDown}
+              placeholder="Search name or employee ID…"
+              aria-label="Search drivers"
+              className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+            />
+          </div>
+          <ul role="listbox" className="max-h-60 overflow-y-auto py-1">
+            {loading && drivers.length === 0 && <li className="px-3 py-2 text-[12px] text-slate-400">Loading drivers…</li>}
+            {!loading && list.length === 0 && <li className="px-3 py-2 text-[12px] text-slate-400">No driver matches.</li>}
+            {list.map((d, i) => {
+              const ok = selectable(d);
+              const st = DRIVER_STATUS[d.status] || DRIVER_STATUS.unavailable;
+              return (
+                <li
+                  key={d.id}
+                  role="option"
+                  aria-selected={String(d.id) === String(value)}
+                  aria-disabled={!ok}
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => pick(d)}
+                  className={`px-3 py-2 flex items-center justify-between gap-2 text-[13px] ${ok ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${i === active && ok ? "bg-cyan-50" : ""}`}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-slate-800">{d.name}</span>
+                      <span className="block text-[11px] text-slate-400">
+                        {d.employee_id || "No employee ID"}{d.status === "in_transit" && d.reason ? ` · ${d.reason}` : ""}
+                      </span>
+                    </span>
+                  </span>
+                  <span className={`flex-shrink-0 px-2 py-0.5 rounded-full border text-[10.5px] font-semibold ${st.pill}`}>{statusLabel(d)}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
     </div>

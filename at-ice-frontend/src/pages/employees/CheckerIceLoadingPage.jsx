@@ -1,11 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
+import logo from "../../assets/logo.png";
 import { useNavigate } from "react-router-dom";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import { ScopeStatusRow } from "../../components/NightMode";
 import { useMaxQuantity } from "../../lib/limits";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
+import { formatDateTime } from "../../lib/time";
 
 // Icons
 const ChevronLeftIcon = () => (
@@ -65,15 +71,18 @@ export default function CheckerIceLoadingPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  const [showForm, setShowForm] = useState(false);
+  // The count form is kept as a draft while open, so a refresh keeps it.
+  const draft = useDraft("checker:ice-loading", {
+    showForm: false, deliveryId: "", loadedAt: "", quantities: { bags: "", small_sack: "", big_sack: "" },
+  }, { when: (v) => v.showForm });
+  const { showForm, deliveryId, loadedAt, quantities } = draft.values;
+  const { showForm: setShowForm, deliveryId: setDeliveryId, loadedAt: setLoadedAt, quantities: setQuantities } = draft.set;
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const [deliveryId, setDeliveryId] = useState("");
-  const [todays, setTodays] = useState([]); // today's deliveries for the dropdown
-  const [todaysLoaded, setTodaysLoaded] = useState(false);
-  const [loadedAt, setLoadedAt] = useState("");
-  const [quantities, setQuantities] = useState({ bags: "", small_sack: "", big_sack: "" });
+  // Deliveries to count; one already counted (by either Checker) is disabled.
+  const [deliveries, setDeliveries] = useState([]);
+  const timedIn = useTimedIn();
 
   const total = useMemo(() => {
     return PRODUCT_TYPES.reduce((sum, p) => sum + (Number(quantities[p.key]) || 0), 0);
@@ -96,29 +105,27 @@ export default function CheckerIceLoadingPage() {
     }
   };
 
-  // reload when a live notice for this page arrives (lib/live.js)
-  const live = useLiveTick(["deliveries"]);
-  useEffect(() => {
-    fetchLoadings();
-  }, [live]);
-
-  // Today's deliveries (delivery number, customer, driver) for the dropdown
-  const fetchTodays = async () => {
+  const fetchDeliveries = async () => {
     try {
       const res = await fetch("/api/ice-loadings/deliveries", {
         headers: { Accept: "application/json", Authorization: `Bearer ${token()}` },
       });
-      setTodays(res.ok ? await res.json() : []);
+      if (!res.ok) return;
+      const data = await res.json();
+      setDeliveries(Array.isArray(data) ? data : []);
     } catch {
-      setTodays([]);
-    } finally {
-      setTodaysLoaded(true);
+      /* the list stays as it was */
     }
   };
 
+  // reload when a live notice for this page arrives (lib/live.js)
+  const live = useLiveTick(["deliveries"]);
   useEffect(() => {
-    if (showForm) fetchTodays();
-  }, [showForm, live]);
+    fetchLoadings();
+    fetchDeliveries();
+  }, [live]);
+
+  const chosen = deliveries.find((d) => String(d.id) === String(deliveryId));
 
   const resetForm = () => {
     setDeliveryId("");
@@ -137,8 +144,16 @@ export default function CheckerIceLoadingPage() {
     e.preventDefault();
     setFormError("");
 
+    if (timedIn === false) {
+      setFormError("Time in at the Attendance Station first. Saving is turned off until your Time In is recorded.");
+      return;
+    }
     if (!deliveryId || !loadedAt) {
       setFormError("Please choose the delivery and the loaded-at time.");
+      return;
+    }
+    if (chosen?.loaded) {
+      setFormError(`This delivery was already counted${chosen.loaded_by ? ` by ${chosen.loaded_by}` : ""}. A delivery can only be counted once.`);
       return;
     }
     if (total <= 0) {
@@ -168,6 +183,12 @@ export default function CheckerIceLoadingPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        // 409: the other Checker counted this delivery first.
+        if (data.already_loaded) {
+          toast.error("Already counted by the other Checker.");
+          fetchDeliveries();
+          fetchLoadings();
+        }
         setFormError(data.message || "Failed to record ice loading. Please try again.");
         setSubmitting(false);
         return;
@@ -176,6 +197,7 @@ export default function CheckerIceLoadingPage() {
       resetForm();
       setShowForm(false);
       fetchLoadings();
+      fetchDeliveries();
     } catch {
       setFormError("Network error. Please check your connection.");
     } finally {
@@ -213,20 +235,25 @@ export default function CheckerIceLoadingPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
 
       {/* ── Top Bar ── */}
-      <header className="bg-white border-b border-black/[0.08] px-5 pt-4 pb-4 flex-shrink-0 sticky top-0 z-20">
-        <div className="flex items-center gap-2 mb-1">
+      <header className="bg-white border-b border-black/[0.09] flex-shrink-0 sticky top-0 z-20">
+        <div className="flex items-center gap-3 px-4 py-3">
           <button
             onClick={() => navigate("/checker/dashboard")}
-            className="text-slate-400 active:text-slate-600 transition-colors cursor-pointer p-1 -ml-1"
+            className="text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+            aria-label="Back to dashboard"
           >
             <ChevronLeftIcon />
           </button>
-          <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">Ice Loading Count</div>
+          <span className="brand-logo w-11 h-11 flex-shrink-0 rounded-lg flex items-center justify-center overflow-hidden"><img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" /></span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] font-semibold text-slate-800 leading-tight">Ice Loading Count</div>
+            <div className="text-[12px] text-slate-400 leading-tight">Count sacks loaded per delivery truck, by product type.</div>
+          </div>
         </div>
-        <ScopeStatusRow />
-        <div className="text-[12px] text-slate-400 ml-7">
-          Count sacks loaded per delivery truck, by product type.
-        </div>
+        <ScopeStatusRow className="px-4 pb-3" />
+        <div className="px-4 pb-4">
+
+        <TimeInNotice timedIn={timedIn} className="mt-3" />
 
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -235,30 +262,37 @@ export default function CheckerIceLoadingPage() {
           {showForm ? <CloseIcon /> : <PlusIcon />}
           {showForm ? "Close Form" : "New Loading Count"}
         </button>
+        </div>
       </header>
 
       {/* ── New Loading Count Form ── */}
       {showForm && (
         <div className="bg-white border-b border-black/[0.08] px-4 py-4">
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <DraftHint draft={draft} onDiscard={() => setFormError("")} />
             <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
-                Delivery ID
+              <label htmlFor="ice-delivery" className="text-[11px] font-medium text-slate-500 tracking-widest uppercase px-0.5">
+                Delivery
               </label>
               <select
+                id="ice-delivery"
                 value={deliveryId}
-                onChange={(e) => setDeliveryId(e.target.value)}
+                onChange={(e) => { setDeliveryId(e.target.value); setFormError(""); }}
                 className="px-4 py-3 border border-black/[0.12] rounded-xl bg-slate-50/80 focus:border-cyan-400 focus:bg-white focus:ring-2 focus:ring-cyan-500/10 outline-none text-[14px] text-slate-800 transition-all"
               >
-                <option value="">{todaysLoaded && todays.length === 0 ? "No deliveries today" : "Select a delivery…"}</option>
-                {todays.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.delivery_no} · {d.customer || "No customer"} · {d.driver || "No driver"}
+                <option value="">Choose a delivery…</option>
+                {deliveries.map((d) => (
+                  <option key={d.id} value={d.id} disabled={d.loaded}>
+                    {d.delivery_no || `DEL-${String(d.id).padStart(4, "0")}`}
+                    {d.customer ? ` · ${d.customer}` : ""}{d.driver ? ` · ${d.driver}` : ""}
+                    {d.loaded ? ` · already counted${d.loaded_by ? ` by ${d.loaded_by}` : ""}` : ""}
                   </option>
                 ))}
               </select>
               <span className="text-[11px] text-slate-400 px-0.5">
-                Today's deliveries only, with the customer and the driver.
+                {deliveries.length === 0
+                  ? "No pending or in-transit deliveries up to today."
+                  : "Each delivery is counted once. Deliveries already counted by either Checker cannot be chosen."}
               </span>
             </div>
 
@@ -315,7 +349,7 @@ export default function CheckerIceLoadingPage() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || timedIn === false || !!chosen?.loaded}
               className="w-full py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[13px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {submitting ? "Saving…" : "Save Count"}
@@ -375,13 +409,7 @@ export default function CheckerIceLoadingPage() {
                 {group.loaded_at && (
                   <span className="text-[10px] text-slate-400 flex items-center gap-1">
                     <ClockIcon />
-                    {new Date(group.loaded_at).toLocaleString("en-PH", {
-                      timeZone: "Asia/Manila",
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatDateTime(group.loaded_at, { year: false })}
                   </span>
                 )}
                 {group.checkerName && (

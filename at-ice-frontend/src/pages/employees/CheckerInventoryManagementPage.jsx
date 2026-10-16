@@ -3,9 +3,14 @@ import { useNavigate } from "react-router-dom";
 import logo from "../../assets/logo.png";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
+import { useDraft } from "../../lib/useDraft";
+import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import { ScopeStatusRow } from "../../components/NightMode";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 import EmptyState from "../../components/EmptyState";
+import { formatDateTime } from "../../lib/time";
 
 const ChevronLeftIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
@@ -63,18 +68,14 @@ const toneClasses = {
 
 function fmtDate(d) {
   if (!d) return "";
-  return new Date(d).toLocaleString("en-PH", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatDateTime(d, { year: false });
 }
 
 const ALERT_TABS = ["Active", "Resolved", "All"];
 
 export default function CheckerInventoryManagementPage() {
   const navigate = useNavigate();
+  const timedIn = useTimedIn();
   const token = localStorage.getItem("token");
 
   // Top-level view: "items" or "alerts"
@@ -95,8 +96,10 @@ export default function CheckerInventoryManagementPage() {
   const [notice, setNotice] = useState("");
 
   // Add / edit item
-  const [editing, setEditing] = useState(null); // null = closed, {} = new, product = edit
-  const [form, setForm] = useState(EMPTY_ITEM);
+  // Kept as a draft while the modal is open, so a refresh reopens it as it was.
+  const formDraft = useDraft("checker:item", { editing: null, form: EMPTY_ITEM }, { when: (v) => !!v.editing });
+  const { editing, form } = formDraft.values; // editing: null = closed, {} = new, product = edit
+  const { editing: setEditing, form: setForm } = formDraft.set;
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const isNew = editing && !editing.id;
@@ -132,18 +135,13 @@ export default function CheckerInventoryManagementPage() {
 
     const name = form.name.trim();
     if (!name) return setFormError("Enter the item name.");
-    const min = form.minimum_stock === "" ? null : Number(form.minimum_stock);
-    const max = form.maximum_stock === "" ? null : Number(form.maximum_stock);
-    if (min !== null && (!Number.isInteger(min) || min < 0)) return setFormError("Minimum stock must be a whole number, 0 or more.");
-    if (max !== null && (!Number.isInteger(max) || max < 0)) return setFormError("Maximum stock must be a whole number, 0 or more.");
-    if (min !== null && max !== null && max < min) return setFormError("Maximum stock must be greater than or equal to the minimum stock.");
 
+    // Minimum and maximum stock are set by Admin only (Admin > Stock Limits),
+    // so they are not sent from here.
     const payload = {
       name,
       category: form.category.trim() || null,
       unit: form.unit.trim() || null,
-      minimum_stock: min,
-      maximum_stock: max,
       description: form.description.trim() || null,
     };
 
@@ -284,6 +282,7 @@ export default function CheckerInventoryManagementPage() {
           </div>
         </div>
         <ScopeStatusRow className="px-4 pb-3" />
+        <TimeInNotice timedIn={timedIn} className="mx-4 mb-3" />
 
         {/* View tabs */}
         <div className="px-4 pb-3 flex gap-2">
@@ -448,7 +447,7 @@ export default function CheckerInventoryManagementPage() {
                   {isActive ? (
                     <button
                       onClick={() => resolveAlert(a.id)}
-                      disabled={resolving === a.id}
+                      disabled={resolving === a.id || timedIn === false}
                       className="shrink-0 text-[13px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
                     >
                       Resolve
@@ -482,6 +481,7 @@ export default function CheckerInventoryManagementPage() {
             </div>
 
             <form onSubmit={saveItem} className="px-4 py-4 flex flex-col gap-3">
+              <DraftHint draft={formDraft} />
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-medium text-slate-500">Item Name</span>
                 <input
@@ -526,34 +526,30 @@ export default function CheckerInventoryManagementPage() {
                 </label>
               </div>
 
+              {/* Read-only: only the Admin sets the minimum and maximum stock. */}
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-[11px] font-medium text-slate-500">Minimum Stock (low stock alert)</span>
                   <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputMode="numeric"
-                    value={form.minimum_stock}
-                    onChange={(e) => setForm({ ...form, minimum_stock: e.target.value })}
-                    placeholder="e.g. 500"
-                    className={inputCls}
+                    type="text"
+                    readOnly
+                    value={isNew ? "Set by Admin" : (form.minimum_stock === "" ? "—" : form.minimum_stock)}
+                    className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`}
+                    aria-label="Minimum stock, set by Admin"
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-[11px] font-medium text-slate-500">Maximum Stock (optional)</span>
+                  <span className="text-[11px] font-medium text-slate-500">Maximum Stock</span>
                   <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputMode="numeric"
-                    value={form.maximum_stock}
-                    onChange={(e) => setForm({ ...form, maximum_stock: e.target.value })}
-                    placeholder="e.g. 5000"
-                    className={inputCls}
+                    type="text"
+                    readOnly
+                    value={isNew ? "Set by Admin" : (form.maximum_stock === "" ? "—" : form.maximum_stock)}
+                    className={`${inputCls} bg-slate-50 text-slate-500 cursor-not-allowed`}
+                    aria-label="Maximum stock, set by Admin"
                   />
                 </label>
               </div>
+              <div className="text-[11px] text-slate-400 -mt-1">Only the Admin can set or change the minimum and maximum stock.</div>
 
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-medium text-slate-500">Description (optional)</span>
@@ -586,7 +582,7 @@ export default function CheckerInventoryManagementPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || timedIn === false}
                   className="flex-1 text-[13px] font-semibold bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg py-2 transition-colors disabled:opacity-50"
                 >
                   {saving ? "Saving…" : isNew ? "Add Item" : "Save Changes"}

@@ -6,6 +6,8 @@ import PhoneInput from "../components/PhoneInput";
 import AddressFields from "../components/AddressFields";
 import { MOBILE_REGEX, MOBILE_MESSAGE, toStoredPhone } from "../lib/phone";
 import { APPLICANT_POSITIONS } from "../lib/positions";
+import { useDraft } from "../lib/useDraft";
+import DraftHint from "../components/DraftHint";
 
 // Public job application form, opened by scanning the QR code that HR prints
 // from HRIS > Interviews. No login. Sends POST /api/apply; the application
@@ -31,15 +33,18 @@ const EMPTY = {
 export default function ApplyPage() {
   // Opened from an employee's referral link: /job-applications/EMP-0001
   const { referrer = "" } = useParams();
-  const [form, setForm] = useState(EMPTY);
+  // What was typed survives a refresh (the resume has to be attached again).
+  const draft = useDraft("apply", { form: EMPTY });
+  const { form } = draft.values;
+  const setForm = draft.set.form;
   const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(null); // { name, phone, position_applied } once sent
   const [resume, setResume] = useState(null);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), []);
+  const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -71,7 +76,9 @@ export default function ApplyPage() {
       if (res.status === 413) throw new Error("The resume is too large. Use a file up to 5 MB.");
       if (res.status === 429) throw new Error("Too many applications were sent from this network. Wait a few minutes and try again.");
       if (!res.ok) throw new Error(data?.message || "The application could not be sent. Try again.");
-      setSent(true);
+      setSent({ name: form.name, phone: form.phone, position_applied: form.position_applied });
+      draft.clear();
+      setResume(null);
       window.scrollTo({ top: 0 });
     } catch (err) {
       setError(err.message);
@@ -104,9 +111,9 @@ export default function ApplyPage() {
               </div>
               <h1 className="text-[22px] font-bold text-[var(--neu-accent)]">Application sent</h1>
               <p className="text-[14px] text-[var(--neu-muted)] max-w-xs">
-                Thank you, {form.name.trim().split(/\s+/)[0]}! HR received your application for <b className="text-slate-700">{form.position_applied}</b> and will contact you at +63 {form.phone} to set your interview.
+                Thank you, {sent.name.trim().split(/\s+/)[0]}! HR received your application for <b className="text-slate-700">{sent.position_applied}</b> and will contact you at +63 {sent.phone} to set your interview.
               </p>
-              <button type="button" onClick={() => { setForm(EMPTY); setResume(null); setSent(false); setErrors({}); }} className="text-[13px] font-medium text-[var(--neu-accent)] hover:underline cursor-pointer mt-1">
+              <button type="button" onClick={() => { draft.clear(); setResume(null); setSent(null); setErrors({}); }} className="text-[13px] font-medium text-[var(--neu-accent)] hover:underline cursor-pointer mt-1">
                 Send another application
               </button>
             </div>
@@ -116,6 +123,7 @@ export default function ApplyPage() {
                 <h1 className="text-[22px] font-bold text-[var(--neu-accent)] tracking-wide">Job application</h1>
                 <p className="text-[13px] text-[var(--neu-muted)] mt-1">Fill in your details. HR will contact you to set an interview.</p>
               </div>
+              <DraftHint draft={draft} onDiscard={() => { setResume(null); setErrors({}); }} />
 
               <label className="flex flex-col gap-2">
                 <span className={labelCls}>Full Name *</span>

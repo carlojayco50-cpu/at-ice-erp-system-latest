@@ -256,16 +256,17 @@
   color: var(--neu-faint);
   opacity: 1;
 }
-/* A search field on its own (no icon beside it) gets the same glass */
-:is(.ice-main, .ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input) {
+/* A search field on its own (no icon beside it) gets the same glass; one in a
+   row that already shows an icon gets no second one */
+:is(.ice-main, .ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input, :has(> svg) > input) {
   padding-left: 36px !important;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' fill='none' stroke='%23566173' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") !important;
   background-repeat: no-repeat !important;
   background-position: 12px center !important;
   background-size: 15px !important;
 }
-.cp-dark :is(.ice-main, .ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input),
-.cp-dark:is(.ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input) {
+.cp-dark :is(.ice-main, .ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input, :has(> svg) > input),
+.cp-dark:is(.ice-scope) :is(input[type="search"], input[placeholder^="Search" i]):not(div.flex.items-center.border > input, :has(> svg) > input) {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' fill='none' stroke='%239aa6b8' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") !important;
 }
 
@@ -276,16 +277,15 @@
    not close it). Its slot in the layout widens with it, so the page beside it
    narrows and every page re-lays out to fit (nothing is covered). Below
    1024px the menu button and the drawer are used instead. Labels to hide
-   carry .rail-label. */
-/* Closing waits 400ms; opening is immediate. (A transition-delay belongs to
-   the state being entered, so the closed state carries the pause.) */
+   carry .rail-label. Open and closed is the .is-open class set by
+   components/Rail.jsx (which also waits the 400ms before closing and keeps the
+   rail open across page changes), not :hover, so a page change never folds it. */
 .rail-slot {
   width: 64px;
-  transition: width 220ms ease 400ms;
+  transition: width 220ms ease;
 }
-.rail-slot:has(> aside.rail:is(:hover, :focus-within)) {
+.rail-slot.is-open {
   width: 248px;
-  transition-delay: 0ms;
 }
 aside.rail {
   width: 100%;
@@ -299,10 +299,9 @@ aside.rail .rail-label {
   white-space: nowrap;
   transition: opacity 150ms ease;
 }
-aside.rail:not(:hover, :focus-within) .rail-label {
+aside.rail:not(.is-open) .rail-label {
   opacity: 0;
   pointer-events: none;
-  transition-delay: 400ms;
 }
 /* Section titles stay visible when the rail is closed, small and centered so
    the groups of icons read as groups instead of odd gaps (the longest,
@@ -316,8 +315,7 @@ aside.rail .rail-section {
   transition: font-size 150ms ease, padding 150ms ease, letter-spacing 150ms ease, text-align 0s;
   transition-behavior: allow-discrete;
 }
-aside.rail:not(:hover, :focus-within) .rail-section {
-  transition-delay: 400ms;
+aside.rail:not(.is-open) .rail-section {
   font-size: 8px !important;
   letter-spacing: 0.04em !important;
   padding-left: 2px !important;
@@ -326,6 +324,56 @@ aside.rail:not(:hover, :focus-within) .rail-section {
 }
 @media (prefers-reduced-motion: reduce) {
   .rail-slot, aside.rail .rail-label, aside.rail .rail-section { transition: none; }
+}
+
+/* ---- Sidebar menu pages (components/SideNav.jsx) ---------------------------
+   The open section's pages sit under its icon on a thin line; the current
+   page is bold with a short accent on the line, the others muted. On the
+   closed rail the list folds away (after the same pause as the labels). */
+.sidenav-chev { opacity: 0.6; transition: transform 150ms ease, opacity 150ms ease; }
+.sidenav-sub {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease;
+}
+.sidenav-sub.is-open { grid-template-rows: 1fr; }
+.sidenav-sub > div { min-height: 0; overflow: hidden; }
+aside.rail:not(.is-open) .sidenav-sub { grid-template-rows: 0fr; }
+.sidenav-list {
+  --sidenav-line: rgba(100, 116, 139, 0.28);
+  margin: 2px 12px 6px 30px;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--sidenav-line);
+}
+.cp-dark .sidenav-list { --sidenav-line: rgba(255, 255, 255, 0.14); }
+.sidenav-link {
+  position: relative;
+  display: block;
+  padding: 5px 10px 5px 14px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--neu-faint, #64748b);
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 100ms ease, background-color 100ms ease;
+}
+.sidenav-link:hover { color: var(--neu-text, #1e293b); }
+.sidenav-link.is-current { color: var(--neu-text, #1e293b); font-weight: 600; }
+.sidenav-link.is-current::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--neu-accent, #06b6d4);
+}
+.sidenav-link:focus-visible { outline: 2px solid var(--neu-accent, #06b6d4); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .sidenav-sub, .sidenav-chev { transition: none; }
 }
 
 /* ---- Responsive, every page ----------------------------------------------

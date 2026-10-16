@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import HrLayout from "../../components/HrLayout";
 import PasswordInput from "../../components/PasswordInput";
 import { toast } from "../../lib/toast";
+import { formatDateTime } from "../../lib/time";
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -28,7 +29,7 @@ const inputCls =
   "w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500";
 
 const fmtDateTime = (v) =>
-  v ? new Date(v).toLocaleString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  v ? formatDateTime(v) : "";
 
 function Notice({ tone, children }) {
   const cls = tone === "error" ? "bg-red-50 border-red-200 text-red-700" : "bg-emerald-50 border-emerald-200 text-emerald-700";

@@ -11,11 +11,25 @@ export const COMPANY = {
 
 // Contact Support topics. Keys must match SupportMessage::TOPICS on the backend.
 export const SUPPORT_TOPICS = [
+  { key: "late_delivery", label: "Late or Missed Delivery" },
   { key: "delivery_status", label: "Delivery Status & Schedule Confirmation" },
-  { key: "emergency_supply", label: "Emergency Ice Shortage / Urgent Additional Sacks" },
-  { key: "billing", label: "Billing, Invoice or Payment Clearance" },
+  { key: "wrong_quantity", label: "Wrong Quantity Delivered" },
+  { key: "short_delivery", label: "Short Delivery (Fewer Sacks Than Invoiced)" },
+  { key: "damaged_ice", label: "Damaged or Melted Ice" },
   { key: "ice_quality", label: "Ice Quality / Temperature Verification" },
+  { key: "emergency_supply", label: "Emergency Ice Shortage / Urgent Additional Sacks" },
+  { key: "new_order", label: "New Order Request" },
+  { key: "cancel_order", label: "Cancel an Order or Delivery" },
+  { key: "change_schedule", label: "Change Delivery Schedule" },
+  { key: "billing", label: "Invoice or Billing Error" },
+  { key: "payment_proof", label: "Payment Proof Follow-up" },
+  { key: "price_inquiry", label: "Price Inquiry" },
   { key: "contract_rate", label: "Contract Rate or Volume Discount Review" },
+  { key: "change_details", label: "Change Address or Contact Details" },
+  { key: "staff_conduct", label: "Rude Driver or Salesman" },
+  { key: "account_login", label: "Account or Login Problem" },
+  { key: "feedback", label: "Feedback or Suggestion" },
+  { key: "other", label: "Other" },
 ];
 
 // Frosted ice card used across the customer portal. bg-white/90 is mapped to

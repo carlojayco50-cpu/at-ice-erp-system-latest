@@ -10,8 +10,17 @@ import HeaderAvatar from "../../components/HeaderAvatar";
 import { ScopeStatusRow } from "../../components/NightMode";
 import { initialsOf } from "../../lib/initials";
 import EmptyState from "../../components/EmptyState";
+import { printDeliveryConfirmation } from "../../lib/printDelivery";
+import { formatDateTime, formatTime } from "../../lib/time";
 
 // Icons 
+const PrinterIcon = () => (
+  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+    <polyline points="6 9 6 2 18 2 18 9" />
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+    <rect x="6" y="14" width="12" height="8" />
+  </svg>
+);
 const MapPinIcon = () => (
   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -235,7 +244,7 @@ export default function SalesmanDashboard() {
                         <>
                           <span className="text-[10px] text-slate-400 flex items-center gap-1">
                             <ClockIcon />
-                            {new Date(d.created_at).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })}
+                            {formatTime(d.created_at)}
                           </span>
                           <span className="text-[10px] text-slate-300">·</span>
                         </>
@@ -317,7 +326,7 @@ function SubmittedProof({ delivery }) {
       <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3 py-2.5">
         <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
         <span className="text-[12px] text-green-600 font-medium">
-          Confirmed{when ? ` on ${new Date(when).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}. Sent to Admin.
+          Confirmed{when ? ` on ${formatDateTime(when, { year: false })}` : ""}. Sent to Admin.
         </span>
       </div>
       {receipt && (
@@ -345,6 +354,16 @@ function SubmittedProof({ delivery }) {
           <img src={`${BACKEND_URL}/storage/${proof.photo_path}`} alt="Proof of delivery" className="w-full max-h-48 object-cover" />
         </a>
       )}
+      <button
+        type="button"
+        onClick={() => printDeliveryConfirmation({
+          delivery, proof, receipt,
+          photoUrl: proof?.photo_path ? `${BACKEND_URL}/storage/${proof.photo_path}` : null,
+        })}
+        className="w-full py-3 bg-white border border-black/[0.09] text-slate-700 text-[12px] font-semibold rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+      >
+        <PrinterIcon /> Print delivery confirmation
+      </button>
     </div>
   );
 }

@@ -5,11 +5,60 @@ namespace App\Http\Controllers;
 use App\Models\Delivery;
 use App\Models\IceLoading;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class IceLoadingController extends Controller
 {
+    /**
+     * Deliveries a Checker can count: pending or in transit, scheduled up to
+     * today (the business day in config('atice.timezone'); a later booking is
+     * not loaded yet). Each says whether it was already counted (and by whom)
+     * so the form can disable it, plus the customer and driver.
+     */
+    public function deliveries()
+    {
+        $today = Carbon::now(config('atice.timezone'))->toDateString();
+
+        $loaded = IceLoading::with('checker:id,name')
+            ->orderBy('id')
+            ->get()
+            ->unique('delivery_id')
+            ->keyBy('delivery_id');
+
+        $rows = Delivery::with(['customer:id,name', 'driver:id,name'])
+            ->whereIn('status', ['pending', 'in_transit'])
+            ->whereDate('scheduled_date', '<=', $today)
+            ->orderBy('scheduled_date')
+            ->orderBy('id')
+            ->limit(200)
+            ->get(['id', 'delivery_no', 'customer_id', 'driver_id', 'status', 'scheduled_date'])
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'delivery_no' => $d->delivery_no,
+                'customer' => $d->customer?->name,
+                'driver' => $d->driver?->name,
+                'status' => $d->status,
+                'scheduled_date' => $d->scheduled_date?->toDateString(),
+                'loaded' => $loaded->has($d->id),
+                'loaded_by' => $loaded->get($d->id)?->checker?->name,
+            ]);
+
+        return response()->json($rows);
+    }
+
+    private function alreadyLoaded(?IceLoading $loading)
+    {
+        $who = $loading?->checker?->name;
+
+        return response()->json([
+            'message' => 'This delivery\'s ice loading was already recorded'
+                .($who ? " by {$who}" : '').'. A delivery can only be counted once.',
+            'already_loaded' => true,
+        ], 409);
+    }
+
     public function index(Request $request)
     {
         $query = IceLoading::with(['delivery.customer', 'checker:id,name'])
@@ -24,28 +73,6 @@ class IceLoadingController extends Controller
         }
 
         return response()->json($query->paginate(50));
-    }
-
-    // GET /api/ice-loadings/deliveries
-    // Today's deliveries (not cancelled) for the Checker's dropdown: delivery
-    // number, customer and driver. "Today" is the business day in config('atice.timezone').
-    public function todaysDeliveries()
-    {
-        $today = Carbon::now(config('atice.timezone'))->toDateString();
-
-        $rows = Delivery::with(['customer:id,name', 'driver:id,name'])
-            ->whereDate('scheduled_date', $today)
-            ->where('status', '!=', 'cancelled')
-            ->orderByDesc('id')
-            ->get()
-            ->map(fn ($d) => [
-                'id' => $d->id,
-                'delivery_no' => $d->delivery_no,
-                'customer' => $d->customer?->name,
-                'driver' => $d->driver?->name,
-            ]);
-
-        return response()->json($rows);
     }
 
     public function store(Request $request)
@@ -64,8 +91,8 @@ class IceLoadingController extends Controller
             return response()->json(['message' => 'That delivery was cancelled.'], 422);
         }
 
-        // The time is typed without a zone: it is local time, not UTC.
-        $loadedAt = Carbon::parse($validated['loaded_at'], config('atice.timezone'))->utc();
+        // The time is typed without a zone: it is local time, not UTC. Saved in the app's zone, which is how it is read back.
+        $loadedAt = Carbon::parse($validated['loaded_at'], config('atice.timezone'))->setTimezone(config('app.timezone'));
 
         $productTypes = array_column($validated['items'], 'product_type');
         if (count($productTypes) !== count(array_unique($productTypes))) {
@@ -87,25 +114,40 @@ class IceLoadingController extends Controller
 
         $created = [];
 
-        DB::beginTransaction();
         try {
-            foreach ($itemsToSave as $item) {
-                $created[] = IceLoading::create([
-                    'delivery_id' => $validated['delivery_id'],
-                    'product_type' => $item['product_type'],
-                    'quantity_loaded' => $item['quantity'],
-                    'loaded_at' => $loadedAt,
-                    'checker_id' => auth()->id(),
-                ]);
-            }
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
+            $created = DB::transaction(function () use ($validated, $itemsToSave, $loadedAt) {
+                // Lock the delivery so two Checkers saving the same delivery
+                // at once are handled one after the other.
+                Delivery::whereKey($validated['delivery_id'])->lockForUpdate()->first();
 
-            return response()->json([
-                'message' => 'Something went wrong. Please try again.',
-                'error' => $e->getMessage(),
-            ], 500);
+                $existing = IceLoading::with('checker:id,name')
+                    ->where('delivery_id', $validated['delivery_id'])
+                    ->first();
+                if ($existing) {
+                    return $existing;
+                }
+
+                $rows = [];
+                foreach ($itemsToSave as $item) {
+                    $rows[] = IceLoading::create([
+                        'delivery_id' => $validated['delivery_id'],
+                        'product_type' => $item['product_type'],
+                        'quantity_loaded' => $item['quantity'],
+                        'loaded_at' => $loadedAt,
+                        'checker_id' => auth()->id(),
+                    ]);
+                }
+
+                return $rows;
+            });
+            if ($created instanceof IceLoading) {
+                return $this->alreadyLoaded($created);
+            }
+        } catch (UniqueConstraintViolationException) {
+            // The unique index caught a save that got past the check.
+            return $this->alreadyLoaded(
+                IceLoading::with('checker:id,name')->where('delivery_id', $validated['delivery_id'])->first()
+            );
         }
 
         $loaded = collect($created)->map(

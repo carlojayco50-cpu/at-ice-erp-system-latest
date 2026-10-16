@@ -23,6 +23,11 @@ async function api(url, options = {}) {
 }
 const todayLocal = () => new Date().toLocaleDateString("en-CA");
 const addDays = (ymd, n) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+// Same pay-period buttons and search as Admin > Payroll
+const Chevron = ({ left }) => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><polyline points={left ? "15 18 9 12 15 6" : "9 18 15 12 9 6"} /></svg>;
+const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const navBtn = "inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 disabled:opacity-40 cursor-pointer";
 const num = (n) => { const v = Number(n); return !v ? "—" : Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0$/, ""); };
 
 const STATUS = {
@@ -90,15 +95,18 @@ export default function TimesheetsPage() {
     <HrLayout pageTitle="Timesheets" breadcrumb="HRIS / Timesheets">
       <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <button type="button" aria-label="Previous pay period" disabled={!period} onClick={() => setDate(addDays(period.start, -1))} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500 hover:border-cyan-400 cursor-pointer">‹</button>
+          <button type="button" aria-label="Previous pay period" title="Previous pay period" disabled={!period} onClick={() => setDate(addDays(period.start, -1))} className={navBtn}><Chevron left /> Previous</button>
           <span className="px-3 py-1.5 rounded-md bg-slate-50 border border-black/[0.06] text-xs text-slate-700 font-medium min-w-[180px] text-center" title="Start and end are fixed by the pay period">
             {period ? payPeriodLabel(period) : "…"}
           </span>
-          <button type="button" aria-label="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500 hover:border-cyan-400 cursor-pointer">›</button>
+          <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>
           <input type="date" aria-label="Go to the pay period of a date" onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
         </div>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name"
-          className="px-2.5 py-1.5 border border-black/[0.09] rounded-md text-xs w-full sm:w-56 focus:outline-none focus:border-cyan-400" />
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-slate-500 w-full sm:w-60">
+          <SearchIcon />
+          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name"
+            className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
+        </div>
         <div className="flex-1" />
         {period && !ended && <span className="text-[11px] text-amber-600">This pay period ends {period.end}; timesheets can be approved after that.</span>}
         <button type="button" onClick={approve} disabled={!ended || selected.size === 0 || busy}

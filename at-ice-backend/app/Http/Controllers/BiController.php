@@ -10,7 +10,9 @@ use App\Models\LiveEvent;
 use App\Models\Product;
 use App\Models\Receipt;
 use Carbon\Carbon;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -823,8 +825,28 @@ class BiController extends Controller
         return $lastEnd > 0 ? mb_substr($text, 0, $lastEnd + 1) : $text;
     }
 
-    // GET /api/bi/ai-summary
-    public function aiSummary()
+    // The last AI summary is kept in the cache (the database store outside
+    // tests, so it survives restarts) together with a fingerprint of exactly
+    // what was sent to Groq. Groq's free tier allows only about 7,000 input
+    // tokens a minute, so Groq is asked again only when that fingerprint
+    // changes, that is when the figures, the prompt or the model settings
+    // change.
+    private const AI_CACHE_KEY = 'bi.ai_summary';
+
+    // Set after a 429 from Groq: no new request before this time.
+    private const AI_WAIT_KEY = 'bi.ai_summary.wait_until';
+
+    // Only one request at a time may call Groq (many dashboards loading at once).
+    private const AI_LOCK_KEY = 'bi.ai_summary.lock';
+
+    // The Admin's Refresh button asks for a new summary even when the figures
+    // are the same, but at most once in this many seconds.
+    private const AI_FORCE_COOLDOWN = 300;
+
+    // GET /api/bi/ai-summary (?refresh=1 from the Admin's Refresh button)
+    // Returns { summary, generated_at, stale, message }. stale = Groq could
+    // not be asked, so this is the last summary, made from older figures.
+    public function aiSummary(Request $request)
     {
         $data = json_decode($this->summary()->content(), true);
 
@@ -839,15 +861,68 @@ class BiController extends Controller
     Overdue receivables: ₱'.number_format($data['overdue']['total_overdue_amount']).' across '.$data['overdue']['overdue_customers'].' customer(s)
 
     Respond with ONLY the summary paragraph, no labels or headers.';
+        $payload = [
+            'model' => 'openai/gpt-oss-20b',
+            'messages' => [
+                ['role' => 'user', 'content' => $prompt],
+            ],
+            // gpt-oss is a reasoning model: part of the budget is used for
+            // its hidden "thinking" before the answer. 300 was too small
+            // and cut the summary mid-sentence.
+            'max_tokens' => 1024,
+            'temperature' => 0.7,
+        ];
+        $fingerprint = hash('sha256', json_encode($payload));
+        $force = $request->boolean('refresh');
+
+        $stored = Cache::get(self::AI_CACHE_KEY);
+        if ($this->aiSummaryIsCurrent($stored, $fingerprint, $force)) {
+            return $this->aiSummaryReply($stored);
+        }
 
         // Read the key through config (env() returns null in production once
         // the config is cached). Falls back to env() for local development.
         $apiKey = config('services.groq.key') ?: env('GROQ_API_KEY');
 
         if (! $apiKey) {
-            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+            return $this->aiSummaryReply($stored, true);
         }
 
+        // Groq asked us to wait (429): do not call it again before then.
+        $waitUntil = (int) Cache::get(self::AI_WAIT_KEY, 0);
+        if ($waitUntil > now()->timestamp) {
+            return $this->aiSummaryBusy($stored, $waitUntil - now()->timestamp);
+        }
+
+        try {
+            return Cache::lock(self::AI_LOCK_KEY, 45)->block(35, function () use ($payload, $fingerprint, $force, $apiKey) {
+                // Another request may have made this summary while this one waited.
+                $stored = Cache::get(self::AI_CACHE_KEY);
+                if ($this->aiSummaryIsCurrent($stored, $fingerprint, $force)) {
+                    return $this->aiSummaryReply($stored);
+                }
+
+                return $this->generateAiSummary($apiKey, $payload, $fingerprint, $stored);
+            });
+        } catch (LockTimeoutException) {
+            return $this->aiSummaryReply(Cache::get(self::AI_CACHE_KEY), true);
+        }
+    }
+
+    // The stored summary still fits: same fingerprint and, for a forced
+    // refresh, made within the cooldown.
+    private function aiSummaryIsCurrent(?array $stored, string $fingerprint, bool $force): bool
+    {
+        if (! $stored || ($stored['fingerprint'] ?? null) !== $fingerprint) {
+            return false;
+        }
+
+        return ! $force
+            || Carbon::parse($stored['generated_at'])->gt(now()->subSeconds(self::AI_FORCE_COOLDOWN));
+    }
+
+    private function generateAiSummary(string $apiKey, array $payload, string $fingerprint, ?array $stored)
+    {
         try {
             $http = Http::timeout(30)
                 ->withHeaders(['Authorization' => "Bearer {$apiKey}"]);
@@ -858,21 +933,20 @@ class BiController extends Controller
                 $http = $http->withoutVerifying();
             }
 
-            $response = $http->post('https://api.groq.com/openai/v1/chat/completions', [
-                'model' => 'openai/gpt-oss-20b',
-                'messages' => [
-                    ['role' => 'user', 'content' => $prompt],
-                ],
-                // gpt-oss is a reasoning model: part of the budget is used for
-                // its hidden "thinking" before the answer. 300 was too small
-                // and cut the summary mid-sentence.
-                'max_tokens' => 1024,
-                'temperature' => 0.7,
-            ]);
+            $response = $http->post('https://api.groq.com/openai/v1/chat/completions', $payload);
         } catch (\Throwable $e) {
             Log::warning('Groq AI summary request failed', ['error' => $e->getMessage()]);
 
-            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+            return $this->aiSummaryReply($stored, true);
+        }
+
+        // Groq's free tier allows only a few requests a minute.
+        if ($response->status() === 429) {
+            preg_match('/try again in ([0-9.]+)s/i', (string) $response->json('error.message'), $wait);
+            $seconds = isset($wait[1]) ? (int) ceil((float) $wait[1]) : 30;
+            Cache::put(self::AI_WAIT_KEY, now()->timestamp + $seconds, $seconds);
+
+            return $this->aiSummaryBusy($stored, $seconds);
         }
 
         if ($response->failed()) {
@@ -882,15 +956,48 @@ class BiController extends Controller
                 'body' => $response->json(),
             ]);
 
-            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+            return $this->aiSummaryReply($stored, true);
         }
 
         $text = $response->json('choices.0.message.content');
 
         if (! is_string($text) || trim($text) === '') {
-            return response()->json(['summary' => 'AI summary unavailable at this time.']);
+            return $this->aiSummaryReply($stored, true);
         }
 
-        return response()->json(['summary' => $this->trimToCompleteSentence($text)]);
+        $stored = [
+            'fingerprint' => $fingerprint,
+            'summary' => $this->trimToCompleteSentence($text),
+            'generated_at' => now()->toIso8601String(),
+        ];
+        Cache::forever(self::AI_CACHE_KEY, $stored);
+
+        return $this->aiSummaryReply($stored);
+    }
+
+    // The stored summary (stale = Groq could not be asked this time), or
+    // the "unavailable" text when there is none yet.
+    private function aiSummaryReply(?array $stored, bool $stale = false, ?string $message = null)
+    {
+        return response()->json([
+            'summary' => $stored['summary'] ?? 'AI summary unavailable at this time.',
+            'generated_at' => $stored['generated_at'] ?? null,
+            'stale' => $stored ? $stale : false,
+            'message' => $message,
+        ]);
+    }
+
+    // Groq said to wait: show the last summary if there is one, otherwise a 429.
+    private function aiSummaryBusy(?array $stored, int $seconds)
+    {
+        $message = "The AI is busy. Try again in {$seconds} seconds.";
+
+        if ($stored) {
+            return $this->aiSummaryReply($stored, true, $message);
+        }
+
+        return $this->aiSummaryReply(null, false, $message)
+            ->setStatusCode(429)
+            ->header('Retry-After', (string) $seconds);
     }
 }

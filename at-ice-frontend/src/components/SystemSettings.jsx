@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import PasswordInput from "./PasswordInput";
+import TimeSelect from "./TimeSelect";
+import { formatDateTime } from "../lib/time";
 import { toast } from "../lib/toast";
-import { openProtectedFile } from "../lib/openFile";
+import { useDraft } from "../lib/useDraft";
+import { downloadProtectedFile } from "../lib/openFile";
 
 // Admin > Settings: the rates and rules the system uses (GET/PUT /api/settings,
-// App\Support\Settings) and the Admin override PIN that unlocks a locked
-// Attendance Station kiosk. Every change is written to the audit log.
+// App\Support\Settings) with the holiday and overtime pay rates on the same
+// card, and the Admin override PIN that unlocks a locked Attendance Station
+// kiosk. Every change is written to the audit log.
 
 const GROUPS = [
   ["payroll.", "Payroll"],
@@ -15,6 +19,9 @@ const GROUPS = [
   ["thirteenth.", "13th month"],
   ["retention.", "Records"],
 ];
+const PAY_RATES_ID = "settings-rates-pay";
+const groupId = (prefix) => `settings-rates-${prefix.replace(/\W/g, "")}`;
+const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
 const inputCls = "w-full px-2.5 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20";
 
@@ -29,7 +36,10 @@ async function api(url, options = {}) {
 }
 
 function SettingRow({ s, onSaved }) {
-  const [value, setValue] = useState(String(s.value ?? ""));
+  // An unsaved change survives a refresh (the row shows Save until it is saved).
+  const draft = useDraft(`settings:${s.key}`, { value: String(s.value ?? "") });
+  const { value } = draft.values;
+  const setValue = draft.set.value;
   const [busy, setBusy] = useState(false);
   const changed = value !== String(s.value ?? "");
   const id = `setting-${s.key}`;
@@ -39,6 +49,7 @@ function SettingRow({ s, onSaved }) {
     try {
       await api("/api/settings", { method: "PUT", body: JSON.stringify({ key: s.key, value }) });
       toast.success(`${s.label} saved.`);
+      draft.clear();
       onSaved();
     } catch (e) {
       toast.error(e.message);
@@ -61,8 +72,10 @@ function SettingRow({ s, onSaved }) {
         {s.type.slice(5).split(",").map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}
       </select>
     );
+  } else if (s.type === "time") {
+    field = <TimeSelect id={id} value={value} onChange={(e) => setValue(e.target.value)} selectClassName="px-1.5 py-1.5 border border-black/[0.09] rounded-md text-[13px] text-slate-800 outline-none focus:border-cyan-500/50" />;
   } else {
-    const type = { int: "number", number: "number", date: "date", time: "time" }[s.type] || "text";
+    const type = { int: "number", number: "number", date: "date" }[s.type] || "text";
     field = (
       <input
         id={id}
@@ -163,8 +176,10 @@ const RATE_LABELS = {
 };
 function PayRates() {
   const [rows, setRows] = useState(null);
-  const [draft, setDraft] = useState({});
-  const [from, setFrom] = useState(new Date().toLocaleDateString("en-CA"));
+  // Typed rates (and the date they apply from) survive a refresh until saved.
+  const ratesDraft = useDraft("settings:pay-rates", { draft: {}, from: new Date().toLocaleDateString("en-CA") });
+  const { draft, from } = ratesDraft.values;
+  const { draft: setDraft, from: setFrom } = ratesDraft.set;
   const load = useCallback(() => { api("/api/pay-multipliers").then(setRows).catch((e) => toast.error(e.message)); }, []);
   useEffect(() => { load(); }, [load]);
   const save = async (key) => {
@@ -178,8 +193,8 @@ function PayRates() {
     }
   };
   return (
-    <div className="bg-white border border-black/[0.09] rounded-xl p-[18px]">
-      <h2 className="text-[15px] font-semibold text-slate-800">Holiday and overtime pay rates</h2>
+    <section id={PAY_RATES_ID} className="mt-4 scroll-mt-20">
+      <h3 className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">Holiday and overtime pay rates</h3>
       <p className="text-[12px] text-slate-500 mt-0.5">x the hourly rate. Client defaults; the DOLE rate is in each note. A change applies from the date below.</p>
       <label className="mt-2 flex items-center gap-2 text-[12px] text-slate-600">New rates apply from
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputCls} w-auto`} />
@@ -195,7 +210,7 @@ function PayRates() {
             className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-40">Save</button>
         </div>
       ))}
-    </div>
+    </section>
   );
 }
 
@@ -224,7 +239,7 @@ function RetentionReview() {
   const rows = [
     ...(data?.employees || []).map((e) => ({
       key: `e${e.id}`, kind: "employee", ref: e.id, label: `${e.employee_id} ${e.name}`,
-      note: `Inactive since ${e.deactivated_at} · ${e.attendance_count} attendance record(s)`,
+      note: `Inactive since ${formatDateTime(e.deactivated_at)} · ${e.attendance_count} attendance record(s)`,
       csv: `/api/attendances/export?from=2000-01-01&to=${today}&employee_id=${e.id}`, file: `attendance-${e.employee_id}.csv`,
     })),
     ...(data?.attendance_years || []).map((y) => ({
@@ -249,7 +264,7 @@ function RetentionReview() {
             <span className="font-medium text-slate-800">{r.label}</span>
             <span className="text-slate-400">{r.note}</span>
             <span className="flex-1" />
-            <button type="button" className={btn} onClick={() => openProtectedFile(r.csv, r.file)}>Download CSV</button>
+            <button type="button" className={btn} onClick={() => downloadProtectedFile(r.csv, r.file)}>Download CSV</button>
             <button type="button" className={btn} onClick={() => act("keep", r.kind, r.ref, r.label)}>Keep</button>
             {r.kind === "employee" && <button type="button" className={btn} onClick={() => act("anonymize", r.kind, r.ref, r.label)}>Anonymize</button>}
             <button type="button" className="px-2.5 py-1 rounded-md border border-red-200 text-[11px] text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => act("delete", r.kind, r.ref, r.label)}>Delete</button>
@@ -271,24 +286,31 @@ export default function SystemSettings() {
 
   return (
     <div className="flex flex-col gap-4 max-w-4xl">
-      <div className="bg-white border border-black/[0.09] rounded-xl p-[18px]">
+      <div id="settings-rates" className="bg-white border border-black/[0.09] rounded-xl p-[18px] scroll-mt-20">
         <h2 className="text-[15px] font-semibold text-slate-800">Rates and rules</h2>
-        <p className="text-[12px] text-slate-500 mt-0.5">Used by attendance, leave and payroll. Each change is recorded in the audit log.</p>
+        <p className="text-[12px] text-slate-500 mt-0.5">Used by attendance, leave and payroll, including holiday and overtime pay. Each change is recorded in the audit log.</p>
+        {settings && (
+          <nav aria-label="Rates and rules sections" className="mt-3 flex flex-wrap gap-1.5">
+            {[...GROUPS.filter(([prefix]) => settings.some((s) => s.key.startsWith(prefix))).map(([prefix, title]) => [groupId(prefix), title]), [PAY_RATES_ID, "Holiday and overtime pay"]].map(([id, title]) => (
+              <button key={id} type="button" onClick={() => scrollTo(id)} className="px-2.5 py-1 rounded-full border border-black/[0.09] bg-slate-50 text-[11px] text-slate-600 hover:bg-white hover:border-cyan-500/40 hover:text-cyan-700 cursor-pointer">{title}</button>
+            ))}
+          </nav>
+        )}
         {error && <p role="alert" className="mt-3 text-[12px] text-red-600">{error}</p>}
         {!settings && !error && <p className="mt-3 text-[12px] text-slate-400">Loading…</p>}
         {settings && GROUPS.map(([prefix, title]) => {
           const rows = settings.filter((s) => s.key.startsWith(prefix));
           return rows.length ? (
-            <section key={prefix} className="mt-4">
+            <section key={prefix} id={groupId(prefix)} className="mt-4 scroll-mt-20">
               <h3 className="text-[11px] font-semibold tracking-wider uppercase text-slate-400">{title}</h3>
               {rows.map((s) => <SettingRow key={`${s.key}:${s.value}`} s={s} onSaved={load} />)}
             </section>
           ) : null;
         })}
+        <PayRates />
       </div>
-      <PayRates />
-      <OverridePinForm />
-      <RetentionReview />
+      <div id="settings-admin-pin" className="scroll-mt-20"><OverridePinForm /></div>
+      <div id="settings-retention" className="scroll-mt-20"><RetentionReview /></div>
     </div>
   );
 }

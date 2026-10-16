@@ -55,7 +55,7 @@ class ProjectController extends Controller
     public function options()
     {
         return response()->json(
-            Project::whereIn('status', ['planned', 'working', 'stuck'])->orderBy('name')->get(['id', 'name', 'status'])
+            Project::whereIn('status', ['planned', 'working', 'stuck'])->orderBy('name')->get(['id', 'name', 'status', 'description'])
         );
     }
 
