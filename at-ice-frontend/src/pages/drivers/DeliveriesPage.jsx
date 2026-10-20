@@ -13,6 +13,8 @@ import HeaderAvatar from "../../components/HeaderAvatar";
 import { ScopeStatusRow } from "../../components/NightMode";
 import { initialsOf } from "../../lib/initials";
 import EmptyState from "../../components/EmptyState";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 
 // Pusher/Echo setup, created once at module load
 window.Pusher = Pusher;
@@ -107,6 +109,7 @@ export function DeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [driverPos, setDriverPos] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const timedIn = useTimedIn();
   const watchIdRef = useRef(null);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -287,6 +290,7 @@ export function DeliveriesPage() {
 
       {/* Delivery list */}
       <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
+        <TimeInNotice timedIn={timedIn} />
         {loading && (
           <SkeletonList />
         )}
@@ -386,7 +390,7 @@ export function DeliveriesPage() {
                     <div className="flex gap-2 mt-1">
                       <button
                         onClick={() => startDelivery(d.id)}
-                        disabled={actionLoading === d.id}
+                        disabled={actionLoading === d.id || timedIn === false}
                         className="flex-1 py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
                       >
                         {actionLoading === d.id ? "Updating…" : "Start Delivery"}

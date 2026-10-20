@@ -8,10 +8,11 @@ import { toList } from "../../lib/list";
 import { formatDateTime as dateTime12 } from "../../lib/time";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
-import { DriverView, StoreView, EditDeliveryModal, MarkOffModal } from "./deliveries/BoardViews";
+import { DriverView, StoreView, EditDeliveryModal } from "./deliveries/BoardViews";
 import ContractsTab from "./deliveries/ContractsTab";
 import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
+import { STATUS_STYLE } from "./deliveries/utils";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 
@@ -43,14 +44,7 @@ const TrashIcon = () => <svg width="13" height="13" fill="none" stroke="currentC
 const EyeIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
 const BanIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>;
 
-// Board colors (lib/boardTones.js, monday.com style): a solid status cell.
-const STATUS_STYLE = {
-  pending:    { bg: "bg-[#579bfc]", text: "text-white" },
-  queued:     { bg: "bg-[#a25ddc]", text: "text-white" },
-  in_transit: { bg: "bg-[#0e7490]", text: "text-white" },
-  delivered:  { bg: "bg-[#00c875]", text: "text-white" },
-  cancelled:  { bg: "bg-[#c4c4c4]", text: "text-white" },
-};
+// Status pill colors: deliveries/utils.js (one meaning per color everywhere)
 
 // Ice products delivered to customers. These are NOT inventory items
 // (ice is perishable and goes straight to the truck), so they are a fixed
@@ -83,7 +77,7 @@ const emptyBlock = () => ({
 // in_transit or unavailable. Worked out from attendance and deliveries.
 const DRIVER_STATUS = {
   available:   { dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  in_transit:  { dot: "bg-amber-500",   pill: "bg-amber-50 text-amber-700 border-amber-200" },
+  in_transit:  { dot: "bg-cyan-600",    pill: "bg-cyan-50 text-cyan-800 border-cyan-200" },
   unavailable: { dot: "bg-slate-400",   pill: "bg-slate-100 text-slate-600 border-slate-200" },
 };
 const DRIVER_ORDER = { available: 0, in_transit: 1, unavailable: 2 };
@@ -147,7 +141,6 @@ export default function DeliveriesPage() {
   const [board, setBoard] = useState(null);
   const [boardLoading, setBoardLoading] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [markOff, setMarkOff] = useState(undefined); // undefined = closed, null = pick a driver
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -391,7 +384,6 @@ export default function DeliveriesPage() {
                 {boardDate !== todayStr() && (
                   <button type="button" onClick={() => setBoardDate(todayStr())} className="px-2.5 py-1.5 rounded-lg border border-black/[0.09] text-[12px] text-slate-600 hover:bg-slate-50">Today</button>
                 )}
-                <button type="button" onClick={() => setMarkOff(null)} className="px-3 py-1.5 rounded-lg border border-red-200 text-[12px] font-medium text-red-600 hover:bg-red-50">Driver absent</button>
               </>
             )}
             {tab === "list" && (
@@ -440,14 +432,14 @@ export default function DeliveriesPage() {
         )}
 
         {tab === "drivers" && (
-          <DriverView board={board} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} onMarkOff={(dr) => setMarkOff(dr)} />
+          <DriverView board={board} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
         {tab === "stores" && (
           <StoreView board={board} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
         )}
         {tab === "contracts" && <ContractsTab stores={activeStores} live={live} onChanged={refreshAll} />}
         {tab === "assign" && (
-          <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} onMarkOff={(dr) => setMarkOff(dr)} />
+          <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} />
         )}
 
         {tab === "list" && (<>
@@ -462,7 +454,7 @@ export default function DeliveriesPage() {
               className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border transition-colors cursor-pointer ${statusFilter === f.value ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-600 hover:bg-slate-50"}`}
             >
               {f.label}{" "}
-              <span className={`ml-1 inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full text-[11px] font-bold tabular-nums ${statusFilter === f.value ? "bg-white text-cyan-700" : counts[f.value] > 0 ? "bg-slate-800 text-white" : "bg-slate-200 text-slate-600"}`}>
+              <span className={`ml-1 inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full text-[11px] font-bold tabular-nums ${statusFilter === f.value ? "count-chip is-on" : counts[f.value] > 0 ? "count-chip" : "count-chip is-zero"}`}>
                 {counts[f.value]}
               </span>
             </button>
@@ -506,7 +498,7 @@ export default function DeliveriesPage() {
                       {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                     </td>
                     <td className="px-[18px] py-2.5">
-                      <span className={`inline-flex items-center justify-center min-w-[88px] px-2 py-1 rounded-sm text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
+                      <span className={`inline-flex items-center justify-center min-w-[84px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
                         {d.status?.replace("_", " ")}
                       </span>
                     </td>
@@ -530,7 +522,7 @@ export default function DeliveriesPage() {
                           <EyeIcon />
                         </button>
                         {d.status !== "delivered" && d.status !== "cancelled" && (
-                          <button onClick={() => setCancelTarget(d)} className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50" title="Cancel">
+                          <button data-no-confirm onClick={() => setCancelTarget(d)} className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50" title="Cancel">
                             <BanIcon />
                           </button>
                         )}
@@ -753,16 +745,6 @@ export default function DeliveriesPage() {
           isToday={String(editing.scheduled_date || "").slice(0, 10) === (board?.today || todayStr())}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); refreshAll(); }}
-        />
-      )}
-
-      {markOff !== undefined && (
-        <MarkOffModal
-          driver={markOff}
-          drivers={board?.drivers || []}
-          date={boardDate < todayStr() ? todayStr() : boardDate}
-          onClose={() => setMarkOff(undefined)}
-          onSaved={() => { setMarkOff(undefined); refreshAll(); }}
         />
       )}
 

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLiveTick } from "./live";
 
-// A Checker can save nothing until they have timed in at the Attendance
-// Station today (the server refuses with 403 "needs_time_in"). Pages use this
-// to show the notice and disable their save buttons. null = still checking.
+// A Checker, Salesman, Maintenance employee or Driver can save nothing until
+// they have timed in at the Attendance Station today (the server refuses with
+// 403 "needs_time_in"). Pages use this to show the notice and disable their
+// save buttons. null = still checking.
 export function useTimedIn() {
   const [timedIn, setTimedIn] = useState(null);
   const live = useLiveTick(["attendance"]);

@@ -167,15 +167,19 @@ class PaymentProofTest extends TestCase
         ], ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('is_pdf', true);
     }
 
-    public function test_customer_type_and_chain_are_saved_with_the_chain_spelled_like_an_existing_one(): void
+    // There is no chain field (owner, 2026-10-20): the chain comes from the
+    // name, a chain sent anyway is ignored, and a blank type is filled in.
+    public function test_customer_chain_comes_from_the_name_and_a_blank_type_is_filled_in(): void
     {
-        Customer::whereKey($this->customer->id)->update(['chain' => 'Alfamart', 'customer_type' => 'convenience_store']);
         $other = Customer::create(['name' => 'Alfamart Tungko', 'customer_code' => 'CUST-ALF-002', 'branch_code' => 'ALF-SJDM-002', 'invoice_code' => 'ALT', 'is_active' => true, 'email' => 'alfamart.tungko@gmail.com', 'contact_number' => '+639171234567']);
+        $contact = ['contact_person' => 'Ana', 'email' => 'alfamart.tungko@gmail.com', 'contact_number' => '+639171234567'];
 
         Sanctum::actingAs($this->admin);
-        $this->putJson("/api/customers/{$other->id}", ['customer_type' => 'convenience_store', 'chain' => ' alfamart ', 'contact_person' => 'Ana', 'email' => 'alfamart.tungko@gmail.com', 'contact_number' => '+639171234567'])
+        $this->putJson("/api/customers/{$other->id}", ['name' => 'Alfamart Tungko', 'customer_type' => '', 'chain' => 'Something Else'] + $contact)
             ->assertOk()->assertJsonPath('chain', 'Alfamart')->assertJsonPath('customer_type', 'convenience_store');
-        $this->putJson("/api/customers/{$other->id}", ['customer_type' => 'spaceship', 'contact_person' => 'Ana', 'email' => 'alfamart.tungko@gmail.com', 'contact_number' => '+639171234567'])
+        $this->putJson("/api/customers/{$other->id}", ['name' => 'Aling Nena Store', 'customer_type' => ''] + $contact)
+            ->assertOk()->assertJsonPath('chain', null)->assertJsonPath('customer_type', 'dealer');
+        $this->putJson("/api/customers/{$other->id}", ['customer_type' => 'spaceship'] + $contact)
             ->assertStatus(422)->assertJsonValidationErrors('customer_type');
     }
 

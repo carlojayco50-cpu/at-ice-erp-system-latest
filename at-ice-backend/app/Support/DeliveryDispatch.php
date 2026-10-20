@@ -26,8 +26,11 @@ use Throwable;
 // Contract deliveries (owner decision 2026-10-17):
 //   generate()        an approved contract makes one delivery per store per
 //                     delivery day; the Driver comes from driver_store_assignments
-//   reassign()        a Driver who is off today (driver_leaves, or an approved
-//                     leave request) has their pending deliveries given at random
+//   reassign()        a Driver who is off today (not timed in by
+//                     delivery.not_timed_in_minutes after their shift start, an
+//                     approved leave request, or an older driver_leaves mark;
+//                     Admin no longer marks anyone absent, owner 2026-10-20)
+//                     has their pending deliveries given at random
 //                     to an available Driver; when none is free they are queued
 //   assignQueued()    queued deliveries go LIFO (latest ordered_at first) to the
 //                     Driver who became available first
@@ -46,6 +49,10 @@ class DeliveryDispatch
             $off[$l->driver_id] = DriverLeave::TYPES[$l->type] ?? $l->type;
         }
 
+        if ($date === DriverAvailability::today()) {
+            $off += self::notTimedIn();
+        }
+
         $employeeIds = LeaveRequest::where('status', 'approved')
             ->whereDate('start_date', '<=', $date)
             ->whereDate('end_date', '>=', $date)
@@ -57,6 +64,36 @@ class DeliveryDispatch
         }
 
         return $off;
+    }
+
+    // Drivers (user id => why) who have not timed in today although their
+    // shift started more than delivery.not_timed_in_minutes ago: absence is
+    // detected from attendance, nobody marks it.
+    public static function notTimedIn(): array
+    {
+        static $memo = [null, []];
+        $now = Carbon::now(DriverAvailability::LOCAL_TZ);
+        if ($memo[0] === $now->format('Y-m-d H:i')) {
+            return $memo[1];
+        }
+        $minutes = (int) Settings::get('delivery.not_timed_in_minutes');
+        $out = [];
+        foreach (DriverAvailability::all() as $row) {
+            if ($row['status'] !== 'unavailable' || $row['reason'] !== 'Not timed in yet') {
+                continue;
+            }
+            $employee = Employee::where('user_id', $row['id'])->first();
+            if (! $employee || ($employee->date_hired && $employee->date_hired->toDateString() > $now->toDateString())) {
+                continue;
+            }
+            $start = Lateness::shiftStart($employee);
+            if ($start && $now->greaterThanOrEqualTo(Carbon::parse($now->toDateString().' '.$start, DriverAvailability::LOCAL_TZ)->addMinutes($minutes))) {
+                $out[$row['id']] = 'Not timed in';
+            }
+        }
+        $memo = [$now->format('Y-m-d H:i'), $out];
+
+        return $out;
     }
 
     // Driver ids who can take a delivery today, the one who became free first

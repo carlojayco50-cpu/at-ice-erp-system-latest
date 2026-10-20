@@ -23,6 +23,7 @@ import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import { COMPANY } from "../../lib/company";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import { confirmAction } from "../../lib/confirm";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -219,7 +220,8 @@ export default function PayrollRecordsPage() {
   const toggle = (id) => setSelected((s) => { const x = new Set(s); if (x.has(id)) x.delete(id); else x.add(id); return x; });
 
   const markPaid = async (ids, who) => {
-    if (!window.confirm(who ? `Mark the payroll of ${who} as paid? Paid is final.` : `Mark ${ids.length} payroll${ids.length === 1 ? "" : "s"} as paid? Paid is final.`)) return;
+    const title = who ? `Mark the payroll of ${who} as paid?` : `Mark ${ids.length} payroll${ids.length === 1 ? "" : "s"} as paid?`;
+    if (!(await confirmAction({ title, message: "Paid is final and cannot be undone.", confirmLabel: "Mark paid" }))) return;
     setBusy(true);
     try {
       const res = await api("/api/payrolls/mark-paid", { method: "POST", body: JSON.stringify({ ids }) });
@@ -274,7 +276,7 @@ export default function PayrollRecordsPage() {
             </div>
             <div className="flex-1" />
             <span className="text-[11px] text-slate-400">Pay day {period?.pay_day || "—"} · SSS, PhilHealth, Pag-IBIG this pay day: {data ? `${Math.round(data.gov_share * 100)}%` : "—"}</span>
-            <button type="button" onClick={() => markPaid([...selected])} disabled={selected.size === 0 || busy} className="min-w-[150px] px-3.5 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold text-center disabled:opacity-40 cursor-pointer">
+            <button type="button" data-no-confirm onClick={() => markPaid([...selected])} disabled={selected.size === 0 || busy} className="min-w-[150px] px-3.5 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold text-center disabled:opacity-40 cursor-pointer">
               {busy ? "Saving…" : selected.size ? `Mark selected paid (${selected.size})` : "Mark selected paid"}
             </button>
           </div>
@@ -335,7 +337,7 @@ export default function PayrollRecordsPage() {
                                     : <span className={rowBtn} aria-hidden="true" />}
                                   <button onClick={() => openPayslip(p)} className={`${rowBtn} border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer`}>Payslip</button>
                                   {p.status === "unpaid"
-                                    ? <button onClick={() => markPaid([p.id], r.employee_id)} disabled={busy} className={`${rowBtn} bg-emerald-500 hover:bg-emerald-600 text-white font-semibold disabled:opacity-40 cursor-pointer`}>Mark paid</button>
+                                    ? <button data-no-confirm onClick={() => markPaid([p.id], r.employee_id)} disabled={busy} className={`${rowBtn} bg-emerald-500 hover:bg-emerald-600 text-white font-semibold disabled:opacity-40 cursor-pointer`}>Mark paid</button>
                                     : <span className={`${rowBtn} border border-emerald-200 bg-emerald-50 text-emerald-700`}>Paid</span>}
                                 </div>
                               </td>

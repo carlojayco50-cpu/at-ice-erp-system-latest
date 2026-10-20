@@ -3,23 +3,20 @@ import { toast } from "../../../lib/toast";
 import { api, nextMonday, todayStr, shortDate, storeName, inputCls, labelCls, btnPrimary } from "./utils";
 import { StorePicker } from "./shared";
 
-const LEAVE_LABEL = { absent: "Absent", emergency: "Emergency leave", rest_day: "Rest day" };
-
 // Driver Stores: Admin picks which Driver handles which stores, from a date
 // (usually next week or the next pay period). The daily deliveries follow it.
-// Below: Drivers marked absent, on leave or on a rest day.
-export default function DriverStoresTab({ stores, drivers, live, onChanged, onMarkOff }) {
+// Below: Drivers who are off today. Nobody marks this: a Driver still not
+// timed in a while after their shift starts, or on approved leave, is off and
+// their stops are reassigned (owner, 2026-10-20).
+export default function DriverStoresTab({ stores, drivers, live, onChanged }) {
   const [assignments, setAssignments] = useState([]);
-  const [leaves, setLeaves] = useState([]);
   const [form, setForm] = useState({ driver_id: "", store_ids: [], effective_from: nextMonday(), effective_to: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [a, l] = await Promise.all([api("driver-store-assignments"), api("driver-leaves")]);
-      setAssignments(a);
-      setLeaves(l);
+      setAssignments(await api("driver-store-assignments"));
     } catch (err) {
       toast.error(err.message);
     }
@@ -64,17 +61,7 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged, onMa
     }
   }
 
-  async function removeLeave(l) {
-    try {
-      await api(`driver-leaves/${l.id}`, { method: "DELETE" });
-      toast.success(`${l.driver?.name || "Driver"}'s leave mark was removed.`);
-      load();
-      onChanged();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  }
-
+  const offToday = drivers.filter((dr) => dr.status === "off");
   const byDriver = drivers.map((dr) => ({ driver: dr, list: assignments.filter((a) => String(a.driver_id) === String(dr.id)) }));
 
   return (
@@ -134,19 +121,16 @@ export default function DriverStoresTab({ stores, drivers, live, onChanged, onMa
         </div>
 
         <div className="rounded-xl border border-black/[0.09]">
-          <div className="px-4 py-2.5 border-b border-black/[0.09] bg-slate-50 rounded-t-xl flex items-center justify-between">
-            <span className="text-[12.5px] font-semibold text-slate-700">Absent, on leave or rest day</span>
-            <button type="button" onClick={() => onMarkOff(null)} className="text-[11.5px] font-medium text-red-600 hover:text-red-700">+ Mark a driver off</button>
+          <div className="px-4 py-2.5 border-b border-black/[0.09] bg-slate-50 rounded-t-xl">
+            <span className="text-[12.5px] font-semibold text-slate-700">Off today</span>
+            <p className="text-[11px] text-slate-500 mt-0.5">Detected automatically: not timed in an hour after the shift starts (Admin › Settings › Rates), or on approved leave. Their stops go to a driver who is free.</p>
           </div>
-          {leaves.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">No driver is marked off from today on. Approved leave requests also count.</div>}
+          {offToday.length === 0 && <div className="px-4 py-6 text-[13px] text-slate-400">Every driver is working today.</div>}
           <ul>
-            {leaves.map((l) => (
-              <li key={l.id} className="px-4 py-2.5 border-t first:border-t-0 border-black/[0.06] flex items-center justify-between gap-3 text-[13px]">
-                <span>
-                  <span className="text-slate-800">{l.driver?.name}</span>
-                  <span className="text-slate-400"> · {shortDate(l.date)} · {LEAVE_LABEL[l.type] || l.type}{l.reason ? ` · ${l.reason}` : ""}</span>
-                </span>
-                <button type="button" onClick={() => removeLeave(l)} className="px-2 py-1 rounded-md border border-black/[0.09] text-[11.5px] text-slate-600 hover:bg-slate-50">Remove</button>
+            {offToday.map((dr) => (
+              <li key={dr.id} className="px-4 py-2.5 border-t first:border-t-0 border-black/[0.06] flex items-center justify-between gap-3 text-[13px]">
+                <span className="text-slate-800">{dr.name}</span>
+                <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-semibold">{dr.reason || "Off"}</span>
               </li>
             ))}
           </ul>

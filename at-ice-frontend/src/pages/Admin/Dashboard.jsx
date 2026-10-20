@@ -568,7 +568,7 @@ export default function Dashboard() {
                     : "From the average month so far (less than 3 months of sales)"}
                 </div>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#579bfc]/10 text-[#3a7fe0] font-semibold">Estimate</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2f6fd6]/10 text-[#1f56b5] font-semibold">Estimate</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1.6fr] divide-x divide-black/[0.06]">
               <div className="px-[18px] py-3.5">
@@ -605,7 +605,7 @@ export default function Dashboard() {
                   {[...forecastHistory, { label: `${nextMonth.label || "Next"} (est.)`, revenue: nextMonth.revenue, estimate: true }].map((h) => (
                     <div key={h.label} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${h.label}: ${fmt(h.revenue)}`}>
                       <div
-                        className={`w-full rounded-t ${h.estimate ? "bg-[#579bfc]/40 border border-dashed border-[#579bfc]" : "bg-[#579bfc]"}`}
+                        className={`w-full rounded-t ${h.estimate ? "bg-[#2f6fd6]/35 border border-dashed border-[#2f6fd6]" : "bg-[#2f6fd6]"}`}
                         style={{ height: `${Math.max(3, (Number(h.revenue) / historyMax) * 48)}px` }}
                       />
                       <span className="text-[9px] text-slate-400 truncate w-full text-center">{h.label.split(" ")[0]}</span>
@@ -665,7 +665,7 @@ export default function Dashboard() {
                         onClick={() => navigate("/admin/projects")}
                         className="w-full grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-1.5 text-xs text-left border-b border-black/[0.06] last:border-b-0 cursor-pointer hover:bg-slate-50"
                       >
-                        <span className="truncate text-slate-800">{p.name}{p.overdue && <span className="ml-1 text-[10px] text-[#d83a52] font-semibold">overdue</span>}</span>
+                        <span className="truncate text-slate-800">{p.name}{p.overdue && <span className="ml-1 text-[10px] text-[#b4233c] font-semibold">overdue</span>}</span>
                         <span className="text-[10px] font-mono text-slate-500">{fmt(p.materials_cost)}</span>
                         <StatusCell tone={{ working: "working", stuck: "stuck", planned: "info" }[p.status] || "idle"} className="min-h-[20px] rounded px-1.5 text-[10px]">
                           {{ working: "Working", stuck: "Stuck", planned: "Planned" }[p.status] || p.status}
@@ -808,7 +808,7 @@ export default function Dashboard() {
                         <span key="r" className="font-mono font-semibold text-slate-800">{fmt(s.revenue)}</span>,
                         s.unpaid > 0 ? <StatusCell tone="stuck">{fmt(s.unpaid)}</StatusCell> : <StatusCell tone="done">Paid</StatusCell>,
                         <div key="sh" className="flex items-center gap-1.5 min-w-[90px]">
-                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-[#a25ddc]" style={{ width: `${share}%` }} /></div>
+                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-[#7e3fbf]" style={{ width: `${share}%` }} /></div>
                           <span className="text-[10px] text-slate-500 w-7 text-right">{share}%</span>
                         </div>,
                       ]}

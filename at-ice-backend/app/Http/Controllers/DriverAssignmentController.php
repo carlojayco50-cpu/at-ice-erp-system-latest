@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Delivery;
-use App\Models\DriverLeave;
 use App\Models\DriverStoreAssignment;
 use App\Models\LiveEvent;
 use App\Models\User;
@@ -117,59 +116,5 @@ class DriverAssignmentController extends Controller
         Audit::log('driver_assignment.ended', $a);
 
         return response()->json(['message' => 'Assignment ended.']);
-    }
-
-    public function leaves(Request $request)
-    {
-        $from = $request->query('from', DriverAvailability::today());
-
-        return response()->json(
-            DriverLeave::with('driver:id,name')->whereDate('date', '>=', $from)->orderBy('date')->get()
-        );
-    }
-
-    // A Driver is absent, on emergency leave or on a rest day. When it is
-    // today, their pending deliveries are reassigned right away; a later day
-    // is handled on that day.
-    public function storeLeave(Request $request)
-    {
-        $data = $request->validate([
-            'driver_id' => ['required', Rule::exists('users', 'id')->where('role', 'driver')],
-            'date' => 'required|date|after_or_equal:today',
-            'type' => ['required', Rule::in(array_keys(DriverLeave::TYPES))],
-            'reason' => 'nullable|string|max:255',
-        ], ['driver_id.exists' => 'Please select a driver.']);
-        $date = Carbon::parse($data['date'])->toDateString();
-
-        if (DriverLeave::where('driver_id', $data['driver_id'])->whereDate('date', $date)->exists()) {
-            return response()->json(['message' => 'This driver is already marked off on that day.'], 422);
-        }
-
-        $leave = DriverLeave::create(['date' => $date, 'recorded_by' => $request->user()->id] + $data);
-        Audit::log('driver_leave.created', $leave, null, $leave->only(['driver_id', 'date', 'type', 'reason']));
-
-        $moved = DeliveryDispatch::reassign((int) $data['driver_id'], $date);
-        if ($moved) {
-            DeliveryDispatch::sendDelayNotices();
-        }
-        $queued = Delivery::where('status', 'queued')->where('reassigned_from_driver_id', $data['driver_id'])->whereDate('scheduled_date', $date)->count();
-
-        $text = $date === DriverAvailability::today()
-            ? ($moved
-                ? "{$moved} of their deliveries today were reassigned".($queued ? " ({$queued} queued until a driver is free)." : '.')
-                : 'They have no pending deliveries today.')
-            : 'Their deliveries that day will be reassigned on the day.';
-
-        return response()->json(['message' => "Driver marked off. {$text}", 'leave' => $leave, 'reassigned' => $moved, 'queued' => $queued], 201);
-    }
-
-    // Removes the mark. Deliveries that were already reassigned keep their new Driver.
-    public function destroyLeave($id)
-    {
-        $leave = DriverLeave::findOrFail($id);
-        Audit::log('driver_leave.removed', $leave, $leave->only(['driver_id', 'date', 'type']));
-        $leave->delete();
-
-        return response()->json(['message' => 'Leave mark removed.']);
     }
 }

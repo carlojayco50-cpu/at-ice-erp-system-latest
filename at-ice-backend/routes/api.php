@@ -87,7 +87,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
-    // Whether the signed-in employee has timed in at the kiosk (Checker pages).
+    // Whether the signed-in employee or Driver has timed in at the kiosk
+    // (Checker, Salesman, Maintenance and Driver pages).
     Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([
         'timed_in' => \App\Support\OnShift::isTimedIn($request->user()),
     ]));
@@ -168,9 +169,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
         Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
         Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
-        Route::get('driver-leaves', [DriverAssignmentController::class, 'leaves']);
-        Route::post('driver-leaves', [DriverAssignmentController::class, 'storeLeave']);
-        Route::delete('driver-leaves/{id}', [DriverAssignmentController::class, 'destroyLeave']);
 
         Route::get('products-summary', [ProductController::class, 'index']);
 
@@ -325,9 +323,11 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::delete('face-data/{id}', [FaceDataController::class, 'destroy']);
     });
 
+    // timed.in (Checker, Salesman, Maintenance, Driver): nothing is saved
+    // until they have timed in at the kiosk today (reads still work; filing
+    // leave, the account and logout are outside these groups). Admin passes.
+
     // EMPLOYEE: CHECKER ROUTES
-    // timed.in: a Checker saves nothing until they have timed in at the kiosk
-    // today (reads still work). Admin passes.
     Route::middleware(['role:employee,checker', 'timed.in'])->group(function () {
 
         Route::apiResource('products', ProductController::class);
@@ -360,7 +360,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     });
 
     // EMPLOYEE: SALESMAN ROUTES
-    Route::middleware('role:employee,salesman')->group(function () {
+    Route::middleware(['role:employee,salesman', 'timed.in'])->group(function () {
 
         Route::get('my-deliveries', [DeliveryProofController::class, 'myDeliveries']);
         Route::post('delivery-confirmation', [DeliveryProofController::class, 'confirm']);
@@ -368,7 +368,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     });
 
     // EMPLOYEE: MAINTENANCE ROUTES
-    Route::middleware('role:employee,maintenance')->group(function () {
+    Route::middleware(['role:employee,maintenance', 'timed.in'])->group(function () {
 
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
         Route::get('stock-out-items', [StockOutRequestController::class, 'items']);
@@ -385,7 +385,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     });
 
     // DRIVER ROUTES
-    Route::middleware('role:driver')->group(function () {
+    Route::middleware(['role:driver', 'timed.in'])->group(function () {
 
         Route::get('driver/deliveries', [DeliveryController::class, 'driverDeliveries']);
         Route::patch('driver/deliveries/{id}/status', [DeliveryController::class, 'updateStatus']);

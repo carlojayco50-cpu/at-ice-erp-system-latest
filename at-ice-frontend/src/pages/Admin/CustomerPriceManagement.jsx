@@ -167,8 +167,8 @@ export default function CustomerPriceManagement() {
   }
 
   const filteredRows = rows.filter((r) =>
-    (!typeFilter || (typeFilter === "none" ? !r.customer_type : r.customer_type === typeFilter))
-    && `${r.customer_name} ${r.chain || ""} ${r.branch_code || ""}`.toLowerCase().includes(search.toLowerCase())
+    (!typeFilter || (r.customer_type || "dealer") === typeFilter)
+    && `${r.customer_name} ${r.branch_code || ""}`.toLowerCase().includes(search.toLowerCase())
   );
 
   const setCount = (row) =>
@@ -193,7 +193,6 @@ export default function CustomerPriceManagement() {
             className="bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500">
             <option value="">All types</option>
             {Object.entries(CUSTOMER_TYPES).map(([v, t]) => <option key={v} value={v}>{t.label}</option>)}
-            <option value="none">Type not set</option>
           </select>
           <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
             <SearchIcon />
@@ -257,8 +256,7 @@ export default function CustomerPriceManagement() {
                       <td className="px-[18px] py-2.5">
                         <div className="text-slate-800">{row.customer_name}{row.branch_code ? <span className="text-slate-400"> · {row.branch_code}</span> : null}</div>
                         <div className="text-[11px] text-slate-400">
-                          {row.customer_type ? CUSTOMER_TYPES[row.customer_type]?.label : <span className="text-amber-600">Type not set: no reference price</span>}
-                          {row.chain ? ` · ${row.chain}` : ""}
+                          {CUSTOMER_TYPES[row.customer_type || "dealer"]?.label}
                         </div>
                       </td>
 
@@ -414,7 +412,7 @@ function ReferencePrices({ onChanged }) {
       <div className="px-[18px] py-3.5 border-b border-black/[0.09]">
         <h3 className="text-[14px] font-semibold text-slate-800">Reference prices by customer type</h3>
         <p className="text-[12px] text-slate-500 mt-0.5">
-          Client-confirmed: Dealers, SM Malls (Supermarket / Mall) and Alfamart (Convenience Store). Restaurants have no reference price yet, so set each one's own price.
+          Client-confirmed groups. Supermarkets, malls and big restaurant chains pay the SM Malls prices, convenience stores the Alfamart prices, and dealers and independent stores the Dealers prices. A blank price has not been given by the client yet.
         </p>
       </div>
       <div className="overflow-x-auto">
@@ -458,7 +456,7 @@ function ReferencePrices({ onChanged }) {
                         </>
                       ) : (
                         <>
-                          <button onClick={() => setConfirmApply(type)} className="px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]">Apply to all</button>
+                          <button data-no-confirm onClick={() => setConfirmApply(type)} className="px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]">Apply to all</button>
                           <button onClick={() => { setEditing(type); setDraft({ ...row }); }} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]"><EditIcon /> Edit</button>
                         </>
                       )}

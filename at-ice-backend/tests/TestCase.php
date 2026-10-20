@@ -2,6 +2,9 @@
 
 namespace Tests;
 
+use App\Models\Attendance;
+use App\Models\Employee;
+use App\Models\User;
 use App\Services\EmailVerifier;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
@@ -20,5 +23,18 @@ abstract class TestCase extends BaseTestCase
                 return str_contains($email, 'no-such-user') ? 'invalid' : 'valid';
             }
         });
+    }
+
+    // The user has an employee record and timed in a few minutes ago: an
+    // employee or Driver saves nothing until then (EnsureTimedIn).
+    protected function timedIn(User $user): User
+    {
+        $emp = $user->employee ?? Employee::create([
+            'user_id' => $user->id, 'employee_id' => sprintf('EMP-%04d', 8000 + $user->id), 'first_name' => $user->name, 'last_name' => 'Test',
+            'position' => ucfirst((string) ($user->sub_role ?: $user->role)), 'daily_rate' => 600, 'date_hired' => '2026-01-05', 'is_active' => true,
+        ]);
+        Attendance::create(['employee_id' => $emp->id, 'date' => now()->toDateString(), 'time_in' => now()->subMinutes(5)->format('H:i:s'), 'status' => 'present']);
+
+        return $user->fresh();
     }
 }

@@ -16,6 +16,7 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import { confirmAction } from "../../lib/confirm";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -128,7 +129,7 @@ export default function HolidaysPage({ admin = false }) {
   };
 
   const remove = async (h) => {
-    if (!window.confirm(`Remove ${h.name} (${h.date})?`)) return;
+    if (!(await confirmAction({ title: `Remove ${h.name}?`, message: `${h.date} will be an ordinary day again (late, absent and leave apply).`, confirmLabel: "Remove", danger: true }))) return;
     try {
       await api(`/api/holidays/${h.id}`, { method: "DELETE" });
       toast.success(`${h.name} was removed.`);
@@ -210,7 +211,7 @@ export default function HolidaysPage({ admin = false }) {
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-1.5">
                       <button onClick={() => setModal(h)} className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 cursor-pointer">Edit</button>
-                      <button onClick={() => remove(h)} className="px-2.5 py-1 border border-red-200 rounded-md text-[11px] text-red-600 cursor-pointer">Remove</button>
+                      <button data-no-confirm onClick={() => remove(h)} className="px-2.5 py-1 border border-red-200 rounded-md text-[11px] text-red-600 cursor-pointer">Remove</button>
                     </div>
                   </td>
                 </tr>

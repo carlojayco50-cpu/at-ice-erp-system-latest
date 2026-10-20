@@ -56,36 +56,28 @@ class CustomerController extends Controller
         }
     }
 
-    // Customer type and chain/group (filters on Admin > Customers). Both optional.
+    // Customer type (sets the reference prices). There is no chain field any
+    // more (owner, 2026-10-20): the chain is worked out from the name.
     private static function groupRules(): array
     {
         return [
             'customer_type' => ['nullable', Rule::in(array_keys(Customer::TYPES))],
-            'chain' => 'nullable|string|max:100',
         ];
     }
 
-    // Chain spelled like one already saved ("alfamart" -> "Alfamart"); blank -> null.
+    // The chain comes from the name (Customer::KNOWN_CHAINS: "SM Hypermarket
+    // Tungko" -> SM) and is used only to pick a chain's stores on a contract.
+    // A blank type is filled in from the name: a known chain's type, else
+    // Dealers, so every customer has a type and therefore a reference price.
     // An unused mop (no longer on the form) is not sent to the database as null.
     private function cleanGroup(array $data): array
     {
-        if (array_key_exists('chain', $data)) {
-            $chain = trim(preg_replace('/\s+/', ' ', (string) $data['chain']));
-            $data['chain'] = $chain === '' ? null
-                : (Customer::whereRaw('LOWER(chain) = ?', [mb_strtolower($chain)])->value('chain') ?? $chain);
-        }
-        if (array_key_exists('customer_type', $data) && $data['customer_type'] === '') {
-            $data['customer_type'] = null;
-        }
-        // A known chain (or a name that starts with one) fills in the chain
-        // and the type when they were left blank (Customer::KNOWN_CHAINS).
-        // A food word in the name ("Mi Ma Grill") makes it Restaurant / Food.
-        $known = Customer::knownChain($data['chain'] ?? null, $data['name'] ?? null);
-        if ($known && array_key_exists('chain', $data) && empty($data['chain'])) {
-            $data['chain'] = $known;
+        unset($data['chain']);
+        if (array_key_exists('name', $data)) {
+            $data['chain'] = Customer::knownChain(null, $data['name']);
         }
         if (array_key_exists('customer_type', $data) && empty($data['customer_type'])) {
-            $data['customer_type'] = Customer::guessType($data['chain'] ?? null, $data['name'] ?? null);
+            $data['customer_type'] = Customer::guessType(null, $data['name'] ?? null);
         }
         if (array_key_exists('mop', $data) && $data['mop'] === null) {
             unset($data['mop']);

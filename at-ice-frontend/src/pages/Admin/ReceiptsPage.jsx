@@ -223,7 +223,7 @@ export default function ReceiptsPage() {
                   >
                     <CheckIcon /> Approve
                   </button>
-                  <button
+                  <button data-no-confirm
                     onClick={() => { setRejectTarget(p); setRejectReason(""); }}
                     disabled={proofBusy === p.id}
                     className="px-2.5 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50 text-[12px] disabled:opacity-50"
@@ -328,7 +328,7 @@ export default function ReceiptsPage() {
                           <PrintIcon />
                         </button>
                         {r.payment_status !== "paid" && (
-                          <button
+                          <button data-no-confirm
                             onClick={() => { setPayTarget(r); setPayMethod("cash"); }}
                             disabled={!!proofByReceipt[r.id]}
                             title={proofByReceipt[r.id] ? "The customer sent a payment proof. Approve or reject it under Payment proofs to review." : undefined}

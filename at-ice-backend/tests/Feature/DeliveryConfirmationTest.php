@@ -32,7 +32,7 @@ class DeliveryConfirmationTest extends TestCase
     private function confirm(Delivery $delivery, int $quantity = 2)
     {
         Storage::fake('public');
-        $salesman = User::create(['name' => 'Salesman', 'email' => 'sales@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']);
+        $salesman = $this->timedIn(User::create(['name' => 'Salesman', 'email' => 'sales@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']));
         Sanctum::actingAs($salesman);
         // A 1x1 JPEG (no GD needed)
         $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=');

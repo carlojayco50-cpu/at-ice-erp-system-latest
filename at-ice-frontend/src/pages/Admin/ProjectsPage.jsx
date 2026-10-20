@@ -81,7 +81,7 @@ function Timeline({ p }) {
           {day(p.start_date) || "?"} – {day(p.due_date) || "?"}
         </span>
       </div>
-      {p.overdue && <div className="text-[10px] text-[#d83a52] font-semibold mt-0.5">Overdue</div>}
+      {p.overdue && <div className="text-[10px] text-[#b4233c] font-semibold mt-0.5">Overdue</div>}
     </div>
   );
 }
@@ -267,11 +267,11 @@ export default function ProjectsPage() {
                       </span>,
                       <span key="c" className="text-[11px] font-mono">
                         <b className="text-slate-800">{peso(p.materials_cost)}</b>
-                        {p.budget != null && <span className={p.budget_left < 0 ? "text-[#d83a52]" : "text-slate-400"}> / {peso(p.budget)}</span>}
+                        {p.budget != null && <span className={p.budget_left < 0 ? "text-[#b4233c]" : "text-slate-400"}> / {peso(p.budget)}</span>}
                       </span>,
                       <span key="a" className="flex items-center justify-center gap-1">
                         <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="px-2 py-1 text-[11px] rounded border border-black/[0.09] text-slate-600 hover:border-cyan-400 cursor-pointer">Edit</button>
-                        <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(p); }} className="px-2 py-1 text-[11px] rounded border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer">Delete</button>
+                        <button data-no-confirm type="button" onClick={(e) => { e.stopPropagation(); setDeleting(p); }} className="px-2 py-1 text-[11px] rounded border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer">Delete</button>
                       </span>,
                     ]}
                   />

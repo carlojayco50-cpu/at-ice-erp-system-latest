@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
@@ -26,8 +26,10 @@ const fieldBox =
 // 16px text stops iOS from zooming the page when the field is focused
 const fieldInput = "flex-1 bg-transparent text-[16px] text-slate-800 placeholder:text-[var(--neu-faint)] outline-none min-w-0 py-3 pr-4";
 
-// Sliding card geometry (px): card height, how far the Attendance Station
-// panel stops from the top when open, and how much of it peeks when closed.
+// Sliding card geometry (px): the least card height (it grows with the
+// sign-in form, e.g. when an error shows, so the peeking Attendance Station
+// panel never covers the form), how far the panel stops from the top when
+// open, and how much of it peeks when closed.
 const CARD_H = 560;
 const KIOSK_TOP = 64;
 const PEEK = 72;
@@ -49,6 +51,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState("login");
   const kiosk = mode === "kiosk";
   const [kioskBlocked, setKioskBlocked] = useState(false);
+
   // Bumped on every open so the PIN boxes start empty and take the focus.
   const [pinRun, setPinRun] = useState(0);
   const showKiosk = () => {
@@ -145,6 +148,19 @@ export default function LoginPage() {
     }
   }
 
+  // The card grows with the sign-in form (an error or notice adds a line)
+  const formLayer = useRef(null);
+  const [cardH, setCardH] = useState(CARD_H);
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = formLayer.current;
+      if (el) setCardH(Math.max(CARD_H, el.scrollHeight + PEEK + 12));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [error, notice, existing]);
+
   if (typeof existing === "string") return <Navigate to={existing} replace />;
   if (existing === null) {
     return <div className="min-h-[100dvh] w-full bg-slate-900" aria-busy="true" />;
@@ -174,10 +190,10 @@ export default function LoginPage() {
             peeks from the bottom. Clicking its title slides it up over the form
             and shows the HR PIN; clicking "Login" (or Esc, or Cancel) slides it
             back down. Only transform and opacity animate. */}
-        <div className="relative rounded-[28px] overflow-hidden shadow-2xl shadow-black/40 bg-[var(--neu-bg)]"
-          style={{ height: CARD_H }}>
+        <div className="relative rounded-[28px] overflow-clip shadow-2xl shadow-black/40 bg-[var(--neu-bg)]"
+          style={{ height: cardH }}>
           {/* Base layer: sign in */}
-          <div className="absolute inset-0 flex flex-col px-5 sm:px-8">
+          <div ref={formLayer} className="absolute inset-x-0 top-0 flex flex-col px-5 sm:px-8">
             <button
               type="button"
               onClick={showLogin}
@@ -285,10 +301,10 @@ export default function LoginPage() {
           <div
             className="neu-dark absolute inset-x-0 top-0 bg-[var(--neu-bg)] shadow-[0_-10px_24px_rgba(163,177,198,0.55)] transition-transform duration-[800ms] ease-in-out"
             style={{
-              height: CARD_H - KIOSK_TOP,
+              height: cardH - KIOSK_TOP,
               // Curved top only, so no light corners show at the bottom of the card
               borderRadius: "60% 60% 0 0 / 56px 56px 0 0",
-              transform: `translateY(${kiosk ? KIOSK_TOP : CARD_H - PEEK}px)`,
+              transform: `translateY(${kiosk ? KIOSK_TOP : cardH - PEEK}px)`,
             }}
           >
             <button

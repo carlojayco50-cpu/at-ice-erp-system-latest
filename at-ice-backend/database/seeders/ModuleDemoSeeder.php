@@ -178,8 +178,8 @@ class ModuleDemoSeeder extends Seeder
             'alfa1' => ['Alfamart Graceville', 'convenience_store', 'Alfamart', 'ALG', 'Graceville', 14.8139, 121.0405],
             'alfa2' => ['Alfamart Sapang Palay', 'convenience_store', 'Alfamart', 'ALS', 'Sapang Palay', 14.8357, 121.0540],
             'seven' => ['7-Eleven Minuyan', 'convenience_store', '7-Eleven', 'SEM', 'Minuyan', 14.8256, 121.0644],
-            'jolly' => ['Jollibee Tungko', 'restaurant', 'Jollibee', 'JBT', 'Tungkong Mangga', 14.8061, 121.0499],
-            'inasal' => ['Mang Inasal Muzon', 'restaurant', 'Mang Inasal', 'MIM', 'Muzon', 14.7935, 121.0391],
+            'jolly' => ['Jollibee Tungko', 'supermarket', 'Jollibee', 'JBT', 'Tungkong Mangga', 14.8061, 121.0499],
+            'inasal' => ['Mang Inasal Muzon', 'supermarket', 'Mang Inasal', 'MIM', 'Muzon', 14.7935, 121.0391],
             'dealer' => ['Demo Ice Dealer Kaypian', 'dealer', 'Independent', 'DIK', 'Kaypian', 14.7894, 121.0702],
         ];
         $out = [];
@@ -250,7 +250,9 @@ class ModuleDemoSeeder extends Seeder
         $trip->items()->create(['product_type' => 'bags', 'quantity_ordered' => 30, 'unit_price' => 24]);
         IceLoading::create(['delivery_id' => $trip->id, 'product_type' => 'bags', 'checker_id' => $checker->id, 'quantity_loaded' => 30, 'loaded_at' => now()->subHour()]);
 
-        // Carlo is on emergency leave: his stops today go to a free driver (Ana; Ben is in transit)
+        // Carlo is off today (an older-style off mark; Admin no longer marks
+        // Drivers off, a Driver not timed in is detected): his stops today go
+        // to a free driver (Ana; Ben is in transit)
         DriverLeave::create(['driver_id' => $carlo->id, 'date' => $today, 'type' => 'emergency', 'reason' => 'Demo: family emergency', 'recorded_by' => $admin->id]);
         DeliveryDispatch::reassign($carlo->id, $today);
         DeliveryDispatch::sendDelayNotices();

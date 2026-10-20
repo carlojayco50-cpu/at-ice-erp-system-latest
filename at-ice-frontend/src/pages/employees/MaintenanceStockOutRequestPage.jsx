@@ -8,6 +8,8 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
 import { formatDateTime } from "../../lib/time";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 
 const STATUS_LABEL = { pending: "Pending", approved: "Approved", released: "Released", rejected: "Rejected" };
 const FILTERS = [["all", "All"], ["pending", "Pending"], ["approved", "Approved"], ["released", "Released"], ["rejected", "Rejected"]];
@@ -24,6 +26,7 @@ function firstError(data, fallback) {
 // inventory (Admin approves and releases them). ?status= picks the filter,
 // ?new=1 opens the request form.
 export default function MaintenanceStockOutRequestPage() {
+  const timedIn = useTimedIn();
   const token = localStorage.getItem("token");
   const [params, setParams] = useSearchParams();
   const filter = FILTERS.some(([v]) => v === params.get("status")) ? params.get("status") : "all";
@@ -159,8 +162,9 @@ export default function MaintenanceStockOutRequestPage() {
     <RoleShell
       role="maintenance"
       title="Parts requests"
-      actionBar={<ActionBar><LoadingButton onClick={() => setShowForm(true)}><Icon name="plus" /> Request parts</LoadingButton></ActionBar>}
+      actionBar={<ActionBar><LoadingButton disabled={timedIn === false} onClick={() => setShowForm(true)}><Icon name="plus" /> Request parts</LoadingButton></ActionBar>}
     >
+      <TimeInNotice timedIn={timedIn} />
       <SuccessBanner>{notice}</SuccessBanner>
 
       {/* quick status filter */}
@@ -216,7 +220,7 @@ export default function MaintenanceStockOutRequestPage() {
         open={showForm}
         onClose={() => !submitting && setShowForm(false)}
         title="Request parts"
-        footer={<LoadingButton type="submit" form="stock-out-form" loading={submitting}>{submitting ? "Submitting…" : "Submit request"}</LoadingButton>}
+        footer={<LoadingButton type="submit" form="stock-out-form" loading={submitting} disabled={timedIn === false}>{submitting ? "Submitting…" : "Submit request"}</LoadingButton>}
       >
         <form id="stock-out-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
           <DraftHint draft={draft} />

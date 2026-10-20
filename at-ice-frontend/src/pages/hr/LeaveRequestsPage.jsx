@@ -241,8 +241,8 @@ export default function LeaveRequestsPage() {
                           <button onClick={() => setViewing(l)} className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer">View</button>
                           {l.status === "pending" && (
                             <>
-                              <button onClick={() => openDecision(l, "approved")} className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 rounded-md text-[11px] font-semibold text-white cursor-pointer">Approve</button>
-                              <button onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 border border-red-200 text-red-600 hover:bg-red-50 rounded-md text-[11px] font-semibold cursor-pointer">Reject</button>
+                              <button data-no-confirm onClick={() => openDecision(l, "approved")} className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 rounded-md text-[11px] font-semibold text-white cursor-pointer">Approve</button>
+                              <button data-no-confirm onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 border border-red-200 text-red-600 hover:bg-red-50 rounded-md text-[11px] font-semibold cursor-pointer">Reject</button>
                             </>
                           )}
                         </div>

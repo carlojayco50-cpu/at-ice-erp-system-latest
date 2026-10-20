@@ -376,7 +376,7 @@ export default function AttendanceStation() {
 
         {/* Camera card */}
         <div className="bg-[var(--neu-bg)] rounded-[28px] shadow-2xl shadow-black/30 overflow-hidden">
-          <div className="px-8 pt-7 pb-5 border-b border-[rgba(163,177,198,0.4)] flex items-center justify-between">
+          <div className="px-5 sm:px-8 pt-6 sm:pt-7 pb-5 border-b border-[rgba(163,177,198,0.4)] flex items-start justify-between gap-4">
             <div>
               <h2 className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">Face Recognition Check-In</h2>
               <p className="text-[13px] text-[var(--neu-faint)] mt-1">Choose Time In or Time Out below, face the camera, then blink and turn your head when asked.</p>
@@ -391,32 +391,20 @@ export default function AttendanceStation() {
             </div>
           </div>
 
-          <div className="px-8 py-6">
+          <div className="px-5 sm:px-8 py-6">
             <div className={`relative w-full aspect-video bg-slate-900 rounded-2xl overflow-hidden shadow-[var(--neu-inset)] ring-4 ${m.ring} transition-shadow`}>
               {/* Shown like a mirror, so "turn left" matches what the worker sees */}
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover -scale-x-100" />
 
-              {/* Liveness challenge: oval guide, the step to do, and progress */}
+              {/* Liveness challenge: only the oval guide and a greeting sit on the
+                  camera, so nothing covers the face; the step to do is shown
+                  under the camera */}
               {challenge && (
-                <div className="absolute inset-0 flex flex-col items-center justify-between py-4 pointer-events-none" aria-live="polite">
-                  <div className="px-3.5 py-1.5 rounded-full bg-black/55 text-white text-[12px] font-medium backdrop-blur-sm">
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 max-w-[90%] truncate px-3.5 py-1.5 rounded-full bg-black/55 text-white text-[12px] font-medium backdrop-blur-sm">
                     {challenge.name ? `Hi ${challenge.name.split(" ")[0]}! ` : ""}Quick live check
                   </div>
-                  <div className="w-[34%] aspect-[3/4] rounded-[50%] border-[3px] border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]" />
-                  <div className="flex flex-col items-center gap-2 px-4 py-2.5 rounded-2xl bg-black/60 backdrop-blur-sm text-center">
-                    <div className="flex items-center gap-2 text-white text-[18px] font-semibold">
-                      {challenge.step === "left" && <span aria-hidden="true">←</span>}
-                      {STEP_TEXT[challenge.step]?.title}
-                      {challenge.step === "right" && <span aria-hidden="true">→</span>}
-                    </div>
-                    <div className="text-white/75 text-[12px]">{STEP_TEXT[challenge.step]?.sub}</div>
-                    {challenge.hint && <div className="text-amber-300 text-[12px] font-medium">{challenge.hint}</div>}
-                    <div className="flex gap-1.5" aria-label={`Step ${challenge.index + 1} of ${challenge.total}`}>
-                      {Array.from({ length: challenge.total }, (_, i) => (
-                        <span key={i} className={`h-1.5 w-8 rounded-full ${i < challenge.index ? "bg-emerald-400" : i === challenge.index ? "bg-white" : "bg-white/30"}`} />
-                      ))}
-                    </div>
-                  </div>
+                  <div className="absolute inset-0 m-auto h-[64%] aspect-[3/4] rounded-[50%] border-[3px] border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]" />
                 </div>
               )}
 
@@ -438,6 +426,33 @@ export default function AttendanceStation() {
                   <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${m.dot}`} />
                   <span className="text-[11px] font-medium tracking-wide">Scanning for {m.label}</span>
                 </div>
+              )}
+            </div>
+
+            {/* What to do now: the live-check step, or what the camera is
+                waiting for. Always the same height, so the page never jumps. */}
+            <div className="mt-4 min-h-[76px] rounded-2xl px-4 py-3 shadow-[var(--neu-inset-sm)] flex flex-col items-center justify-center text-center" aria-live="polite">
+              {challenge ? (
+                <>
+                  <div className="flex items-center gap-2 text-[17px] font-semibold text-slate-800">
+                    {challenge.step === "left" && <span aria-hidden="true">←</span>}
+                    {STEP_TEXT[challenge.step]?.title}
+                    {challenge.step === "right" && <span aria-hidden="true">→</span>}
+                  </div>
+                  <div className="text-[12px] text-[var(--neu-muted)]">
+                    {challenge.hint ? <span className="font-medium text-amber-700">{challenge.hint}</span> : STEP_TEXT[challenge.step]?.sub}
+                  </div>
+                  <div className="flex gap-1.5 mt-1.5" aria-label={`Step ${challenge.index + 1} of ${challenge.total}`}>
+                    {Array.from({ length: challenge.total }, (_, i) => (
+                      <span key={i} className={`h-1.5 w-8 rounded-full ${i < challenge.index ? "bg-emerald-500" : i === challenge.index ? "bg-cyan-600" : "bg-slate-300"}`} />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-[15px] font-semibold text-slate-800">{cameraReady && !loadError ? `Ready for ${m.label}` : "Getting ready…"}</div>
+                  <div className="text-[12px] text-[var(--neu-muted)]">Stand in front of the camera. The live check starts when your face is found.</div>
+                </>
               )}
             </div>
 

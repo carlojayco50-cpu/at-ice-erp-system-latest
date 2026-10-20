@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { CUSTOMER_TYPES, CHAIN_NAMES, typeForChain, chainFromName } from "../../lib/customerTypes";
+import { CUSTOMER_TYPES, typeForChain } from "../../lib/customerTypes";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import PhoneInput from "../../components/PhoneInput";
@@ -27,11 +27,10 @@ const CopyIcon = () => <svg width="13" height="13" fill="none" stroke="currentCo
 const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const CheckIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
 
-// Customer type and chain/group (filters on the list). Keys match Customer::TYPES.
-// Customer types and their known chains: lib/customerTypes.js (same list as the backend).
-// Offered under Chain / Group next to the chains already saved.
-const CHAIN_SUGGESTIONS = [...CHAIN_NAMES, "Independent"];
-const NOT_SET = "__none";
+// Customer type (filter on the list, sets the reference prices). Keys match
+// Customer::TYPES; lib/customerTypes.js has the same list. There is no chain
+// field (owner, 2026-10-20): the type is filled in from the name (a known
+// chain's group, else Dealers) and Admin may change it.
 
 // Create Login needs what Add Customer requires (CustomerController::LOGIN_REQUIRED).
 // The login is the customer's own email, checked on the server to be an existing account.
@@ -46,7 +45,7 @@ const EMPTY_FORM = {
   name: "", block_lot: "", street: "", subdivision: "", barangay: "",
   city: "", province: "", region: "", barangay_code: "", postal_code: "", contact_person: "",
   contact_number: "", email: "", notes: "",
-  customer_type: "", chain: "",
+  customer_type: "",
   invoice_code: "", // starts every invoice number, e.g. PG-20261013-001 (blank: made from the name)
   latitude: "", longitude: "",
   _customerCode: "", _branchCode: "", _legacy: false, _legacyAddress: "", _mapLink: "",
@@ -93,7 +92,6 @@ export default function CustomersPage() {
   const [error, setError]         = useState("");
   const [search, setSearch]       = useState("");
   const [typeFilter, setTypeFilter]   = useState("");
-  const [chainFilter, setChainFilter] = useState("");
 
   // Add/Edit modal: kept as a draft while open, so a refresh reopens it as it was.
   const formDraft = useDraft("customers:form", { showForm: false, editingId: null, form: EMPTY_FORM }, { when: (v) => v.showForm });
@@ -162,7 +160,6 @@ export default function CustomersPage() {
       contact_number: localDigits(customer.contact_number),
       email: customer.email || "",
       customer_type: customer.customer_type || "",
-      chain: customer.chain || "",
       notes: customer.notes || "",
       latitude: customer.latitude ?? "",
       longitude: customer.longitude ?? "",
@@ -295,19 +292,14 @@ export default function CustomersPage() {
     navigator.clipboard?.writeText(text).catch(() => {});
   }
 
-  // Chains already saved, for the filter and the Chain / Group suggestions.
-  const savedChains = [...new Set(customers.map((c) => c.chain).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const chainOptions = [...new Set([...savedChains, ...CHAIN_SUGGESTIONS])].sort((a, b) => a.localeCompare(b));
-
   const filtered = customers.filter((c) => {
-    if (typeFilter && (typeFilter === NOT_SET ? !!c.customer_type : c.customer_type !== typeFilter)) return false;
-    if (chainFilter && (chainFilter === NOT_SET ? !!c.chain : c.chain !== chainFilter)) return false;
+    if (typeFilter && (c.customer_type || "dealer") !== typeFilter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""} ${c.chain ?? ""}`.toLowerCase();
+    const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });
-  const filtering = !!(search || typeFilter || chainFilter);
+  const filtering = !!(search || typeFilter);
   const filterCls = "bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500";
 
   const pager = usePagination(filtered);
@@ -326,12 +318,6 @@ export default function CustomersPage() {
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
               <option value="">All types</option>
               {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label}</option>)}
-              <option value={NOT_SET}>Type not set</option>
-            </select>
-            <select value={chainFilter} onChange={(e) => setChainFilter(e.target.value)} className={filterCls} aria-label="Filter by chain or group">
-              <option value="">All chains</option>
-              {savedChains.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
-              <option value={NOT_SET}>Chain not set</option>
             </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
@@ -365,7 +351,7 @@ export default function CustomersPage() {
                 <th className="px-[18px] py-2.5 font-medium">Customer</th>
                 <th className="px-[18px] py-2.5 font-medium">Location</th>
                 <th className="px-[18px] py-2.5 font-medium">Contact</th>
-                <th className="px-[18px] py-2.5 font-medium">Type / Chain</th>
+                <th className="px-[18px] py-2.5 font-medium">Type</th>
                 <th className="px-[18px] py-2.5 font-medium">Portal Login</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
@@ -400,12 +386,7 @@ export default function CustomersPage() {
                     ) : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
-                    {c.customer_type || c.chain ? (
-                      <>
-                        <div>{CUSTOMER_TYPES[c.customer_type]?.label || <span className="text-slate-300">—</span>}</div>
-                        {c.chain && <div className="text-[11px] text-slate-400">{c.chain}</div>}
-                      </>
-                    ) : <span className="text-slate-300">—</span>}
+                    {CUSTOMER_TYPES[c.customer_type || "dealer"]?.label}
                   </td>
                   <td className="px-[18px] py-2.5">
                     {c.user ? (
@@ -440,7 +421,7 @@ export default function CustomersPage() {
                       >
                         <EditIcon />
                       </button>
-                      <button
+                      <button data-no-confirm
                         onClick={() => setDeactivateTarget(c)}
                         className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50"
                         title="Deactivate"
@@ -484,51 +465,29 @@ export default function CustomersPage() {
                     label="Branch / Business Name"
                     value={form.name}
                     onChange={(v) => setForm((f) => {
-                      // Chain and type follow the name while they are blank or
-                      // still what was filled in from it (_auto*); one typed by
+                      // The type follows the name while it is blank or still
+                      // what was filled in from it (_autoType); one picked by
                       // hand is kept.
-                      const chainIsAuto = !f.chain || f.chain === f._autoChain;
-                      const chain = chainIsAuto ? chainFromName(v) : f.chain;
                       const typeIsAuto = !f.customer_type || f.customer_type === f._autoType;
-                      const type = typeIsAuto ? typeForChain(chain, v) : f.customer_type;
-                      return {
-                        ...f, name: v, chain, customer_type: type,
-                        _autoChain: chainIsAuto ? chain : f._autoChain,
-                        _autoType: typeIsAuto ? type : f._autoType,
-                      };
+                      const type = typeIsAuto ? typeForChain("", v) : f.customer_type;
+                      return { ...f, name: v, customer_type: type, _autoType: typeIsAuto ? type : f._autoType };
                     })}
                     placeholder="e.g. Alfamart Muzon"
                     required
                   />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
                   <select
-                    value={form.customer_type}
+                    value={form.customer_type || "dealer"}
                     onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value }))}
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   >
-                    <option value="">Not set</option>
                     {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label}</option>)}
                   </select>
                   <p className="mt-1 text-[11px] text-slate-400 leading-snug">
-                    {form.customer_type ? `e.g. ${CUSTOMER_TYPES[form.customer_type]?.examples}` : "Sets the reference prices. Filled in from a known chain."}
+                    Filled in from the name. Prices come from this type's reference prices (CRM › Customer Prices) unless the customer has its own.
                   </p>
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Chain / Group</label>
-                  <input
-                    type="text"
-                    list="customer-chains"
-                    value={form.chain}
-                    onChange={(e) => setForm((f) => ({ ...f, chain: e.target.value, customer_type: typeForChain(e.target.value) || f.customer_type }))}
-                    placeholder="e.g. SM, Alfamart, Independent"
-                    maxLength={100}
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  />
-                  <datalist id="customer-chains">
-                    {chainOptions.map((ch) => <option key={ch} value={ch} />)}
-                  </datalist>
                 </div>
                 <div className="col-span-2">
                   <Field

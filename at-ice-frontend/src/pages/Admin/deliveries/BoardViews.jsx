@@ -7,7 +7,7 @@ const OPEN = ["pending", "queued", "in_transit"];
 
 // Driver View: a card per Driver; clicking one lists the stores they deliver
 // to that day. "Queued" and "No driver" cards hold what still needs a driver.
-export function DriverView({ board, loading, onView, onEdit, onCancel, onMarkOff }) {
+export function DriverView({ board, loading, onView, onEdit, onCancel }) {
   const [picked, setPicked] = useState(null); // driver id, "queued" or "none"
   const deliveries = board?.deliveries || [];
   const drivers = board?.drivers || [];
@@ -63,7 +63,7 @@ export function DriverView({ board, loading, onView, onEdit, onCancel, onMarkOff
                 <span><b className="tabular-nums text-slate-800">{done}</b> done</span>
               </div>
               {reassigned > 0 && (
-                <div className="mt-1.5 text-[11px] font-medium text-amber-700">
+                <div className="mt-1.5 text-[11px] font-medium text-violet-700">
                   {reassigned} {g.driver ? "reassigned to this driver" : "from a driver who is off"}
                 </div>
               )}
@@ -79,10 +79,8 @@ export function DriverView({ board, loading, onView, onEdit, onCancel, onMarkOff
             <span className="text-[12.5px] font-semibold text-slate-700">
               {current.driver ? `${current.driver.name}: stores to deliver` : current.title}
             </span>
-            {current.driver && current.driver.status !== "off" && (
-              <button type="button" onClick={() => onMarkOff(current.driver)} className="text-[11.5px] font-medium text-red-600 hover:text-red-700">
-                Mark absent / on leave
-              </button>
+            {current.driver?.status === "off" && (
+              <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-semibold">{current.driver.reason || "Off"}</span>
             )}
           </div>
           <DeliveryRows list={current.list} showDriver={!current.driver} onView={onView} onEdit={onEdit} onCancel={onCancel} empty="No deliveries for this driver on this day." />
@@ -177,7 +175,7 @@ function RowActions({ d, onView, onEdit, onCancel }) {
         <button type="button" onClick={() => onEdit(d)} className="px-2 py-1 rounded-md border border-black/[0.09] text-[11.5px] text-slate-600 hover:bg-slate-50">Edit</button>
       )}
       {OPEN.includes(d.status) && (
-        <button type="button" onClick={() => onCancel(d)} className="px-2 py-1 rounded-md border border-black/[0.09] text-[11.5px] text-red-600 hover:bg-red-50">Cancel</button>
+        <button data-no-confirm type="button" onClick={() => onCancel(d)} className="px-2 py-1 rounded-md border border-black/[0.09] text-[11.5px] text-red-600 hover:bg-red-50">Cancel</button>
       )}
     </div>
   );
@@ -258,70 +256,6 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>
           <button type="submit" disabled={saving} className={btnPrimary}>{saving ? "Saving…" : "Save"}</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-// Mark a Driver absent, on emergency leave or on a rest day. Today's
-// pending deliveries are reassigned at random right away.
-export function MarkOffModal({ driver, drivers, date, onClose, onSaved }) {
-  const [form, setForm] = useState({ driver_id: driver ? String(driver.id) : "", date, type: "absent", reason: "" });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  async function save(e) {
-    e.preventDefault();
-    if (!form.driver_id) { setError("Please select a driver."); return; }
-    setSaving(true);
-    setError("");
-    try {
-      const res = await api("driver-leaves", { method: "POST", body: { ...form, reason: form.reason || null } });
-      toast.success(res.message);
-      onSaved();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal title="Driver absent or on leave" onClose={onClose}>
-      <form onSubmit={save} className="p-5 flex flex-col gap-3" noValidate>
-        {error && <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-[12px] text-red-700">{error}</div>}
-        <div>
-          <label className={labelCls}>Driver *</label>
-          <select value={form.driver_id} onChange={(e) => setForm({ ...form, driver_id: e.target.value })} className={inputCls}>
-            <option value="">Select driver…</option>
-            {drivers.map((dr) => <option key={dr.id} value={dr.id}>{dr.name}</option>)}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Date *</label>
-            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Type *</label>
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className={inputCls}>
-              <option value="absent">Absent</option>
-              <option value="emergency">Emergency leave</option>
-              <option value="rest_day">Rest day</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className={labelCls}>Reason</label>
-          <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className={inputCls} />
-        </div>
-        <p className="text-[11.5px] text-slate-500">
-          Their pending deliveries that day go at random to a driver who has timed in, is not on leave and is not in transit. If every driver is in transit, they wait in the queue (latest order first). Each affected store is told it may be delayed.
-        </p>
-        <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
-          <button type="button" onClick={onClose} className={btnGhost}>Close</button>
-          <button type="submit" disabled={saving} className="px-3.5 py-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white text-[12px] font-medium disabled:opacity-50">{saving ? "Saving…" : "Mark off and reassign"}</button>
         </div>
       </form>
     </Modal>

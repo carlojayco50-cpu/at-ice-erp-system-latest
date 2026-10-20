@@ -8,7 +8,7 @@
 //   unpaid
 // "Paid" and "Proof rejected" are never shown together.
 export const PAYMENT_BADGE = {
-  paid: { label: "Paid", cls: "bg-[#00a35f] text-white border-[#00a35f]" },
+  paid: { label: "Paid", cls: "bg-[#047857] text-white border-[#047857]" },
   review: { label: "Proof to review", cls: "bg-sky-50 text-sky-800 border-sky-200" },
   rejected: { label: "Rejected", cls: "bg-red-50 text-red-800 border-red-200" },
   overdue: { label: "Overdue", cls: "bg-[#fde8ec] text-[#9f1239] border-[#fbcfd8]" },

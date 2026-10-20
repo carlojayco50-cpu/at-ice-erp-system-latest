@@ -159,7 +159,7 @@ export default function CheckerStockMovementsPage() {
                   <LoadingButton loading={actingOn === `${m.id}:confirm`} disabled={!!actingOn || timedIn === false} onClick={() => act(m, "confirm")}>
                     <Icon name="check" /> Confirm
                   </LoadingButton>
-                  <LoadingButton variant="secondary" disabled={!!actingOn || timedIn === false} onClick={() => setCancelTarget(m)}>Cancel</LoadingButton>
+                  <LoadingButton data-no-confirm variant="secondary" disabled={!!actingOn || timedIn === false} onClick={() => setCancelTarget(m)}>Cancel</LoadingButton>
                 </div>
               )}
               {m.status === "confirmed" && m.confirmed_by && <div className="text-[13px] text-emerald-700 mt-2">Confirmed by {m.confirmed_by.name}</div>}

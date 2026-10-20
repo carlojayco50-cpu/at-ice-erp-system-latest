@@ -520,7 +520,6 @@
 .soft-opt.is-active { box-shadow: var(--neu-raised-sm); }
 .soft-opt.is-selected { box-shadow: var(--neu-inset-sm); color: var(--neu-accent); font-weight: 600; }
 .soft-opt.is-disabled { color: var(--neu-faint); opacity: 0.6; cursor: not-allowed; }
-.soft-list:focus-visible .soft-opt.is-active { box-shadow: var(--neu-raised-sm), 0 0 0 2px rgba(6, 182, 212, 0.6); }
 /* Search box of a long list, kept in view while the list scrolls */
 .soft-searchable .soft-search {
   position: sticky; top: -8px; z-index: 1;
@@ -569,7 +568,12 @@
 .soft-link { padding: 6px 10px; border-radius: 10px; color: var(--neu-accent); font-weight: 600; font-size: 12px; }
 .soft-link:hover { box-shadow: var(--neu-raised-sm); }
 .soft-done { padding: 7px 16px; border-radius: 10px; background: #06b6d4; color: #0f172a; font-weight: 700; font-size: 12px; box-shadow: 3px 3px 8px var(--neu-lo), -3px -3px 8px var(--neu-hi); }
-.soft-pop :is(button, [role="listbox"]):focus-visible { outline: none; box-shadow: 0 0 0 2px var(--neu-bg), 0 0 0 4px rgba(6, 182, 212, 0.75); }
+.soft-pop button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--neu-bg), 0 0 0 4px rgba(6, 182, 212, 0.75); }
+/* The list itself takes focus only to read the arrow keys: no ring of its own
+   (it drew a square cyan frame inside the rounded popup); the active option
+   carries the focus ring, rounded like the option. */
+.soft-pop .soft-list[role="listbox"]:is(:focus, :focus-visible) { outline: none !important; box-shadow: none !important; }
+.soft-pop .soft-list:focus-visible .soft-opt.is-active { box-shadow: var(--neu-raised-sm), inset 0 0 0 1.5px rgba(6, 182, 212, 0.7); }
 
 /* The fields themselves: one calendar icon and one chevron everywhere, in the
    theme color (the browser's own picker icons are hidden). */

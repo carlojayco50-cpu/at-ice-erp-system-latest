@@ -20,6 +20,7 @@ import { openProtectedFile } from "../lib/openFile";
 import { useDraft } from "../lib/useDraft";
 import DraftHint from "../components/DraftHint";
 import FileField from "../components/FileField";
+import { confirmAction } from "../lib/confirm";
 
 const TYPE_LABEL = {
   sick: "Sick Leave (SL)",
@@ -163,7 +164,7 @@ export default function LeaveRequestPage() {
   };
 
   const cancel = async (id) => {
-    if (!window.confirm("Cancel this leave request?")) return;
+    if (!(await confirmAction({ title: "Cancel this leave request?", message: "HR will no longer see it. You can file a new one.", confirmLabel: "Cancel request", danger: true }))) return;
     try {
       const res = await fetch(`/api/my-leave-requests/${id}`, { method: "DELETE", headers: authHeaders() });
       const data = await res.json().catch(() => ({}));
@@ -328,7 +329,7 @@ export default function LeaveRequestPage() {
                 </button>
               ) : <span />}
               {l.status === "pending" && (
-                <button onClick={() => cancel(l.id)} className="text-[12px] font-semibold text-red-600 hover:underline">Cancel request</button>
+                <button data-no-confirm onClick={() => cancel(l.id)} className="text-[12px] font-semibold text-red-600 hover:underline">Cancel request</button>
               )}
             </div>
           </div>

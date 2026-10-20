@@ -596,18 +596,18 @@ export default function InterviewsPage() {
                               <button onClick={() => addAsEmployee(a)} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`} title="Open Add Employee with this applicant's details">Add as Employee</button>
                             )}
                             {a.status === "pending" && (interviewDue(a) ? (
-                              <button onClick={() => openStatus(a, "interviewed")} className={`${actionBtn} border-cyan-200 text-cyan-600 hover:bg-cyan-50`}>Mark Interviewed</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "interviewed")} className={`${actionBtn} border-cyan-200 text-cyan-600 hover:bg-cyan-50`}>Mark Interviewed</button>
                             ) : (
                               <button disabled title={interviewBlockReason(a)} className={`${actionBtn} border-black/[0.09] text-slate-400 bg-slate-50 cursor-not-allowed`}>Mark Interviewed</button>
                             ))}
                             {a.status === "interviewed" && (
-                              <button onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
                             )}
                             {(a.status === "pending" || a.status === "interviewed") && (
-                              <button onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-red-200 text-red-600 hover:bg-red-50`}>Reject</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-red-200 text-red-600 hover:bg-red-50`}>Reject</button>
                             )}
                             {!isFinal(a) && (
-                              <button onClick={() => { setDeleteTarget(a); setDeleteError(""); }} className={`${actionBtn} border-black/[0.09] text-slate-500 hover:border-red-300 hover:text-red-500`}>Delete</button>
+                              <button data-no-confirm onClick={() => { setDeleteTarget(a); setDeleteError(""); }} className={`${actionBtn} border-black/[0.09] text-slate-500 hover:border-red-300 hover:text-red-500`}>Delete</button>
                             )}
                           </div>
                         </td>

@@ -638,7 +638,7 @@ export default function EmployeesPage() {
                         >
                           <EditIcon /> Edit
                         </button>
-                        <button
+                        <button data-no-confirm
                           onClick={() => setConfirmDeactivate(emp)}
                           title="Deactivate"
                           aria-label={`Deactivate ${fullName(emp)}`}
@@ -1166,7 +1166,7 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
           ) : (
             <div className="flex items-center gap-2 pt-1">
               {enrolled && !capturing && (
-                <button
+                <button data-no-confirm
                   type="button"
                   onClick={() => setConfirmRemove(true)}
                   className="px-3.5 py-1.5 border border-red-200 text-red-500 hover:bg-red-50 text-xs font-medium rounded-md cursor-pointer"

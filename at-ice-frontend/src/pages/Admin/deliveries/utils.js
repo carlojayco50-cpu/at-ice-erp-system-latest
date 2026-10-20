@@ -57,22 +57,25 @@ export function daysLabel(days = []) {
   return DAYS.filter((d) => days.includes(d.value)).map((d) => d.label).join(", ");
 }
 
-// Board colors (lib/boardTones.js, monday.com style): a solid status cell.
+// Delivery status pill. One meaning per color everywhere (owner, 2026-10-20,
+// same as StatusBadge on the phone screens): waiting amber, queued violet,
+// on the way deep cyan, done emerald, cancelled gray. A pill, not a solid
+// block, so a status never looks like a button.
 export const STATUS_STYLE = {
-  pending:    { bg: "bg-[#579bfc]", text: "text-white", label: "Pending" },
-  queued:     { bg: "bg-[#a25ddc]", text: "text-white", label: "Queued" },
-  in_transit: { bg: "bg-[#0e7490]", text: "text-white", label: "In Transit" },
-  delivered:  { bg: "bg-[#00c875]", text: "text-white", label: "Delivered" },
-  cancelled:  { bg: "bg-[#c4c4c4]", text: "text-white", label: "Cancelled" },
+  pending:    { bg: "bg-amber-100 border-amber-200", text: "text-amber-800", label: "Pending" },
+  queued:     { bg: "bg-violet-100 border-violet-200", text: "text-violet-800", label: "Queued" },
+  in_transit: { bg: "bg-cyan-100 border-cyan-200", text: "text-cyan-800", label: "In Transit" },
+  delivered:  { bg: "bg-emerald-100 border-emerald-200", text: "text-emerald-800", label: "Delivered" },
+  cancelled:  { bg: "bg-slate-100 border-slate-200", text: "text-slate-600", label: "Cancelled" },
 };
 
 // Driver status on the board: worked out from attendance, deliveries and
 // leave marks (backend). Only known for today.
 export const DRIVER_STATUS = {
   available:   { dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "Available" },
-  in_transit:  { dot: "bg-amber-500",   pill: "bg-amber-50 text-amber-700 border-amber-200",       label: "In transit" },
+  in_transit:  { dot: "bg-cyan-600",    pill: "bg-cyan-50 text-cyan-800 border-cyan-200",          label: "In transit" },
   unavailable: { dot: "bg-slate-400",   pill: "bg-slate-100 text-slate-600 border-slate-200",       label: "Not timed in" },
-  off:         { dot: "bg-red-500",     pill: "bg-red-50 text-red-700 border-red-200",             label: "Off" },
+  off:         { dot: "bg-rose-500",    pill: "bg-rose-50 text-rose-700 border-rose-200",          label: "Off" },
 };
 
 export function storeName(c) {

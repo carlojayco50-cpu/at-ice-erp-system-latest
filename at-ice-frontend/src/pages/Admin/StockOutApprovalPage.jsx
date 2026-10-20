@@ -306,7 +306,7 @@ export default function StockOutApprovalPage() {
                           >
                             Approve
                           </button>
-                          <button
+                          <button data-no-confirm
                             onClick={() => setRejectingId(req.id)}
                             className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
                           >
@@ -343,7 +343,7 @@ export default function StockOutApprovalPage() {
                           </div>
                         </div>
                       ) : (
-                        <button
+                        <button data-no-confirm
                           onClick={() => {
                             setError('');
                             setSuccess('');

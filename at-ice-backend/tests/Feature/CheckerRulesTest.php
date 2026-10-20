@@ -157,7 +157,7 @@ class CheckerRulesTest extends TestCase
 
     public function test_a_stock_out_request_needs_a_purpose_and_projects_carry_their_description(): void
     {
-        $maint = User::create(['name' => 'Maint', 'email' => 'maint@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'maintenance']);
+        $maint = $this->timedIn(User::create(['name' => 'Maint', 'email' => 'maint@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'maintenance']));
         $product = Product::create(['product_code' => 'SUP-0001', 'name' => 'Brake Pad', 'unit' => 'pcs', 'current_stock' => 10, 'minimum_stock' => 1]);
         $project = Project::create(['name' => 'Truck 2 brakes', 'description' => 'Replace the brake pads of truck 2', 'status' => 'working', 'created_by' => $maint->id]);
 

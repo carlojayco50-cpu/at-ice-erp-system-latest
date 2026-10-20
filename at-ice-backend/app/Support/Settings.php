@@ -47,6 +47,7 @@ class Settings
         'leave.vl_notice_days' => [14, 'int', 'Days ahead that vacation leave must be filed'],
         // Deliveries (App\Support\DeliveryDispatch)
         'delivery.delay_notice_hours' => [2, 'int', 'Hours before a reassigned or queued delivery that the store is told it may be late'],
+        'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
         // 13th month
         'thirteenth.credit_date' => ['12-01', 'month-day', 'Date the 13th month pay is credited (MM-DD; legal deadline 12-24)'],
         // Retention (nothing is deleted on its own; Admin reviews)

@@ -162,7 +162,7 @@ export default function CheckerSupplierManagementPage() {
               {s.notes && <div className="text-[13px] text-slate-500 mt-1 italic">{s.notes}</div>}
               <div className="grid grid-cols-2 gap-2 mt-3">
                 <LoadingButton variant="secondary" onClick={() => startEdit(s)} disabled={timedIn === false}><Icon name="edit" size={16} /> Edit</LoadingButton>
-                <LoadingButton variant="secondary" className="!text-rose-700" onClick={() => setRemoveTarget(s)} disabled={timedIn === false}>Remove</LoadingButton>
+                <LoadingButton data-no-confirm variant="secondary" className="!text-rose-700" onClick={() => setRemoveTarget(s)} disabled={timedIn === false}>Remove</LoadingButton>
               </div>
             </article>
           ))}

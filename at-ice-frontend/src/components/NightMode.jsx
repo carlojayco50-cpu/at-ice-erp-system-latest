@@ -50,34 +50,49 @@ export function ScopeStatusRow({ className = "mt-3" }) {
   );
 }
 
-// Pull-to-refresh on phones: pulling down from the very top reloads the
-// page's data (pages that use useLiveTick), not the whole app. The browser's
-// own pull-to-refresh is turned off on these screens so the two do not clash.
+// Pull-to-refresh on phones: pulling straight down from the very top reloads
+// the page's data (pages that use useLiveTick), not the whole app. The
+// browser's own pull-to-refresh is turned off on these screens so the two do
+// not clash. Only a downward pull counts: a sideways or slanted swipe is left
+// to the page. The round indicator stays centered and moves straight down
+// with the finger, its arc filling up until a release would refresh.
+const PULL_READY = 72;
+const PULL_MAX = 112;
+
 function usePullToRefresh() {
   const [pull, setPull] = useState(0); // px pulled
+  const [dragging, setDragging] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const startY = useRef(null);
+  const start = useRef(null); // { x, y, locked: null | "down" | "other" }
   const pullRef = useRef(0);
-  const THRESHOLD = 70;
 
   useEffect(() => {
     const onStart = (e) => {
-      startY.current = window.scrollY <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
+      start.current = window.scrollY <= 0 && e.touches.length === 1
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY, locked: null }
+        : null;
     };
     const onMove = (e) => {
-      if (startY.current === null) return;
-      const dy = e.touches[0].clientY - startY.current;
-      pullRef.current = dy > 0 && window.scrollY <= 0 ? Math.min(dy * 0.5, 110) : 0;
+      const st = start.current;
+      if (!st) return;
+      const dx = e.touches[0].clientX - st.x;
+      const dy = e.touches[0].clientY - st.y;
+      if (!st.locked && Math.hypot(dx, dy) > 8) st.locked = dy > 0 && Math.abs(dy) > Math.abs(dx) * 1.5 ? "down" : "other";
+      if (st.locked !== "down") return;
+      // eased: follows the finger at first, then slows towards PULL_MAX
+      pullRef.current = window.scrollY <= 0 && dy > 0 ? PULL_MAX * (1 - Math.exp(-dy / 190)) : 0;
+      setDragging(true);
       setPull(pullRef.current);
     };
     const onEnd = () => {
-      if (startY.current !== null && pullRef.current >= THRESHOLD) {
+      if (start.current?.locked === "down" && pullRef.current >= PULL_READY) {
         setRefreshing(true);
         refreshAll();
         setTimeout(() => setRefreshing(false), 900);
       }
-      startY.current = null;
+      start.current = null;
       pullRef.current = 0;
+      setDragging(false);
       setPull(0);
     };
     window.addEventListener("touchstart", onStart, { passive: true });
@@ -95,18 +110,26 @@ function usePullToRefresh() {
     };
   }, []);
 
-  if (!pull && !refreshing) return null;
-  const ready = pull >= THRESHOLD;
+  const ready = pull >= PULL_READY;
+  const shown = pull > 4 || refreshing;
+  const y = refreshing ? PULL_READY : pull;
+  const progress = Math.min(1, pull / PULL_READY);
   return (
     <div
-      className="fixed left-1/2 top-2 z-40 -translate-x-1/2 flex items-center gap-2 bg-white border border-black/[0.08] rounded-full px-3 py-1.5 text-[11px] font-medium text-slate-600 shadow-lg"
-      style={{ transform: `translate(-50%, ${refreshing ? 8 : Math.max(0, pull - 30)}px)` }}
+      className={`ptr ${dragging ? "is-dragging" : ""} ${shown ? "is-shown" : ""}`}
+      style={{ transform: `translate3d(-50%, ${y - 48}px, 0)` }}
       role="status"
+      aria-live="polite"
+      aria-label={refreshing ? "Refreshing" : ready ? "Release to refresh" : "Pull to refresh"}
     >
-      <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" className={refreshing ? "animate-spin" : ""} style={refreshing ? undefined : { transform: `rotate(${pull * 3}deg)` }} aria-hidden="true">
-        <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" />
+      <svg width="22" height="22" viewBox="0 0 24 24" className={refreshing ? "animate-spin" : ""} aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2.5" />
+        <circle
+          cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+          strokeDasharray={56.5} strokeDashoffset={refreshing ? 40 : 56.5 * (1 - progress)}
+          transform="rotate(-90 12 12)"
+        />
       </svg>
-      {refreshing ? "Refreshing…" : ready ? "Release to refresh" : "Pull to refresh"}
     </div>
   );
 }

@@ -6,6 +6,8 @@ import { CARD } from "../../lib/mobileUi";
 import { useLiveTick } from "../../lib/live";
 import { printDeliveryConfirmation } from "../../lib/printDelivery";
 import { formatDateTime } from "../../lib/time";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 
 const token = () => localStorage.getItem("token") || "";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
@@ -25,6 +27,7 @@ export default function SalesmanDashboard() {
   const [status, setStatus] = useState("loading");
   const [loadError, setLoadError] = useState("");
   const [selectedId, setSelectedId] = useState(null);
+  const timedIn = useTimedIn();
 
   const load = useCallback(async () => {
     setLoadError("");
@@ -56,7 +59,7 @@ export default function SalesmanDashboard() {
   const actionBar = selected ? (
     <ActionBar>
       {selected.status === "in_transit" && (
-        <LoadingButton onClick={() => navigate(`/salesman/deliveries/${selected.id}/confirm`)}><Icon name="camera" /> Confirm delivery · {selected.customer?.name || "store"}</LoadingButton>
+        <LoadingButton disabled={timedIn === false} onClick={() => navigate(`/salesman/deliveries/${selected.id}/confirm`)}><Icon name="camera" /> Confirm delivery · {selected.customer?.name || "store"}</LoadingButton>
       )}
       {selected.status === "pending" && <LoadingButton disabled>Waiting for the driver to start</LoadingButton>}
       {selected.status === "delivered" && <PrintButton delivery={selected} />}
@@ -65,6 +68,7 @@ export default function SalesmanDashboard() {
 
   return (
     <RoleShell role="salesman" title={delivered ? "Delivered" : "To deliver"} actionBar={actionBar}>
+      <TimeInNotice timedIn={timedIn} />
       <div className="grid grid-cols-1 gap-3">
         {summary.map(([label, value, tone]) => (
           <div key={label} className={`${CARD} flex items-center justify-between`}>

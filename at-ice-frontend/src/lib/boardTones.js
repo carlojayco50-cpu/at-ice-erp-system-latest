@@ -1,13 +1,15 @@
 // The board palette. Each tone has the cell color (strong, white text) and
-// the group title color. Same colors in light and night mode.
+// the group title color. Every cell keeps white text at 4.5:1 or more, and
+// night mode gives the titles a lighter shade (index.css, "Board colors in
+// night mode"), so the board reads the same in both themes (owner, 2026-10-20).
 export const TONES = {
-  done:    { cell: "bg-[#00c875] text-white", text: "text-[#00a35f]", edge: "#00c875" },
+  done:    { cell: "bg-[#047857] text-white", text: "text-[#047857]", edge: "#10b981" },
   // no orange (owner, 2026-10-17): in progress is the brand deep cyan
-  working: { cell: "bg-[#0e7490] text-white", text: "text-[#0e7490]", edge: "#0e7490" },
+  working: { cell: "bg-[#0e7490] text-white", text: "text-[#0b5f76]", edge: "#0e7490" },
   // High priority: deep crimson on a soft pink
   high:    { cell: "bg-[#fde8ec] text-[#9f1239]", text: "text-[#9f1239]", edge: "#be123c" },
-  stuck:   { cell: "bg-[#e2445c] text-white", text: "text-[#d83a52]", edge: "#e2445c" },
-  info:    { cell: "bg-[#579bfc] text-white", text: "text-[#3a7fe0]", edge: "#579bfc" },
-  purple:  { cell: "bg-[#a25ddc] text-white", text: "text-[#8b44c7]", edge: "#a25ddc" },
-  idle:    { cell: "bg-[#c4c4c4] text-white", text: "text-slate-500", edge: "#c4c4c4" },
+  stuck:   { cell: "bg-[#c62e47] text-white", text: "text-[#b4233c]", edge: "#e2445c" },
+  info:    { cell: "bg-[#2f6fd6] text-white", text: "text-[#1f56b5]", edge: "#579bfc" },
+  purple:  { cell: "bg-[#7e3fbf] text-white", text: "text-[#7a35b5]", edge: "#a25ddc" },
+  idle:    { cell: "bg-[#e2e8f0] text-slate-700", text: "text-slate-500", edge: "#94a3b8" },
 };

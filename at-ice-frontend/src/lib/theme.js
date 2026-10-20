@@ -160,17 +160,38 @@ function fadeThemeSwitch() {
   switchTimer = setTimeout(() => root.classList.remove("theme-switching"), 350);
 }
 
+// Until someone presses the Night/Light button on this device, the theme
+// follows the device's own light or dark setting, and changes with it
+// (owner, 2026-10-20). The button's choice is then remembered.
+const deviceDark = () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+function savedTheme(storageKey) {
+  try { return localStorage.getItem(storageKey); } catch { return null; }
+}
+
 export function useNightMode(storageKey = THEME_KEY) {
   const [dark, setDark] = useState(() => {
-    try { return localStorage.getItem(storageKey) === "dark"; } catch { return false; }
+    const saved = savedTheme(storageKey);
+    return saved ? saved === "dark" : deviceDark();
   });
   useEffect(() => {
-    try { localStorage.setItem(storageKey, dark ? "dark" : "light"); } catch { /* ignore */ }
-  }, [dark, storageKey]);
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) return undefined;
+    const follow = (e) => {
+      if (savedTheme(storageKey)) return;
+      fadeThemeSwitch();
+      setDark(e.matches);
+    };
+    media.addEventListener("change", follow);
+    return () => media.removeEventListener("change", follow);
+  }, [storageKey]);
   const switchTheme = useCallback((value) => {
     fadeThemeSwitch();
-    setDark(value);
-  }, []);
+    setDark((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      try { localStorage.setItem(storageKey, next ? "dark" : "light"); } catch { /* ignore */ }
+      return next;
+    });
+  }, [storageKey]);
   return [dark, switchTheme];
 }
 

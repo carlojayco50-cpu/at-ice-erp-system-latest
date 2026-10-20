@@ -1,5 +1,6 @@
-// Shown on Checker pages until the Checker has timed in at the kiosk today
-// (see useTimedIn in lib/timeIn.js). timedIn null = still checking.
+// Shown on the Checker, Salesman, Maintenance and Driver pages until they
+// have timed in at the kiosk today (see useTimedIn in lib/timeIn.js).
+// timedIn null = still checking.
 export default function TimeInNotice({ timedIn, className = "" }) {
   if (timedIn !== false) return null;
   return (

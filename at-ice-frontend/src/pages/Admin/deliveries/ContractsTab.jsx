@@ -97,10 +97,10 @@ export default function ContractsTab({ stores, live, onChanged }) {
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1.5 justify-end">
                     {c.status === "pending" && (
-                      <button type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11.5px] font-medium">Approve</button>
+                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11.5px] font-medium">Approve</button>
                     )}
                     {c.status !== "cancelled" && (
-                      <button type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
+                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
                     )}
                   </div>
                 </td>

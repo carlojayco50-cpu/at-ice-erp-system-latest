@@ -8,6 +8,8 @@ import CameraCapture from "../../components/CameraCapture";
 import { printDeliveryConfirmation } from "../../lib/printDelivery";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 const PRODUCTS = [
@@ -36,6 +38,7 @@ function orderedQuantities(delivery) {
 export default function SalesmanDeliveryConfirmation() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const timedIn = useTimedIn();
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [loadError, setLoadError] = useState("");
   const [delivery, setDelivery] = useState(null);
@@ -93,7 +96,7 @@ export default function SalesmanDeliveryConfirmation() {
   const total = lines.reduce((s, l) => s + (l.lineTotal || 0), 0);
   const missingPrice = lines.filter((l) => !l.hasPrice);
   const notStarted = delivery?.status === "pending";
-  const ready = lines.length > 0 && missingPrice.length === 0 && !!photoFile && !notStarted;
+  const ready = lines.length > 0 && missingPrice.length === 0 && !!photoFile && !notStarted && timedIn !== false;
   const storeName = delivery?.customer?.name || delivery?.store_name || "Store";
   const storeAddress = delivery?.customer?.address || delivery?.address || "—";
   const orderCode = delivery ? delivery.delivery_no || `#${delivery.id}` : "";
@@ -131,7 +134,7 @@ export default function SalesmanDeliveryConfirmation() {
   } else if (step === "review") {
     actionBar = (
       <ActionBar>
-        <LoadingButton loading={submitting} onClick={send}>{submitting ? "Sending…" : "Send to Admin"}</LoadingButton>
+        <LoadingButton loading={submitting} disabled={timedIn === false} onClick={send}>{submitting ? "Sending…" : "Send to Admin"}</LoadingButton>
         <LoadingButton variant="secondary" disabled={submitting} onClick={() => setStep("form")}>Edit</LoadingButton>
       </ActionBar>
     );
@@ -143,6 +146,7 @@ export default function SalesmanDeliveryConfirmation() {
 
   return (
     <RoleShell role="salesman" title={title} actionBar={actionBar}>
+      {step !== "success" && <TimeInNotice timedIn={timedIn} />}
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && (
         <>

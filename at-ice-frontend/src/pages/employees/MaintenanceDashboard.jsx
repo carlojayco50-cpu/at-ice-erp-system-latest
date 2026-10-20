@@ -5,12 +5,15 @@ import { Icon, StatusBadge, ErrorBanner, CardSkeleton, EmptyCard } from "../../c
 import { CARD, CARD_BUTTON } from "../../lib/mobileUi";
 import { useLiveTick } from "../../lib/live";
 import { formatDateTime } from "../../lib/time";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 
 const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
 
 // Maintenance home: urgent items first (stuck or overdue projects, rejected
 // requests), then the request counts and the way into Parts and Projects.
 export default function MaintenanceDashboard() {
+  const timedIn = useTimedIn();
   const [requests, setRequests] = useState([]);
   const [projects, setProjects] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | error
@@ -47,6 +50,7 @@ export default function MaintenanceDashboard() {
 
   return (
     <RoleShell role="maintenance" title="Maintenance">
+      <TimeInNotice timedIn={timedIn} />
       <div className="text-[14px] text-slate-500">
         {new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
       </div>

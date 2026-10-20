@@ -5,6 +5,8 @@ import { StatusBadge, LoadingButton, BottomSheet, ActionBar, ErrorBanner, EmptyC
 import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
 
 const STATUS = { planned: "Planned", working: "Working on it", stuck: "Stuck", done: "Done" };
 const EMPTY = { name: "", description: "", location: "" };
@@ -13,6 +15,7 @@ const EMPTY = { name: "", description: "", location: "" };
 // Admin then sets the owner, budget, dates, status and priority on Admin >
 // Projects. ?new=1 opens the form.
 export default function MaintenanceProjectsPage() {
+  const timedIn = useTimedIn();
   const token = localStorage.getItem("token");
   const [params, setParams] = useSearchParams();
   const [projects, setProjects] = useState([]);
@@ -98,8 +101,9 @@ export default function MaintenanceProjectsPage() {
     <RoleShell
       role="maintenance"
       title="Projects"
-      actionBar={<ActionBar><LoadingButton onClick={() => setShowForm(true)}><Icon name="plus" /> Log a repair job</LoadingButton></ActionBar>}
+      actionBar={<ActionBar><LoadingButton disabled={timedIn === false} onClick={() => setShowForm(true)}><Icon name="plus" /> Log a repair job</LoadingButton></ActionBar>}
     >
+      <TimeInNotice timedIn={timedIn} />
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
       {status === "ready" && sorted.length === 0 && (
@@ -132,7 +136,7 @@ export default function MaintenanceProjectsPage() {
         open={showForm}
         onClose={() => !saving && setShowForm(false)}
         title="Log a repair job"
-        footer={<LoadingButton type="submit" form="project-form" loading={saving}>{saving ? "Saving…" : "Add project"}</LoadingButton>}
+        footer={<LoadingButton type="submit" form="project-form" loading={saving} disabled={timedIn === false}>{saving ? "Saving…" : "Add project"}</LoadingButton>}
       >
         <form id="project-form" onSubmit={submit} className="space-y-4" noValidate>
           <ErrorBanner>{errors._general?.[0]}</ErrorBanner>

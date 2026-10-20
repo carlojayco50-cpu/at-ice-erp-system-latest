@@ -4,6 +4,7 @@ import { NightScope } from './components/NightMode'
 import SplashScreen from './components/SplashScreen'
 import SoftPickers from './components/SoftPickers'
 import Toaster from './components/Toaster'
+import ActionGuard from './components/ActionGuard'
 import AttachmentViewer from './components/AttachmentViewer'
 
 // -- General Pages
@@ -72,6 +73,7 @@ function App() {
       <SplashScreen />
       <SoftPickers />
       <Toaster />
+      <ActionGuard />
       <AttachmentViewer />
       <Routes>
 

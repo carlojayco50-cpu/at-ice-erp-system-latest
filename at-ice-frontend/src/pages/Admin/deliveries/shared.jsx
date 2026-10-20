@@ -6,7 +6,7 @@ import { STATUS_STYLE, inputCls, storeName } from "./utils";
 export function StatusCell({ status }) {
   const s = STATUS_STYLE[status] || STATUS_STYLE.pending;
   return (
-    <span className={`inline-flex items-center justify-center min-w-[88px] px-2 py-1 rounded-sm text-[11px] font-semibold ${s.bg} ${s.text}`}>
+    <span className={`inline-flex items-center justify-center min-w-[84px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${s.bg} ${s.text}`}>
       {s.label}
     </span>
   );
@@ -15,7 +15,7 @@ export function StatusCell({ status }) {
 export function ReassignedTag({ delivery }) {
   if (!delivery?.reassigned_from) return null;
   return (
-    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-violet-50 text-violet-700 border border-violet-200 whitespace-nowrap">
       Reassigned from {delivery.reassigned_from.name}
     </span>
   );
