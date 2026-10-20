@@ -146,7 +146,7 @@ class ApplicantController extends Controller
         }
 
         $applicants = $query
-            ->with('referredBy:id,employee_id,first_name,middle_initial,last_name,suffix')
+            ->with(['referredBy:id,employee_id,first_name,middle_initial,last_name,suffix', 'documents'])
             ->orderByRaw('interview_date IS NULL')   // scheduled first
             ->orderBy('interview_date', 'asc')
             ->orderBy('created_at', 'desc')
@@ -170,7 +170,7 @@ class ApplicantController extends Controller
     // GET single applicant
     public function show($id)
     {
-        $applicant = Applicant::findOrFail($id);
+        $applicant = Applicant::with('documents')->findOrFail($id);
 
         return response()->json($applicant);
     }
@@ -354,6 +354,19 @@ class ApplicantController extends Controller
         }
 
         return Storage::disk('local')->response($applicant->resume_path, $applicant->resume_name ?: 'resume', [
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
+    }
+
+    // GET a document the applicant attached on /apply (2x2 photo, ID...), HR only.
+    public function document($id, $document)
+    {
+        $doc = \App\Models\ApplicantDocument::where('applicant_id', $id)->findOrFail($document);
+        abort_unless(Storage::disk('local')->exists($doc->path), 404);
+
+        return Storage::disk('local')->response($doc->path, $doc->original_name, [
+            'Content-Type' => $doc->mime,
             'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ], 'inline');

@@ -47,7 +47,18 @@ class Settings
         'leave.vl_notice_days' => [14, 'int', 'Days ahead that vacation leave must be filed'],
         // Deliveries (App\Support\DeliveryDispatch)
         'delivery.delay_notice_hours' => [2, 'int', 'Hours before a reassigned or queued delivery that the store is told it may be late'],
+        'delivery.arrival_radius_m' => [150, 'int', 'How close (meters) the Driver and the Salesman must be to the store pin to press Arrived; a delivery is confirmed only after both have arrived'],
+        'plant.latitude' => [14.8031, 'number', 'Plant location (latitude): each route lists the stores nearest to the plant first'],
+        'plant.longitude' => [121.0515, 'number', 'Plant location (longitude)'],
         'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
+        // Performance (App\Support\PerformanceScore): weights of the Draft Base Rating and each role's goal per pay period
+        'performance.weight_attendance' => [50, 'int', 'Weight of attendance (days with a Time In / work days) in the draft performance rating'],
+        'performance.weight_punctuality' => [30, 'int', 'Weight of punctuality (days on time / days with a Time In) in the draft performance rating'],
+        'performance.weight_goal' => [20, 'int', 'Weight of the goal (work done / goal) in the draft performance rating'],
+        'performance.goal_driver' => [50, 'int', 'Driver goal per pay period: deliveries delivered'],
+        'performance.goal_salesman' => [50, 'int', 'Salesman goal per pay period: deliveries confirmed with proof'],
+        'performance.goal_checker' => [60, 'int', 'Checker goal per pay period: ice loading counts and stock movements'],
+        'performance.goal_maintenance' => [8, 'int', 'Maintenance goal per pay period: parts requests and projects filed'],
         // 13th month
         'thirteenth.credit_date' => ['12-01', 'month-day', 'Date the 13th month pay is credited (MM-DD; legal deadline 12-24)'],
         // Retention (nothing is deleted on its own; Admin reviews)

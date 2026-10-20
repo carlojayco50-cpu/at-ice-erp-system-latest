@@ -10,10 +10,12 @@ use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\CustomerPriceController;
 use App\Http\Controllers\DeliveryContractController;
 use App\Http\Controllers\DeliveryController;
-use App\Http\Controllers\DriverAssignmentController;
 use App\Http\Controllers\DeliveryProofController;
+use App\Http\Controllers\DeliveryRouteController;
 use App\Http\Controllers\DocumentScanController;
+use App\Http\Controllers\DriverAssignmentController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeDocumentController;
 use App\Http\Controllers\FaceDataController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\IceLoadingController;
@@ -26,6 +28,7 @@ use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentProofController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\PickupLogController;
 use App\Http\Controllers\PlaceSearchController;
 use App\Http\Controllers\ProductController;
@@ -111,6 +114,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
+        // Performance appraisals: draft ratings from the records, Admin overrides and publishes
+        Route::get('performance', [PerformanceController::class, 'index']);
+        Route::put('performance/{employee}', [PerformanceController::class, 'update']);
 
         // Rates and rules (AppSupportSettings) and the audit log
         Route::get('settings', [SettingsController::class, 'index']);
@@ -271,6 +277,11 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::apiResource('employees', EmployeeController::class);
         // A deactivated employee back for a rehire (same employee ID, history kept)
         Route::post('employees/{id}/reactivate', [EmployeeController::class, 'reactivate']);
+        // Biodata documents (private disk)
+        Route::get('employees/{employee}/documents', [EmployeeDocumentController::class, 'index']);
+        Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store']);
+        Route::get('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'show']);
+        Route::delete('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy']);
 
         // Payroll: full CRUD, computation happens on the frontend
         // (Sweldong Pinoy-style: SSS/PhilHealth/Pag-IBIG/withholding tax),
@@ -312,6 +323,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::post('applicants', [ApplicantController::class, 'store']);
         Route::get('applicants/{id}', [ApplicantController::class, 'show']);
         Route::get('applicants/{id}/resume', [ApplicantController::class, 'resume']);
+        Route::get('applicants/{id}/documents/{document}', [ApplicantController::class, 'document']);
         Route::put('applicants/{id}', [ApplicantController::class, 'update']);
         Route::patch('applicants/{id}/status', [ApplicantController::class, 'updateStatus']);
         Route::delete('applicants/{id}', [ApplicantController::class, 'destroy']);
@@ -363,6 +375,10 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     Route::middleware(['role:employee,salesman', 'timed.in'])->group(function () {
 
         Route::get('my-deliveries', [DeliveryProofController::class, 'myDeliveries']);
+        // The Driver the Salesman rides with today and that Driver's route
+        Route::get('my-route', [DeliveryRouteController::class, 'salesmanRoute']);
+        Route::put('my-route/driver', [DeliveryRouteController::class, 'chooseDriver']);
+        Route::post('my-route/deliveries/{id}/arrive', [DeliveryRouteController::class, 'arrive']);
         Route::post('delivery-confirmation', [DeliveryProofController::class, 'confirm']);
         Route::get('customer-prices/{customer}/lookup', [CustomerPriceController::class, 'lookup']);
     });
@@ -387,7 +403,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     // DRIVER ROUTES
     Route::middleware(['role:driver', 'timed.in'])->group(function () {
 
-        Route::get('driver/deliveries', [DeliveryController::class, 'driverDeliveries']);
+        Route::get('driver/deliveries', [DeliveryRouteController::class, 'driverDeliveries']);
+        Route::post('driver/deliveries/{id}/arrive', [DeliveryRouteController::class, 'arrive']);
         Route::patch('driver/deliveries/{id}/status', [DeliveryController::class, 'updateStatus']);
         Route::get('/driver/dashboard', function () {
             return response()->json(['message' => 'Welcome Driver!']);

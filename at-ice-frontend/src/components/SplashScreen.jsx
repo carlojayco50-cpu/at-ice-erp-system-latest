@@ -22,6 +22,11 @@ import Snowfall from "./Snowfall";
 // The logo picture shows first (and stays, if the video cannot play or the
 // user prefers reduced motion), and the video fades in over it once ready.
 // Only transform and opacity are animated, so it stays smooth on phones.
+//
+// Phones and tablets (owner, 2026-10-20) get a plain splash instead: only the
+// logo, centered on the theme background, no video, snow, text or progress
+// line. It shows only while the page is still loading and closes the moment
+// loading is done (no fixed wait), and it does not replay on sign in or out.
 
 const MotionDiv = motion.div;
 const EASE = [0.22, 1, 0.36, 1];
@@ -50,7 +55,50 @@ function isDark() {
   }
 }
 
+// A phone or tablet: a narrow screen, or a touch screen with no mouse.
+function isHandheld() {
+  try {
+    return !!window.matchMedia?.("(max-width: 1023px), (hover: none) and (pointer: coarse)").matches;
+  } catch {
+    return false;
+  }
+}
+
 export default function SplashScreen() {
+  const [handheld] = useState(isHandheld);
+  return handheld ? <MobileSplash /> : <DesktopSplash />;
+}
+
+// The logo only, while the page loads.
+const SAFETY_MS = 4000; // never block the app longer than this, even if a file stalls
+function MobileSplash() {
+  const [visible, setVisible] = useState(() => document.readyState !== "complete");
+  const [dark] = useState(isDark);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    const done = () => setVisible(false);
+    window.addEventListener("load", done, { once: true });
+    const cap = setTimeout(done, SAFETY_MS);
+    return () => {
+      window.removeEventListener("load", done);
+      clearTimeout(cap);
+    };
+  }, [visible]);
+
+  if (!visible) return null;
+  return (
+    <div
+      role="status"
+      aria-label="Loading AT-ICE"
+      className={`fixed inset-0 z-[1000] flex items-center justify-center ${dark ? "bg-[#070b14]" : "bg-[#e9eef5]"}`}
+    >
+      <img src={brandLogo} alt="AT-ICE" className="w-36 h-36 object-contain" draggable="false" />
+    </div>
+  );
+}
+
+function DesktopSplash() {
   const reduceMotion = useReducedMotion();
   const [visible, setVisible] = useState(true);
   const length = LENGTH;

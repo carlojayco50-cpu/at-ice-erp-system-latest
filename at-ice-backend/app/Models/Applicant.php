@@ -14,6 +14,11 @@ class Applicant extends Model
     // Positions people can apply for (same list as the frontend, src/lib/positions.js).
     public const POSITIONS = ['Checker', 'Salesman', 'Maintenance', 'Driver', 'Guard', 'Bagger', 'Admin Staff'];
 
+    // The only positions the public form (/apply) offers and accepts: field
+    // roles. Office roles such as Admin Staff are never open to the public;
+    // HR can still add those applicants in Interviews (POSITIONS).
+    public const PUBLIC_POSITIONS = ['Checker', 'Salesman', 'Maintenance', 'Driver', 'Guard', 'Bagger'];
+
     // A resume or CV is a PDF or a Word file (applicant on /apply, or HR), up to 5 MB.
     public const RESUME_RULE = 'nullable|file|mimes:pdf,doc,docx|max:5120';
 
@@ -27,6 +32,11 @@ class Applicant extends Model
     public const INTERVIEW_MINUTES = [30, 45];
 
     protected $fillable = [
+        // Biodata (App\Support\Biodata)
+        'birth_date', 'sex', 'civil_status', 'nationality', 'place_of_birth', 'personal_email',
+        'emergency_name', 'emergency_relationship', 'emergency_phone',
+        'education_level', 'school', 'course', 'year_graduated', 'work_history', 'license_restrictions',
+        'license_number', 'license_expiry', 'consented_at', 'consent_ip',
         'name',
         'email',
         'phone',
@@ -56,7 +66,17 @@ class Applicant extends Model
 
     protected $casts = [
         'interview_date' => 'datetime:Y-m-d H:i:s',
+        'birth_date' => 'date:Y-m-d',
+        'license_expiry' => 'date:Y-m-d',
+        'work_history' => 'array',
+        'consented_at' => 'datetime',
     ];
+
+    // Files attached on /apply (private disk)
+    public function documents()
+    {
+        return $this->hasMany(ApplicantDocument::class)->latest();
+    }
 
     // The pending interview that overlaps [start, start + minutes), if any
     // (another applicant's interview that has not ended when this one starts,

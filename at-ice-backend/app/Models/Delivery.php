@@ -71,4 +71,10 @@ class Delivery extends Model
     {
         return $this->hasMany(DeliveryProof::class);
     }
+
+    // The Driver and the Salesman pressing Arrived at the store (GPS checked).
+    public function arrivals()
+    {
+        return $this->hasMany(DeliveryArrival::class);
+    }
 }

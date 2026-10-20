@@ -29,6 +29,9 @@ class PublicApplicationTest extends TestCase
             'province' => 'Bulacan',
             'region' => 'Region III – Central Luzon',
             'notes' => 'May lisensya po ako.',
+            'consent' => true,
+            'license_number' => 'N01-23-456789',
+            'license_expiry' => now()->addYears(2)->toDateString(),
         ];
     }
 
@@ -110,5 +113,53 @@ class PublicApplicationTest extends TestCase
         $this->post('/api/apply', $this->form(['resume' => UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf')]), ['Accept' => 'application/json'])
             ->assertStatus(422)
             ->assertJsonPath('errors.resume.0', 'The resume is too large. Use a file up to 5 MB.');
+    }
+
+    public function test_nothing_is_kept_without_the_privacy_consent_and_drivers_give_their_license(): void
+    {
+        $this->postJson('/api/apply', $this->form(['consent' => false]))->assertUnprocessable()->assertJsonValidationErrors('consent');
+        $this->postJson('/api/apply', array_diff_key($this->form(), ['license_number' => 1]))->assertUnprocessable()->assertJsonValidationErrors('license_number');
+        // other positions need no license
+        $this->postJson('/api/apply', array_diff_key($this->form(['position_applied' => 'Bagger']), ['license_number' => 1, 'license_expiry' => 1]))->assertCreated();
+        $this->assertDatabaseCount('applicants', 1);
+        $this->assertNotNull(Applicant::first()->consented_at);
+    }
+
+    public function test_biodata_photo_and_documents_are_kept_private_and_carry_over_when_hired(): void
+    {
+        Storage::fake('local');
+        $this->post('/api/apply', $this->form([
+            'birth_date' => '1995-04-12', 'sex' => 'female', 'civil_status' => 'single', 'nationality' => 'Filipino',
+            'emergency_name' => 'Ana Reyes', 'emergency_relationship' => 'Mother', 'emergency_phone' => '0918 765 4321',
+            'education_level' => 'college_graduate', 'school' => 'BulSU', 'course' => 'BS Business Administration', 'year_graduated' => 2016,
+            'work_history' => [['company' => 'Coca-Cola Bulacan', 'position' => 'Driver', 'from' => '2018-01', 'to' => '2024-06'], ['company' => '']],
+            'license_restrictions' => ['B', 'B1'],
+            'photo' => UploadedFile::fake()->createWithContent('me.jpg', base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=')),
+            'documents' => [UploadedFile::fake()->create('nbi.pdf', 100, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertCreated();
+
+        $a = Applicant::with('documents')->first();
+        $this->assertSame('B,B1', $a->license_restrictions);
+        $this->assertCount(1, $a->work_history);
+        $this->assertSame('+639187654321', $a->emergency_phone);
+        $this->assertEqualsCanonicalizing(['photo', 'other'], $a->documents->pluck('type')->all());
+
+        Sanctum::actingAs(User::create(['name' => 'HR', 'email' => 'hr@atice.cloud', 'password' => 'secret-password', 'role' => 'hr']));
+        $this->get("/api/applicants/{$a->id}/documents/{$a->documents[0]->id}")->assertOk();
+
+        $employee = $this->postJson('/api/employees', [
+            'first_name' => 'Maria Clara', 'last_name' => 'Reyes', 'phone' => '09171234567', 'position' => 'Bagger',
+            'street' => 'Rizal St', 'barangay' => 'Muzon', 'city' => 'San Jose Del Monte', 'province' => 'Bulacan',
+            'daily_rate' => 600, 'date_hired' => now()->toDateString(), 'shift_start' => '08:00', 'shift_end' => '17:00',
+            'employment_type' => 'regular', 'applicant_id' => $a->id,
+            'sss_no' => '3412345678', 'tin_no' => '123456789', 'philhealth_no' => '123456789012', 'pagibig_no' => '121234567890',
+            'birth_date' => '1995-04-12',
+        ])->assertCreated()->json('employee');
+
+        $this->assertSame('34-1234567-8', $employee['sss_no']);
+        $this->assertSame('123-456-789-000', $employee['tin_no']);
+        $this->assertSame('12-345678901-2', $employee['philhealth_no']);
+        $this->assertSame('1212-3456-7890', $employee['pagibig_no']);
+        $this->assertCount(2, $this->getJson("/api/employees/{$employee['id']}/documents")->assertOk()->json());
     }
 }

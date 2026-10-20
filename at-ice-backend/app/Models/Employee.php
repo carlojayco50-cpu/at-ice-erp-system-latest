@@ -10,6 +10,11 @@ class Employee extends Model
     use HasFactory;
 
     protected $fillable = [
+        // Biodata (App\Support\Biodata)
+        'birth_date', 'sex', 'civil_status', 'nationality', 'place_of_birth', 'personal_email',
+        'emergency_name', 'emergency_relationship', 'emergency_phone',
+        'education_level', 'school', 'course', 'year_graduated', 'work_history', 'license_restrictions',
+        'sss_no', 'tin_no', 'philhealth_no', 'pagibig_no',
         'user_id',
         'employee_id',
         'first_name',
@@ -50,6 +55,8 @@ class Employee extends Model
     protected $casts = [
         'date_hired' => 'date',
         'license_expiry' => 'date:Y-m-d',
+        'birth_date' => 'date:Y-m-d',
+        'work_history' => 'array',
         'is_active' => 'boolean',
         'deactivated_at' => 'datetime',
         'anonymized_at' => 'datetime',
@@ -57,6 +64,12 @@ class Employee extends Model
         'monthly_rate' => 'decimal:2',
         'daily_rate' => 'decimal:2',
     ];
+
+    // Files attached to the biodata (private disk)
+    public function documents()
+    {
+        return $this->hasMany(EmployeeDocument::class)->latest();
+    }
 
     // Relationship - Employee belongs to User
     public function user()

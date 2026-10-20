@@ -18,6 +18,7 @@ export const ADMIN_NAV = [
   { icon: GridIcon, label: "Dashboard", to: "/dashboard" },
   { icon: UsersIcon, label: "HRIS", children: [
       { label: "Employees", to: "/admin/employees" },
+      { label: "Performance", to: "/admin/performance" },
       { label: "Payroll", to: "/admin/payroll" },
       { label: "Holidays", to: "/admin/holidays" },
     ] },

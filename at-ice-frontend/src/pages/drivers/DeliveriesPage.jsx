@@ -15,6 +15,11 @@ import { initialsOf } from "../../lib/initials";
 import EmptyState from "../../components/EmptyState";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import { StopMeta, ArrivalChips } from "../../components/RouteParts";
+import { pressArrived } from "../../lib/route";
+import { toast } from "../../lib/toast";
 
 // Pusher/Echo setup, created once at module load
 window.Pusher = Pusher;
@@ -109,6 +114,8 @@ export function DeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [driverPos, setDriverPos] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [salesmen, setSalesmen] = useState([]);
+  const [radius, setRadius] = useState(150);
   const timedIn = useTimedIn();
   const watchIdRef = useRef(null);
 
@@ -124,7 +131,10 @@ export function DeliveriesPage() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setDeliveries(toList(data));
+      // today's route first (nearest the plant first), then later stops
+      setDeliveries(Array.isArray(data) ? data : toList(data.deliveries));
+      setSalesmen(data.salesmen || []);
+      if (data.radius_m) setRadius(data.radius_m);
     } catch (err) {
       console.error("Failed to load deliveries:", err);
       setDeliveries([]);
@@ -187,10 +197,8 @@ export function DeliveriesPage() {
         console.error("Failed to start delivery:", res.status, errData);
         return;
       }
-      const data = await res.json();
-      setDeliveries((prev) =>
-        prev.map((d) => (d.id === deliveryId ? data.delivery : d))
-      );
+      await res.json();
+      fetchDeliveries();
     } catch (err) {
       console.error("Network error starting delivery:", err);
     } finally {
@@ -199,6 +207,21 @@ export function DeliveriesPage() {
   }
 
   const visible = filter === "all" ? deliveries : deliveries.filter((d) => d.status === filter);
+  const pager = usePagination(visible, { initialSize: 10 });
+
+  // I am at the store: the server checks the phone is near the store pin
+  async function arrive(d) {
+    setActionLoading(d.id);
+    try {
+      const res = await pressArrived(`/api/driver/deliveries/${d.id}/arrive`);
+      toast.success(res.message || "Arrived.");
+      fetchDeliveries();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  }
 
   const counts = {
     total:      deliveries.length,
@@ -291,13 +314,18 @@ export function DeliveriesPage() {
       {/* Delivery list */}
       <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
         <TimeInNotice timedIn={timedIn} />
+        {salesmen.length > 0 && (
+          <div className="bg-white border border-black/[0.08] rounded-2xl px-4 py-3 text-[12px] text-slate-600">
+            Salesman with you today: <span className="font-semibold text-slate-800">{salesmen.map((s) => s.name).join(", ")}</span>
+          </div>
+        )}
         {loading && (
           <SkeletonList />
         )}
         {!loading && visible.length === 0 && (
           <EmptyState icon="truck">No deliveries found.</EmptyState>
         )}
-        {!loading && visible.map((d) => {
+        {!loading && pager.pageItems.map((d) => {
           const cfg = STATUS_CONFIG[d.status] || STATUS_CONFIG.pending;
           const open = expanded === d.id;
           const customer = d.customer;
@@ -322,6 +350,7 @@ export function DeliveriesPage() {
                   <span className={`w-2 h-2 rounded-full inline-block ${cfg.dot}`} />
                 </div>
                 <div className="flex-1 min-w-0">
+                  {d.route_today && <StopMeta delivery={d} className="mb-1.5" />}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[13px] font-semibold text-slate-800 truncate">{customer?.name || "Unknown Customer"}</span>
                     <span className={`flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text}`}>
@@ -340,7 +369,7 @@ export function DeliveriesPage() {
                     {distanceKm != null && (
                       <>
                         <span className="text-[10px] text-slate-300">·</span>
-                        <span className="text-[10px] text-slate-400">{distanceKm.toFixed(1)} km</span>
+                        <span className="text-[10px] text-slate-400">{distanceKm.toFixed(1)} km from you</span>
                       </>
                     )}
                     <span className="text-[10px] text-slate-300">·</span>
@@ -405,12 +434,24 @@ export function DeliveriesPage() {
                   )}
                   {d.status === "in_transit" && (
                     <div className="flex flex-col gap-2 mt-1">
-                      <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
-                        <span className="text-[12px] text-blue-600 font-medium">
-                          On the way. The Salesman will confirm once the delivery is received.
+                      <div className="flex items-center gap-2 bg-cyan-50 border border-cyan-100 rounded-xl px-3 py-2.5">
+                        <span className="w-2 h-2 rounded-full bg-cyan-600 flex-shrink-0" />
+                        <span className="text-[12px] text-cyan-800 font-medium">
+                          On the way. At the store, you and the Salesman both press Arrived; then the Salesman confirms the delivery.
                         </span>
                       </div>
+                      <ArrivalChips arrival={d.arrival} driverLabel="You" />
+                      {!d.arrival?.driver && (
+                        <button
+                          onClick={() => arrive(d)}
+                          disabled={actionLoading === d.id || timedIn === false}
+                          data-no-confirm
+                          data-tip={`Shares your location. You must be within ${radius} m of the store.`}
+                          className="w-full py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer disabled:opacity-60"
+                        >
+                          {actionLoading === d.id ? "Checking your location…" : "I am at the store"}
+                        </button>
+                      )}
                       <button
                         onClick={() => navigate("/driver/gps")}
                         className="w-full py-3 bg-slate-100 active:bg-slate-200 text-slate-600 text-[12px] font-semibold rounded-xl transition-colors cursor-pointer"
@@ -430,6 +471,9 @@ export function DeliveriesPage() {
             </div>
           );
         })}
+        {!loading && visible.length > 0 && (
+          <div className="rounded-2xl overflow-hidden"><Pagination pager={pager} label="stops" fixed /></div>
+        )}
       </div>
     </div>
   );

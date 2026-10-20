@@ -21,6 +21,12 @@ import { formatLicense, licenseError, expiryError, tomorrowStr } from "../../lib
 import { formatDateTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import DocumentDrop from "../../components/DocumentDrop";
+import {
+  CIVIL_STATUSES, EDUCATION_LEVELS, EMPTY_BIODATA, EXPIRY_ALERT_DAYS, GOV_IDS, RESTRICTIONS, SEXES,
+  biodataFrom, biodataPayload, daysUntil, formatGov, govComplete, uploadWithProgress,
+} from "../../lib/biodata";
+import { printBiodata } from "../../lib/printBiodata";
 
 const API_BASE = "/api";
 
@@ -93,6 +99,31 @@ const emailPreview = (f) =>
 // Departments HR picks from (same list as EmployeeController::DEPARTMENTS).
 const DEPARTMENTS = ["Operations", "Sales", "Maintenance", "Logistics", "Security", "Production", "Administration", "Human Resources"];
 
+// Add/Edit Employee is a six-step form (owner, 2026-10-20). An error on save
+// opens the step that holds the field.
+const FORM_STEPS = ["Personal", "Contact", "Payroll", "Technical", "History", "Attachments"];
+const STEP_OF_FIELD = {
+  first_name: 0, middle_initial: 0, last_name: 0, suffix: 0, birth_date: 0, sex: 0, civil_status: 0, nationality: 0, place_of_birth: 0,
+  phone: 1, personal_email: 1, block_lot: 1, street: 1, subdivision: 1, barangay: 1, city: 1, province: 1, region: 1, barangay_code: 1, postal_code: 1,
+  emergency_name: 1, emergency_relationship: 1, emergency_phone: 1,
+  sss_no: 2, tin_no: 2, philhealth_no: 2, pagibig_no: 2, pay_basis: 2, daily_rate: 2, monthly_rate: 2,
+  position: 3, department: 3, sub_role: 3, employment_status: 3, employment_type: 3, shift: 3, shift_start: 3, shift_end: 3, date_hired: 3,
+  license_number: 3, license_expiry: 3, license_restrictions: 3, vehicle_plate: 3,
+  education_level: 4, school: 4, course: 4, year_graduated: 4, work_history: 4,
+};
+const firstStepOf = (errors) => Math.min(99, ...Object.keys(errors).map((k) => STEP_OF_FIELD[k.split(".")[0]] ?? 99));
+
+// License expiry reminder: amber within EXPIRY_ALERT_DAYS, rose once expired
+function ExpiryBadge({ date }) {
+  const d = daysUntil(date);
+  if (d == null || d > EXPIRY_ALERT_DAYS) return <span className="text-[10px] text-slate-400 mt-0.5 block">An expired license is not accepted.</span>;
+  return (
+    <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full border text-[10.5px] font-semibold ${d < 0 ? "bg-rose-100 border-rose-200 text-rose-800" : "bg-amber-100 border-amber-200 text-amber-800"}`}>
+      {d < 0 ? "Expired" : d === 0 ? "Expires today" : `Expires in ${d} day${d === 1 ? "" : "s"}`}
+    </span>
+  );
+}
+
 const emptyForm = {
   first_name: "", middle_initial: "", last_name: "", suffix: "", email: "", daily_rate: "",
   phone: "", block_lot: "", street: "", subdivision: "", barangay: "",
@@ -107,6 +138,7 @@ const emptyForm = {
   license_number: "", // Driver-only, required for Drivers (LTO format, see lib/license.js)
   license_expiry: "", // Driver-only, required: the license must not have expired
   vehicle_plate: "", // Driver-only — ignored server-side for every other role
+  ...EMPTY_BIODATA, // personal, contact, government numbers, education and work (lib/biodata.js)
   _userRole: "", // display-only, set when editing — lets the Edit modal
                  // show "Driver" even though Driver has no sub_role
 };
@@ -125,6 +157,9 @@ export default function EmployeesPage() {
   const { modalOpen: setModalOpen, editingId: setEditingId, form: setForm, fromApplicant: setFromApplicant } = formDraft.set;
   const [formErrors, setFormErrors] = useState({});
   const [saving, setSaving]       = useState(false);
+  const [step, setStep]           = useState(0);
+  // Attachments: queued (new employee, uploaded once saved) or attached (edit)
+  const [docItems, setDocItems]   = useState([]);
 
   const [confirmDeactivate, setConfirmDeactivate] = useState(null);
 
@@ -187,6 +222,8 @@ export default function EmployeesPage() {
     setEditingId(null);
     setForm(emptyForm);
     setFormErrors({});
+    setStep(0);
+    setDocItems([]);
     setModalOpen(true);
   };
 
@@ -214,8 +251,14 @@ export default function EmployeesPage() {
       position,
       sub_role: POSITION_ROLES[position] || "",
       date_hired: todayStr(),
+      // personal details, education, work and license given on /apply
+      ...biodataFrom(a),
+      license_number: a.license_number || "",
+      license_expiry: a.license_expiry ? String(a.license_expiry).slice(0, 10) : "",
     });
     setFormErrors({});
+    setStep(0);
+    setDocItems([]);
     setFromApplicant(a);
     setModalOpen(true);
     navigate(location.pathname, { replace: true, state: null });
@@ -258,12 +301,57 @@ export default function EmployeesPage() {
       license_number: emp.license_number || "",
       license_expiry: emp.license_expiry ? String(emp.license_expiry).slice(0, 10) : "",
       _userRole: emp.user?.role || "",     // needed to detect Driver, who has no sub_role
+      ...biodataFrom(emp),
     });
     setFormErrors({});
+    setStep(0);
+    setDocItems([]);
     setModalOpen(true);
+    fetch(`${API_BASE}/employees/${emp.id}/documents`, { headers: authHeaders })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setDocItems(list.map((d) => ({ key: `d${d.id}`, type: d.type, name: d.original_name, size: d.size, status: "done", progress: 100, doc: d }))))
+      .catch(() => {});
   };
 
-  const closeModal = () => { setModalOpen(false); setFormErrors({}); setFromApplicant(null); };
+  const closeModal = () => { setModalOpen(false); setFormErrors({}); setFromApplicant(null); setStep(0); setDocItems([]); };
+
+  // Attachments (step 6): a new employee's files wait for the save; an
+  // existing employee's are uploaded at once. Each shows its progress.
+  const patchDoc = (key, patch) => setDocItems((list) => list.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+  const uploadDoc = async (employeeId, it) => {
+    const fd = new FormData();
+    fd.append("type", it.type);
+    fd.append("file", it.file);
+    patchDoc(it.key, { status: "uploading", progress: 0 });
+    try {
+      const res = await uploadWithProgress(`${API_BASE}/employees/${employeeId}/documents`, fd, (progress) => patchDoc(it.key, { progress }));
+      patchDoc(it.key, { status: "done", progress: 100, doc: res.document, file: undefined });
+      return true;
+    } catch (err) {
+      patchDoc(it.key, { status: "error", error: err.message });
+      return false;
+    }
+  };
+  const addDocs = (type, files) => {
+    const items = files.map((file, i) => ({ key: `n${Date.now()}-${i}-${file.name}`, type, name: file.name, size: file.size, file, progress: 0, status: editingId ? "uploading" : "queued" }));
+    setDocItems((list) => [...list.filter((x) => !(type === "photo" && x.type === "photo" && x.status !== "done")), ...items]);
+    if (editingId) items.forEach((it) => uploadDoc(editingId, it));
+  };
+  const removeDoc = async (it) => {
+    if (it.status === "done" && it.doc) {
+      const res = await fetch(`${API_BASE}/employees/${editingId}/documents/${it.doc.id}`, { method: "DELETE", headers: authHeaders }).catch(() => null);
+      if (!res?.ok) { toast.error(`Couldn't remove ${it.name}. Try again.`); return; }
+      toast.success(`${it.name} was removed.`);
+    }
+    setDocItems((list) => list.filter((x) => x.key !== it.key));
+  };
+
+  // The saved biodata as a hard copy (photo: the 2x2 document or the Face ID)
+  const printEmployeeBiodata = async (emp) => {
+    if (!emp) return;
+    const docs = await fetch(`${API_BASE}/employees/${emp.id}/documents`, { headers: authHeaders }).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    printBiodata(emp, docs);
+  };
 
   const handleChange = (field) => (e) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -299,18 +387,65 @@ export default function EmployeesPage() {
     .some((f) => String(form[f] || "").trim() !== "");
   const addressRequired = !form._legacy || addressInUse;
 
+  // Show errors and open the first step that has one
+  const showErrors = (errors) => {
+    setFormErrors(errors);
+    const s = firstStepOf(errors);
+    if (s < 99) setStep(s);
+  };
+
+  // What the step needs before Next (the server checks everything again)
+  const validateStep = (s) => {
+    const bad = {};
+    if (s === 0) {
+      if (!form.first_name.trim()) bad.first_name = ["Enter the first name."];
+      if (!form.last_name.trim()) bad.last_name = ["Enter the last name."];
+    }
+    if (s === 1) {
+      if (form.phone && !MOBILE_REGEX.test(form.phone)) bad.phone = [MOBILE_MESSAGE];
+      if (form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)) bad.emergency_phone = [MOBILE_MESSAGE];
+      if (addressRequired) for (const f of ["street", "barangay", "city", "province"]) if (!String(form[f] || "").trim()) bad[f] = ["Required."];
+      if (form.postal_code && !/^\d{4}$/.test(form.postal_code)) bad.postal_code = ["Postal code must be 4 digits."];
+    }
+    if (s === 2) {
+      for (const g of GOV_IDS) if (!govComplete(g, form[g.key])) bad[g.key] = [`Enter all digits (${g.placeholder}).`];
+      if (form.pay_basis === "monthly" ? !form.monthly_rate : form.daily_rate === "") bad[form.pay_basis === "monthly" ? "monthly_rate" : "daily_rate"] = ["Enter the rate."];
+    }
+    if (s === 3) {
+      if (!editingId && !form.position) bad.position = ["Choose the position."];
+      if (!editingId && !form.date_hired) bad.date_hired = ["Enter the hire date."];
+      if (!editingId && form.date_hired > addDaysStr(14)) bad.date_hired = ["The hire date can be at most 14 days from today."];
+      if (isDriverForm) {
+        if (licenseError(form.license_number)) bad.license_number = [licenseError(form.license_number)];
+        if (!editingId && expiryError(form.license_expiry)) bad.license_expiry = [expiryError(form.license_expiry)];
+      }
+    }
+    return bad;
+  };
+  const goNext = () => {
+    const bad = validateStep(step);
+    if (Object.keys(bad).length) { setFormErrors(bad); return; }
+    setFormErrors({});
+    setStep((x) => Math.min(FORM_STEPS.length - 1, x + 1));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormErrors({});
+    // every step is checked before saving
+    for (let s = 0; s < FORM_STEPS.length; s++) {
+      const bad = validateStep(s);
+      if (Object.keys(bad).length) { showErrors(bad); return; }
+    }
 
     if (form.phone && !MOBILE_REGEX.test(form.phone)) {
-      setFormErrors({ phone: [MOBILE_MESSAGE] });
+      showErrors({ phone: [MOBILE_MESSAGE] });
       return;
     }
     // The password is made from the last name and the mobile number, so a
     // new employee needs a mobile number.
     if (editingId === null && !noAccountForm && !form.phone) {
-      setFormErrors({ phone: ["Enter the mobile number. The password uses its last two digits."] });
+      showErrors({ phone: ["Enter the mobile number. The password uses its last two digits."] });
       return;
     }
     if (addressRequired) {
@@ -319,7 +454,7 @@ export default function EmployeesPage() {
         if (!String(form[f] || "").trim()) missing[f] = ["Required when an address is filled in."];
       }
       if (Object.keys(missing).length) {
-        setFormErrors(missing);
+        showErrors(missing);
         return;
       }
     }
@@ -329,16 +464,16 @@ export default function EmployeesPage() {
       // An unchanged saved date is not checked again (the server does the same).
       if (!editingId && expiryError(form.license_expiry)) bad.license_expiry = [expiryError(form.license_expiry)];
       if (Object.keys(bad).length) {
-        setFormErrors(bad);
+        showErrors(bad);
         return;
       }
     }
     if (form.postal_code && !/^\d{4}$/.test(form.postal_code)) {
-      setFormErrors({ postal_code: ["Postal code must be 4 digits."] });
+      showErrors({ postal_code: ["Postal code must be 4 digits."] });
       return;
     }
     if (form.date_hired > addDaysStr(14)) {
-      setFormErrors({ date_hired: ["The hire date can be at most 14 days from today."] });
+      showErrors({ date_hired: ["The hire date can be at most 14 days from today."] });
       return;
     }
 
@@ -366,6 +501,8 @@ export default function EmployeesPage() {
           vehicle_plate: form.sub_role === "driver" ? (form.vehicle_plate || null) : null,
           license_number: form.sub_role === "driver" ? (form.license_number || null) : null,
           license_expiry: form.sub_role === "driver" ? (form.license_expiry || null) : null,
+          ...biodataPayload(form, { withGov: true }),
+          applicant_id: fromApplicant?.id || null,
         }
       : {
           first_name: form.first_name, middle_initial: form.middle_initial || null,
@@ -383,6 +520,7 @@ export default function EmployeesPage() {
           vehicle_plate: form._userRole === "driver" ? (form.vehicle_plate || null) : null,
           license_number: form._userRole === "driver" ? (form.license_number || null) : null,
           license_expiry: form._userRole === "driver" ? (form.license_expiry || null) : null,
+          ...biodataPayload(form, { withGov: true }),
         };
 
     try {
@@ -392,13 +530,21 @@ export default function EmployeesPage() {
       if (res.status === 422 && data?.errors) {
         // Fields that show their own error under the input. Any other
         // field error is shown at the top so it is never silently hidden.
-        const SHOWN = ["first_name", "middle_initial", "last_name", "suffix", "email", "phone", "department", "daily_rate", "street", "barangay", "city", "province", "region", "barangay_code", "block_lot", "subdivision", "postal_code", "position", "sub_role", "vehicle_plate", "license_number", "license_expiry", "shift", "employment_type", "date_hired", "employment_status", "pay_basis", "monthly_rate", "shift_start", "shift_end"];
+        const SHOWN = [...Object.keys(STEP_OF_FIELD), "first_name", "middle_initial", "last_name", "suffix", "email", "phone", "department", "daily_rate", "street", "barangay", "city", "province", "region", "barangay_code", "block_lot", "subdivision", "postal_code", "position", "sub_role", "vehicle_plate", "license_number", "license_expiry", "shift", "employment_type", "date_hired", "employment_status", "pay_basis", "monthly_rate", "shift_start", "shift_end"];
         const hidden = Object.keys(data.errors).filter((k) => !SHOWN.includes(k));
-        setFormErrors(hidden.length ? { ...data.errors, _general: data.errors[hidden[0]] } : data.errors);
+        showErrors(hidden.length ? { ...data.errors, _general: data.errors[hidden[0]] } : data.errors);
         return;
       }
       if (!res.ok) throw new Error(data?.message || `Request failed (${res.status})`);
 
+      // a new employee's attachments upload now, one at a time with progress
+      if (isCreate && data?.employee?.id) {
+        let failed = 0;
+        for (const it of docItems.filter((x) => x.status === "queued" || x.status === "error")) {
+          if (!(await uploadDoc(data.employee.id, it))) failed++;
+        }
+        if (failed) toast.error(`${failed} file${failed === 1 ? "" : "s"} could not be attached. Add ${failed === 1 ? "it" : "them"} again from Edit.`);
+      }
       await fetchEmployees();
       closeModal();
       const name = fullName(data?.employee) || "The employee";
@@ -412,7 +558,7 @@ export default function EmployeesPage() {
         toast.success(`${name}'s details were saved.`);
       }
     } catch (err) {
-      setFormErrors({ _general: [err.message || "Request failed. Try again."] });
+      showErrors({ _general: [err.message || "Request failed. Try again."] });
       console.error("save employee error:", err);
     } finally {
       setSaving(false);
@@ -632,6 +778,13 @@ export default function EmployeesPage() {
                         >
                           {emp.face_data ? <><EyeIcon /> View</> : <><CameraIcon /> Face</>}
                         </button>
+                        <button data-no-confirm
+                          onClick={() => printEmployeeBiodata(emp)}
+                          data-tip="Prints this employee's biodata as a hard copy"
+                          className="flex items-center gap-1 px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer"
+                        >
+                          Biodata
+                        </button>
                         <button
                           onClick={() => openEdit(emp)}
                           className="flex items-center gap-1 px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer"
@@ -658,25 +811,60 @@ export default function EmployeesPage() {
         <Pagination pager={pager} />
       </div>
 
-      {/* ── ADD / EDIT MODAL ── */}
+      {/* ── ADD / EDIT MODAL: six steps (owner, 2026-10-20) ── */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
+          <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-black/[0.09]">
               <div className="text-[15px] font-semibold text-slate-800">
-                {editingId ? "Edit Employee" : "Add Employee"}
+                {editingId ? `Edit Employee · ${[form.first_name, form.last_name].filter(Boolean).join(" ")}` : "Add Employee"}
               </div>
-              <button onClick={closeModal} className="text-slate-400 hover:text-slate-700">
-                <XIcon />
-              </button>
+              <div className="flex items-center gap-2">
+                {editingId && (
+                  <button type="button" data-no-confirm data-tip="Prints the saved biodata of this employee"
+                    onClick={() => printEmployeeBiodata(employees.find((e) => e.id === editingId))}
+                    className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer">
+                    Print biodata
+                  </button>
+                )}
+                <button type="button" onClick={closeModal} aria-label="Close" className="text-slate-400 hover:text-slate-700">
+                  <XIcon />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="px-5 py-4 flex flex-col gap-3.5">
+            {/* Step bar: Personal → Contact → Payroll → Technical → History → Attachments */}
+            <nav aria-label="Form steps" className="px-5 pt-4">
+              <ol className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {FORM_STEPS.map((label, i) => {
+                  const state = i === step ? "current" : i < step ? "done" : "todo";
+                  // a passed step is done only when it has everything it needs
+                  const hasError = Object.keys(formErrors).some((k) => STEP_OF_FIELD[k.split(".")[0]] === i)
+                    || (i < step && Object.keys(validateStep(i)).length > 0);
+                  return (
+                    <li key={label}>
+                      <button type="button" onClick={() => setStep(i)} aria-current={state === "current" ? "step" : undefined} data-no-confirm
+                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left text-[11.5px] font-semibold transition-colors cursor-pointer ${
+                          state === "current" ? "border-cyan-500 bg-cyan-50 text-cyan-800"
+                            : hasError ? "border-rose-200 bg-rose-50 text-rose-700"
+                            : state === "done" ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            : "border-black/[0.09] text-slate-500"}`}>
+                        <span className={`flex-shrink-0 w-5 h-5 rounded-full grid place-items-center text-[10px] ${state === "current" ? "bg-cyan-600 text-white" : state === "done" && !hasError ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"}`}>
+                          {state === "done" && !hasError ? "✓" : i + 1}
+                        </span>
+                        <span className="truncate">{label}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </nav>
+
+            <form onSubmit={handleSubmit} className="px-5 py-4 flex flex-col gap-3.5" noValidate>
               <DraftHint draft={formDraft} onDiscard={() => setFormErrors({})} />
-              <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number and address" />
               {fromApplicant && !editingId && (
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] rounded-lg px-3 py-2">
-                  Hired applicant <span className="font-semibold">{fromApplicant.name}</span> ({fromApplicant.position_applied}). Check the details and fill in the rest to make them an employee.
+                  Hired applicant <span className="font-semibold">{fromApplicant.name}</span> ({fromApplicant.position_applied}). Check the details on every step and fill in the rest to make them an employee.
                 </div>
               )}
               {formErrors._general && (
@@ -685,258 +873,330 @@ export default function EmployeesPage() {
                 </div>
               )}
 
-              {/* Position first: it decides whether the employee gets a login account */}
-              <div className="flex flex-col gap-3">
-                <Field label="Position" required error={formErrors.position}>
-                  {editingId ? (
-                    <input readOnly value={form.position || "—"} className={`${inputCls} bg-slate-100 text-slate-500`} />
-                  ) : (
-                    <select required value={form.position} onChange={handlePositionChange} className={inputCls}>
-                      <option value="">Select position</option>
-                      {Object.keys(POSITION_ROLES).map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
+              {/* 1. PERSONAL */}
+              {step === 0 && (
+                <>
+                  <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number and address" />
+                  <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
+                    <Field label="First Name" required error={formErrors.first_name}>
+                      <input required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
+                    </Field>
+                    <Field label="M.I." error={formErrors.middle_initial}>
+                      <input value={form.middle_initial} onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
+                        maxLength={2} placeholder="e.g. D" aria-label="Middle initial" autoCapitalize="characters" className={inputCls} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
+                    <Field label="Last Name" required error={formErrors.last_name}>
+                      <input required value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
+                    </Field>
+                    <Field label="Suffix" error={formErrors.suffix}>
+                      <select value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>
+                        <option value="">None</option>
+                        {NAME_SUFFIXES.map((x) => <option key={x} value={x}>{x}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Field label="Date of Birth" error={formErrors.birth_date}>
+                      <input type="date" max={addDaysStr(-15 * 365)} value={form.birth_date} onChange={handleChange("birth_date")} className={inputCls} />
+                    </Field>
+                    <Field label="Sex" error={formErrors.sex}>
+                      <select value={form.sex} onChange={handleChange("sex")} className={inputCls}>
+                        <option value="">Choose</option>
+                        {SEXES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Civil Status" error={formErrors.civil_status}>
+                      <select value={form.civil_status} onChange={handleChange("civil_status")} className={inputCls}>
+                        <option value="">Choose</option>
+                        {CIVIL_STATUSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Nationality" error={formErrors.nationality}>
+                      <input value={form.nationality} onChange={handleChange("nationality")} maxLength={50} className={inputCls} />
+                    </Field>
+                    <Field label="Place of Birth" error={formErrors.place_of_birth}>
+                      <input value={form.place_of_birth} onChange={handleChange("place_of_birth")} maxLength={120} placeholder="City or municipality, province" className={inputCls} />
+                    </Field>
+                  </div>
+                </>
+              )}
+
+              {/* 2. CONTACT */}
+              {step === 1 && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {phoneField}
+                    <Field label="Personal Email" error={formErrors.personal_email}>
+                      <input type="email" value={form.personal_email} onChange={handleChange("personal_email")} placeholder="name@gmail.com" className={inputCls} />
+                      <span className="text-[10px] text-slate-400 mt-0.5 block">Not the login. The login email is made automatically.</span>
+                    </Field>
+                  </div>
+                  {editingId && (
+                    <div className="text-[11px] text-slate-400 -mt-1.5">
+                      {form.email
+                        ? <>Login: {form.email} · To fix it, click the pencil beside the email in the list.</>
+                        : "No system account (attendance only)."}
+                    </div>
                   )}
-                </Field>
-                {noAccountForm && (
-                  <p className="-mt-1 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-[11px] text-blue-700">
-                    {form.position}s have no system account. They are recorded for attendance (face enrollment) and payroll only.
-                  </p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
-                <Field label="First Name" required error={formErrors.first_name}>
-                  <input required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
-                </Field>
-                <Field label="M.I." error={formErrors.middle_initial}>
-                  <input
-                    value={form.middle_initial}
-                    onChange={(e) => setForm((f) => ({ ...f, middle_initial: cleanInitial(e.target.value) }))}
-                    maxLength={2}
-                    placeholder="e.g. D"
-                    aria-label="Middle initial"
-                    autoCapitalize="characters"
-                    className={inputCls}
-                  />
-                </Field>
-              </div>
-              <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
-                <Field label="Last Name" required error={formErrors.last_name}>
-                  <input required value={form.last_name} onChange={handleChange("last_name")} className={inputCls} />
-                </Field>
-                <Field label="Suffix" error={formErrors.suffix}>
-                  <select value={form.suffix} onChange={handleChange("suffix")} aria-label="Name suffix" className={inputCls}>
-                    <option value="">None</option>
-                    {NAME_SUFFIXES.map((x) => <option key={x} value={x}>{x}</option>)}
-                  </select>
-                </Field>
-              </div>
-
-              {!editingId && !noAccountForm && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <span className="text-[11px] text-slate-500">Email (made automatically)</span>
-                    <div className="flex items-center min-h-[40px] px-3 rounded-lg bg-slate-50 border border-black/[0.09] text-[13px] min-w-0">
-                      {emailPreview(form)
-                        ? <span className="font-mono text-slate-800 truncate" title={emailPreview(form)}>{emailPreview(form)}</span>
-                        : <span className="text-slate-400">Fill in the First and Last Name</span>}
-                    </div>
-                    <span className="text-[10px] text-slate-400 leading-snug">#### is the employee number, given when saved.</span>
-                  </div>
-                  {phoneField}
-                  <div className="col-span-2 flex flex-col gap-1">
-                    <span className="text-[11px] text-slate-500">Password (made automatically)</span>
-                    <div className="flex items-center min-h-[40px] px-3 rounded-lg bg-slate-50 border border-black/[0.09] text-[13px]">
-                      {defaultEmployeePassword(form.last_name, form.phone) ? (
-                        <span className="font-mono font-semibold text-slate-800 select-all">{defaultEmployeePassword(form.last_name, form.phone)}</span>
-                      ) : (
-                        <span className="text-slate-400">Fill in the Last Name and Mobile Number</span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-slate-400 leading-snug">
-                      Last name + last two digits of the mobile number + "!". Give it to the employee with their email.
-                    </span>
-                  </div>
-                </div>
-              )}
-              {editingId && (
-                <div className="text-[11px] text-slate-400 -mt-1.5">
-                  {form.email
-                    ? <>Email: {form.email} · To fix it, click the pencil beside the email in the list.</>
-                    : "No system account (attendance only)."}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                {(editingId || noAccountForm) && phoneField}
-                <div className="col-span-2 text-[12px] font-semibold text-slate-700 mt-1">Address</div>
-                {form._legacyAddress && !addressInUse && (
-                  <p className="col-span-2 -mt-1 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-700">
-                    Saved address (old format): {form._legacyAddress}. Fill in the fields below to replace it.
-                  </p>
-                )}
-                <AddressFields
-                  value={form}
-                  onChange={handleAddress}
-                  required={addressRequired}
-                  errors={formErrors}
-                  inputClassName={inputCls}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Department" error={formErrors.department}>
-                  <select value={form.department} onChange={handleChange("department")} aria-label="Department" className={inputCls}>
-                    <option value="">Choose a department</option>
-                    {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-                    {form.department && !DEPARTMENTS.includes(form.department) && (
-                      <option value={form.department}>{form.department} (old)</option>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 text-[12px] font-semibold text-slate-700 mt-1">Address</div>
+                    {form._legacyAddress && !addressInUse && (
+                      <p className="col-span-2 -mt-1 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-700">
+                        Saved address (old format): {form._legacyAddress}. Fill in the fields below to replace it.
+                      </p>
                     )}
-                  </select>
-                </Field>
-                <Field label="Pay Basis" required error={formErrors.pay_basis}>
-                  <select required value={form.pay_basis} onChange={handleChange("pay_basis")} className={inputCls}>
-                    <option value="daily">Daily rate</option>
-                    <option value="monthly">Monthly rate</option>
-                  </select>
-                </Field>
-              </div>
+                    <AddressFields value={form} onChange={handleAddress} required={addressRequired} errors={formErrors} inputClassName={inputCls} />
+                  </div>
+                  <div className="text-[12px] font-semibold text-slate-700 mt-1">Emergency contact</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Field label="Name" error={formErrors.emergency_name}>
+                      <input value={form.emergency_name} onChange={handleChange("emergency_name")} maxLength={120} className={inputCls} />
+                    </Field>
+                    <Field label="Relationship" error={formErrors.emergency_relationship}>
+                      <input value={form.emergency_relationship} onChange={handleChange("emergency_relationship")} maxLength={40} placeholder="e.g. Mother" className={inputCls} />
+                    </Field>
+                    <Field label="Mobile Number" error={formErrors.emergency_phone}>
+                      <PhoneInput value={form.emergency_phone} onChange={(emergency_phone) => setForm((f) => ({ ...f, emergency_phone }))} className={inputCls}
+                        invalid={!!form.emergency_phone && !MOBILE_REGEX.test(form.emergency_phone)} />
+                    </Field>
+                  </div>
+                </>
+              )}
 
-              <div className="grid grid-cols-2 gap-3">
-                {form.pay_basis === "monthly" ? (
-                  <Field label="Monthly Rate (₱)" required error={formErrors.monthly_rate}>
-                    <input required type="number" min="0" step="0.01" inputMode="decimal" value={form.monthly_rate}
-                      onChange={handleChange("monthly_rate")} placeholder="e.g. 16000" className={inputCls} />
-                    <span className="text-[10px] text-slate-400 mt-0.5 block">The daily rate is worked out from it (Admin Settings).</span>
+              {/* 3. PAYROLL: government numbers and pay */}
+              {step === 2 && (
+                <>
+                  <div className="text-[12px] font-semibold text-slate-700">Government numbers</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {GOV_IDS.map((g) => (
+                      <Field key={g.key} label={g.label} error={formErrors[g.key] || (!govComplete(g, form[g.key]) ? [`Enter all digits (${g.placeholder}).`] : null)}>
+                        <input value={form[g.key]} inputMode="numeric" placeholder={g.placeholder} maxLength={g.placeholder.length}
+                          onChange={(e) => setForm((f) => ({ ...f, [g.key]: formatGov(g.groups, e.target.value) }))} className={`${inputCls} font-mono`} />
+                      </Field>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-slate-400 -mt-1.5">Typed as digits; dashes are added for you. A 9-digit TIN gets the 000 branch code.</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Pay Basis" required error={formErrors.pay_basis}>
+                      <select required value={form.pay_basis} onChange={handleChange("pay_basis")} className={inputCls}>
+                        <option value="daily">Daily rate</option>
+                        <option value="monthly">Monthly rate</option>
+                      </select>
+                    </Field>
+                    {form.pay_basis === "monthly" ? (
+                      <Field label="Monthly Rate (₱)" required error={formErrors.monthly_rate}>
+                        <input required type="number" min="0" step="0.01" inputMode="decimal" value={form.monthly_rate}
+                          onChange={handleChange("monthly_rate")} placeholder="e.g. 16000" className={inputCls} />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">The daily rate is worked out from it (Admin Settings).</span>
+                      </Field>
+                    ) : (
+                      <Field label="Daily Rate (₱)" required error={formErrors.daily_rate}>
+                        <input required type="number" min="0" step="0.01" inputMode="decimal" value={form.daily_rate}
+                          onChange={handleChange("daily_rate")} placeholder="e.g. 610" className={inputCls} />
+                      </Field>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* 4. TECHNICAL: position, schedule, Driver's license */}
+              {step === 3 && (
+                <>
+                  <Field label="Position" required error={formErrors.position}>
+                    {editingId ? (
+                      <input readOnly value={form.position || "—"} className={`${inputCls} bg-slate-100 text-slate-500`} />
+                    ) : (
+                      <select required value={form.position} onChange={handlePositionChange} className={inputCls}>
+                        <option value="">Select position</option>
+                        {Object.keys(POSITION_ROLES).map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    )}
                   </Field>
-                ) : (
-                  <Field label="Daily Rate (₱)" required error={formErrors.daily_rate}>
-                    <input required type="number" min="0" step="0.01" inputMode="decimal" value={form.daily_rate}
-                      onChange={handleChange("daily_rate")} placeholder="e.g. 610" className={inputCls} />
-                  </Field>
-                )}
-                <Field label="Employment Status" required error={formErrors.employment_status}>
-                  <select required value={form.employment_status} onChange={handleChange("employment_status")} className={inputCls}>
-                    <option value="probationary">Probationary</option>
-                    <option value="regular">Regular</option>
-                  </select>
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">Probationary staff cannot file leave; leave credits start once regular.</span>
-                </Field>
-              </div>
-
-              {!editingId && !noAccountForm && (
-                <Field label="Employee Role (set from Position)" error={formErrors.sub_role}>
-                  <input
-                    readOnly
-                    value={form.sub_role ? form.sub_role.charAt(0).toUpperCase() + form.sub_role.slice(1) : "—"}
-                    className={`${inputCls} bg-slate-100 text-slate-500`}
-                  />
-                </Field>
-              )}
-              {editingId && (
-                <div className="text-[11px] text-slate-400 -mt-1.5">
-                  Role: {roleLabel(form.sub_role || (form._userRole === "driver" ? "driver" : POSITION_ROLES[form.position] || ""))} · Not editable here.
-                </div>
-              )}
-
-              {isDriverForm && (
-                <ScanDropZone kind="license" onScan={handleLicenseScan} fills="license number and expiry date" />
-              )}
-
-              {isDriverForm && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Driver's License No." required error={formErrors.license_number || (form.license_number && licenseError(form.license_number) ? [licenseError(form.license_number)] : null)}>
-                    <input
-                      required
-                      value={form.license_number}
-                      onChange={(e) => setForm((f) => ({ ...f, license_number: formatLicense(e.target.value) }))}
-                      placeholder="e.g. N01-23-456789"
-                      maxLength={13}
-                      inputMode="text"
-                      autoCapitalize="characters"
-                      className={`${inputCls} font-mono`}
-                    />
-                    <span className="text-[10px] text-slate-400 mt-0.5 block">
-                      LTO format: office code (letter + 2 digits), year, 6-digit serial.
-                    </span>
-                  </Field>
-                  <Field label="License Expiry" required error={formErrors.license_expiry || (form.license_expiry && expiryError(form.license_expiry) ? [expiryError(form.license_expiry)] : null)}>
-                    <input
-                      required
-                      type="date"
-                      min={tomorrowStr()}
-                      value={form.license_expiry}
-                      onChange={handleChange("license_expiry")}
-                      className={inputCls}
-                    />
-                    <span className="text-[10px] text-slate-400 mt-0.5 block">
-                      An expired license is not accepted.
-                    </span>
-                  </Field>
-                </div>
-              )}
-
-              {isDriverForm && (
-                <Field label="Vehicle Plate Number" error={formErrors.vehicle_plate}>
-                  <input
-                    value={form.vehicle_plate}
-                    onChange={handleChange("vehicle_plate")}
-                    placeholder="e.g. V7824"
-                    className={inputCls}
-                  />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Optional. Shown to customers alongside the driver's name (e.g. "Rhalf Valencia (PN: V7824)").
-                  </span>
-                </Field>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Employment Type" required error={formErrors.employment_type}>
-                  <select required value={form.employment_type} onChange={handleChange("employment_type")} className={inputCls}>
-                    <option value="regular">Regular</option>
-                    <option value="contractual">Contractual</option>
-                    <option value="part_time">Part-Time</option>
-                  </select>
-                </Field>
-                <div aria-hidden="true" />
-                <Field label="Shift Start" required error={formErrors.shift_start}>
-                  <TimeSelect required value={form.shift_start} onChange={handleChange("shift_start")} selectClassName={timeSelectCls} />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">Late is counted from this time, to the minute.</span>
-                </Field>
-                <Field label="Shift End" required error={formErrors.shift_end}>
-                  <TimeSelect required value={form.shift_end} onChange={handleChange("shift_end")} selectClassName={timeSelectCls} />
-                  {form.shift_start && form.shift_end && form.shift_end <= form.shift_start && (
-                    <span className="text-[10px] text-cyan-600 mt-0.5 block">Overnight: ends the next day.</span>
+                  {noAccountForm && (
+                    <p className="-mt-1 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-[11px] text-blue-700">
+                      {form.position}s have no system account. They are recorded for attendance (face enrollment) and payroll only.
+                    </p>
                   )}
-                </Field>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Department" error={formErrors.department}>
+                      <select value={form.department} onChange={handleChange("department")} aria-label="Department" className={inputCls}>
+                        <option value="">Choose a department</option>
+                        {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                        {form.department && !DEPARTMENTS.includes(form.department) && <option value={form.department}>{form.department} (old)</option>}
+                      </select>
+                    </Field>
+                    <Field label="Employee Role (set from Position)" error={formErrors.sub_role}>
+                      <input readOnly className={`${inputCls} bg-slate-100 text-slate-500`}
+                        value={roleLabel(form.sub_role || (form._userRole === "driver" ? "driver" : POSITION_ROLES[form.position] || ""))} />
+                    </Field>
+                    <Field label="Employment Status" required error={formErrors.employment_status}>
+                      <select required value={form.employment_status} onChange={handleChange("employment_status")} className={inputCls}>
+                        <option value="probationary">Probationary</option>
+                        <option value="regular">Regular</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 mt-0.5 block">Probationary staff cannot file leave; leave credits start once regular.</span>
+                    </Field>
+                    <Field label="Employment Type" required error={formErrors.employment_type}>
+                      <select required value={form.employment_type} onChange={handleChange("employment_type")} className={inputCls}>
+                        <option value="regular">Regular</option>
+                        <option value="contractual">Contractual</option>
+                        <option value="part_time">Part-Time</option>
+                      </select>
+                    </Field>
+                    <Field label="Shift Start" required error={formErrors.shift_start}>
+                      <TimeSelect required value={form.shift_start} onChange={handleChange("shift_start")} selectClassName={timeSelectCls} />
+                      <span className="text-[10px] text-slate-400 mt-0.5 block">Late is counted from this time, to the minute.</span>
+                    </Field>
+                    <Field label="Shift End" required error={formErrors.shift_end}>
+                      <TimeSelect required value={form.shift_end} onChange={handleChange("shift_end")} selectClassName={timeSelectCls} />
+                      {form.shift_start && form.shift_end && form.shift_end <= form.shift_start && (
+                        <span className="text-[10px] text-cyan-600 mt-0.5 block">Overnight: ends the next day.</span>
+                      )}
+                    </Field>
+                    {!editingId && (
+                      <Field label="Date Hired" required error={formErrors.date_hired}>
+                        <input required type="date" max={addDaysStr(14)} value={form.date_hired} onChange={handleChange("date_hired")} className={inputCls} />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">Up to 14 days ahead. A future hire is left out of attendance, the kiosk and payroll until that date.</span>
+                      </Field>
+                    )}
+                  </div>
 
-              {!editingId && (
-                <Field label="Date Hired" required error={formErrors.date_hired}>
-                  <input required type="date" max={addDaysStr(14)} value={form.date_hired} onChange={handleChange("date_hired")} className={inputCls} />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">Up to 14 days ahead. A future hire is left out of attendance, the kiosk and payroll until that date.</span>
-                </Field>
+                  {isDriverForm && (
+                    <>
+                      <div className="text-[12px] font-semibold text-slate-700 mt-1">Driver's license</div>
+                      <ScanDropZone kind="license" onScan={handleLicenseScan} fills="license number and expiry date" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field label="Driver's License No." required error={formErrors.license_number || (form.license_number && licenseError(form.license_number) ? [licenseError(form.license_number)] : null)}>
+                          <input required value={form.license_number} onChange={(e) => setForm((f) => ({ ...f, license_number: formatLicense(e.target.value) }))}
+                            placeholder="e.g. N01-23-456789" maxLength={13} autoCapitalize="characters" className={`${inputCls} font-mono`} />
+                          <span className="text-[10px] text-slate-400 mt-0.5 block">LTO format: office code (letter + 2 digits), year, 6-digit serial.</span>
+                        </Field>
+                        <Field label="License Expiry" required error={formErrors.license_expiry || (form.license_expiry && expiryError(form.license_expiry) ? [expiryError(form.license_expiry)] : null)}>
+                          <input required type="date" min={tomorrowStr()} value={form.license_expiry} onChange={handleChange("license_expiry")} className={inputCls} />
+                          <ExpiryBadge date={form.license_expiry} />
+                        </Field>
+                      </div>
+                      <Field label="Restriction Codes" error={formErrors.license_restrictions}>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 pt-1">
+                          {RESTRICTIONS.map(([code, label]) => (
+                            <label key={code} className="flex items-center gap-2 text-[12px] text-slate-700 cursor-pointer">
+                              <input type="checkbox" checked={(form.license_restrictions || []).includes(code)}
+                                onChange={(e) => setForm((f) => ({ ...f, license_restrictions: e.target.checked ? [...(f.license_restrictions || []), code] : (f.license_restrictions || []).filter((c) => c !== code) }))} />
+                              <span><b className="font-mono">{code}</b> · {label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </Field>
+                      <Field label="Vehicle Plate Number" error={formErrors.vehicle_plate}>
+                        <input value={form.vehicle_plate} onChange={handleChange("vehicle_plate")} placeholder="e.g. V7824" className={inputCls} />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">Optional. Shown to customers beside the driver's name.</span>
+                      </Field>
+                    </>
+                  )}
+                </>
               )}
 
-              {!editingId && (
-                <div className="text-[11px] text-slate-400 -mt-1">
-                  Daily rate isn't set here — use the Payroll action on this employee's row once the account exists.
+              {/* 5. HISTORY: education and work */}
+              {step === 4 && (
+                <>
+                  <div className="text-[12px] font-semibold text-slate-700">Education</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field label="Highest Attainment" error={formErrors.education_level}>
+                      <select value={form.education_level} onChange={handleChange("education_level")} className={inputCls}>
+                        <option value="">Choose</option>
+                        {EDUCATION_LEVELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Year Graduated" error={formErrors.year_graduated}>
+                      <input type="number" min="1950" max={new Date().getFullYear() + 6} inputMode="numeric" value={form.year_graduated}
+                        onChange={handleChange("year_graduated")} placeholder="e.g. 2016" className={inputCls} />
+                    </Field>
+                    <Field label="School" error={formErrors.school}>
+                      <input value={form.school} onChange={handleChange("school")} maxLength={160} className={inputCls} />
+                    </Field>
+                    <Field label="Course or Strand" error={formErrors.course}>
+                      <input value={form.course} onChange={handleChange("course")} maxLength={160} className={inputCls} />
+                    </Field>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[12px] font-semibold text-slate-700">Work history</span>
+                    {(form.work_history || []).length < 5 && (
+                      <button type="button" data-no-confirm onClick={() => setForm((f) => ({ ...f, work_history: [...(f.work_history || []), { company: "", position: "", from: "", to: "" }] }))}
+                        className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50">+ Add work</button>
+                    )}
+                  </div>
+                  {(form.work_history || []).length === 0 && <div className="text-[12px] text-slate-400">No previous work added.</div>}
+                  {(form.work_history || []).map((w, i) => {
+                    const set = (k) => (e) => setForm((f) => ({ ...f, work_history: (f.work_history || []).map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)) }));
+                    return (
+                      <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_130px_130px_auto] gap-2 items-end rounded-lg border border-black/[0.09] p-2.5">
+                        <Field label="Company" error={formErrors[`work_history.${i}.company`]}><input value={w.company} onChange={set("company")} className={inputCls} /></Field>
+                        <Field label="Position"><input value={w.position} onChange={set("position")} className={inputCls} /></Field>
+                        <Field label="From"><input type="month" value={w.from} onChange={set("from")} className={inputCls} /></Field>
+                        <Field label="To"><input type="month" value={w.to} onChange={set("to")} className={inputCls} /></Field>
+                        <button type="button" onClick={() => setForm((f) => ({ ...f, work_history: (f.work_history || []).filter((_, j) => j !== i) }))}
+                          className="px-2.5 py-1.5 text-[11px] text-rose-700 hover:underline">Remove</button>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* 6. ATTACHMENTS */}
+              {step === 5 && (
+                <>
+                  {fromApplicant && !editingId && (
+                    <p className="px-3 py-2 rounded-md bg-blue-50 border border-blue-200 text-[11px] text-blue-700">
+                      The applicant's resume and documents are attached when the employee is saved.
+                    </p>
+                  )}
+                  <DocumentDrop items={docItems} onAdd={addDocs} onRemove={removeDoc} disabled={saving}
+                    viewUrl={(doc) => `${API_BASE}/employees/${editingId}/documents/${doc.id}`} />
+                  {!editingId && !noAccountForm && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="text-[11px] text-slate-500">Login email (made automatically)</span>
+                        <div className="flex items-center min-h-[40px] px-3 rounded-lg bg-slate-50 border border-black/[0.09] text-[13px] min-w-0">
+                          {emailPreview(form) ? <span className="font-mono text-slate-800 truncate">{emailPreview(form)}</span> : <span className="text-slate-400">Fill in the Last Name</span>}
+                        </div>
+                        <span className="text-[10px] text-slate-400 leading-snug">#### is the employee number, given when saved.</span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[11px] text-slate-500">Password (made automatically)</span>
+                        <div className="flex items-center min-h-[40px] px-3 rounded-lg bg-slate-50 border border-black/[0.09] text-[13px]">
+                          {defaultEmployeePassword(form.last_name, form.phone)
+                            ? <span className="font-mono font-semibold text-slate-800 select-all">{defaultEmployeePassword(form.last_name, form.phone)}</span>
+                            : <span className="text-slate-400">Fill in the Last Name and Mobile Number</span>}
+                        </div>
+                        <span className="text-[10px] text-slate-400 leading-snug">Last name + last two digits of the mobile number + "!".</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-black/[0.09] mt-1">
+                <button type="button" onClick={closeModal} className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700">Cancel</button>
+                <div className="flex items-center gap-2">
+                  {step > 0 && (
+                    <button type="button" data-no-confirm onClick={() => { setFormErrors({}); setStep(step - 1); }}
+                      className="px-3.5 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-600 hover:bg-slate-50">Back</button>
+                  )}
+                  {step < FORM_STEPS.length - 1 && (
+                    <button type="button" data-no-confirm onClick={goNext}
+                      className={`px-4 py-1.5 rounded-md text-xs font-medium ${editingId ? "border border-black/[0.09] text-slate-700 hover:bg-slate-50" : "bg-cyan-500 hover:bg-cyan-600 text-white"}`}>Next</button>
+                  )}
+                  {(editingId || step === FORM_STEPS.length - 1) && (
+                    <button type="submit" disabled={saving}
+                      className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-medium rounded-md transition-colors">
+                      {saving ? "Saving…" : editingId ? "Save Changes" : "Create Employee"}
+                    </button>
+                  )}
                 </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-black/[0.09] mt-1">
-                <button type="button" onClick={closeModal} className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700">
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-medium rounded-md transition-colors"
-                >
-                  {saving ? "Saving…" : editingId ? "Save Changes" : "Create Employee"}
-                </button>
               </div>
             </form>
           </div>

@@ -24,6 +24,7 @@ import StockLimitsPage from './pages/Admin/StockLimitsPage'
 import ProjectsPage from './pages/Admin/ProjectsPage'
 import MaintenanceProjectsPage from './pages/employees/MaintenanceProjectsPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
+import PerformancePage from './pages/Admin/PerformancePage'
 import CustomersPage from './pages/Admin/CustomersPage'
 import DeliveriesPage from './pages/Admin/DeliveriesPage'
 import ReceiptsPage from './pages/Admin/ReceiptsPage'
@@ -215,6 +216,15 @@ function App() {
         {/* View-only Employees overview for Admin: Name/Position/Role/Shift
             only, backed by GET /api/employees-summary. Full CRUD + Payroll
             live under HR at /hr/employees below. */}
+        {/* Performance appraisals: draft ratings from the records, Admin only */}
+        <Route
+          path="/admin/performance"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <PerformancePage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/employees"
           element={

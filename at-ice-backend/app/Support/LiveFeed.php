@@ -46,6 +46,8 @@ class LiveFeed
     {
         return array_merge(array_keys(self::WATCH), [
             Models\DeliveryProof::class,
+            Models\DeliveryArrival::class,
+            Models\DeliveryCrew::class,
             Models\FaceData::class,
             Models\PickupLog::class,
             Models\IceLoading::class,
@@ -187,6 +189,24 @@ class LiveFeed
                 }
 
                 return ['deliveries', "Delivery {$no} removed", $roles, $users];
+
+            case Models\DeliveryArrival::class:
+                if ($a !== 'created') {
+                    return null;
+                }
+                $d = $m->delivery;
+                $crew = Models\DeliveryCrew::whereDate('date', now()->toDateString())->where('driver_id', $d?->driver_id)->pluck('salesman_id')->all();
+
+                return ['deliveries', ($m->user?->name ?? 'Someone').' arrived at '.($d?->customer?->name ?? 'the store').' ('.($d?->delivery_no ?: "#{$m->delivery_id}").')',
+                    [], array_merge([$d?->driver_id], $crew)];
+
+            case Models\DeliveryCrew::class:
+                if ($a === 'deleted') {
+                    return null;
+                }
+
+                return ['deliveries', ($m->salesman?->name ?? 'A Salesman').' rides with '.($m->driver?->name ?? 'a Driver').' today',
+                    [], [$m->driver_id, $m->salesman_id, $m->getOriginal('driver_id')]];
 
             case Models\DeliveryProof::class:
                 if ($a !== 'created') {

@@ -17,8 +17,9 @@ function pageList(page, count) {
 
 // The one pagination bar under every list table (lib/usePagination.js gives
 // `pager`): "Showing 1–10 of 42", Rows per page (10, 25, 50), Previous, the
-// page numbers (current one in indigo) and Next.
-export default function Pagination({ pager, label = "rows" }) {
+// page numbers (current one in indigo) and Next. fixed: the phone screens
+// always show 10 per page, so Rows per page is left out.
+export default function Pagination({ pager, label = "rows", fixed = false }) {
   if (!pager || pager.total === 0) return null;
   const { page, pageCount, pageSize, total, from, to, setPage, setPageSize } = pager;
   const btn = "pager-btn inline-flex items-center justify-center gap-1 h-9 rounded-lg border text-[12px] font-medium tabular-nums transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer";
@@ -30,13 +31,13 @@ export default function Pagination({ pager, label = "rows" }) {
     <nav aria-label="Pagination" className="pager flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-black/[0.06]">
       <div className="flex items-center gap-3 text-[12px] text-slate-500">
         <span>Showing <b className="text-slate-700">{from}–{to}</b> of <b className="text-slate-700">{total}</b> {label}</span>
-        <label className="flex items-center gap-1.5">
+        {!fixed && <label className="flex items-center gap-1.5">
           <span>Rows per page</span>
           <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} aria-label="Rows per page"
             className="pager-size h-9 px-2 rounded-lg border border-black/[0.09] bg-white text-[12px] text-slate-700 outline-none focus:border-indigo-400">
             {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
-        </label>
+        </label>}
       </div>
       <div className="flex items-center gap-1">
         <button type="button" onClick={() => setPage(page - 1)} disabled={page <= 1} aria-label="Previous page"

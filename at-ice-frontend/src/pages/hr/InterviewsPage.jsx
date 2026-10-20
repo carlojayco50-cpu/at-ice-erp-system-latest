@@ -18,6 +18,10 @@ import { APPLICANT_POSITIONS, applyUrl, isLocalTesting } from "../../lib/positio
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import QRCode from "qrcode";
 import { formatDateTime, formatTime } from "../../lib/time";
+import { CIVIL_STATUSES, EDUCATION_LEVELS, SEXES, labelOf } from "../../lib/biodata";
+
+const DOC_LABEL = { photo: "2x2 photo", resume: "Resume", other: "Document" };
+const monthLabel = (v) => (v ? new Date(`${v}-01T00:00:00`).toLocaleDateString("en-PH", { month: "short", year: "numeric" }) : "");
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 
@@ -834,6 +838,28 @@ export default function InterviewsPage() {
               ["Resume / CV", viewing.resume_name
                 ? <button type="button" onClick={() => openResume(viewing)} className="text-cyan-600 hover:underline font-medium cursor-pointer text-left break-all">{viewing.resume_name}</button>
                 : "—"],
+              ["Photo and Documents", (viewing.documents || []).length === 0 ? "—" : (
+                <span className="flex flex-col gap-1">
+                  {viewing.documents.map((d) => (
+                    <button key={d.id} type="button" onClick={() => previewProtectedFile(`/api/applicants/${viewing.id}/documents/${d.id}`, d.original_name).catch((err) => toast.error(err.message))}
+                      className="text-left text-cyan-600 hover:underline font-medium cursor-pointer break-all">
+                      {DOC_LABEL[d.type] || "Document"} · {d.original_name}
+                    </button>
+                  ))}
+                </span>
+              )],
+              ["Data Privacy Consent", viewing.consented_at ? `Agreed ${fmtDateTime(viewing.consented_at)}` : viewing.source === "qr" ? "—" : "Added by HR"],
+              ["Personal", [
+                viewing.birth_date && `Born ${new Date(`${String(viewing.birth_date).slice(0, 10)}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`,
+                labelOf(SEXES, viewing.sex), labelOf(CIVIL_STATUSES, viewing.civil_status), viewing.nationality, viewing.place_of_birth,
+              ].filter(Boolean).join(" · ") || "—"],
+              ["Emergency Contact", [viewing.emergency_name, viewing.emergency_relationship && `(${viewing.emergency_relationship})`, viewing.emergency_phone].filter(Boolean).join(" ") || "—"],
+              ...(viewing.position_applied === "Driver" ? [["Driver's License", viewing.license_number
+                ? `${viewing.license_number} · expires ${String(viewing.license_expiry || "").slice(0, 10) || "—"}${viewing.license_restrictions ? ` · codes ${viewing.license_restrictions}` : ""}`
+                : "—"]] : []),
+              ["Education", [labelOf(EDUCATION_LEVELS, viewing.education_level), viewing.course, viewing.school, viewing.year_graduated].filter(Boolean).join(" · ") || "—"],
+              ["Work History", (viewing.work_history || []).length === 0 ? "—" : viewing.work_history.map((w) =>
+                `${w.company}${w.position ? `, ${w.position}` : ""} (${monthLabel(w.from) || "?"} – ${w.to ? monthLabel(w.to) : "present"})`).join("\n")],
               ["Address", addressLine(viewing) || "—"],
               ["Interview", fmtInterview(viewing.interview_date)],
               ["Status", STATUS_LABEL[viewing.status] || viewing.status],
