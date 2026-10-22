@@ -9,12 +9,17 @@ import { formatDateTime as dateTime12 } from "../../lib/time";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { DriverView, StoreView, EditDeliveryModal } from "./deliveries/BoardViews";
+import SameDayChanges from "./deliveries/SameDayChanges";
+import AdjustmentRequests from "./deliveries/AdjustmentRequests";
 import ContractsTab from "./deliveries/ContractsTab";
 import DriverStoresTab from "./deliveries/DriverStoresTab";
 import { ReassignedTag } from "./deliveries/shared";
 import { STATUS_STYLE } from "./deliveries/utils";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { PILL } from "../../lib/statusTones";
 
 const API_BASE = "/api";
 // Proof photos are on Laravel's public disk, served by the backend at /storage/.
@@ -23,9 +28,9 @@ const photoUrl = (path) => (path ? `${BACKEND_URL}/storage/${path}` : null);
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatDateTime = (v) => (v ? dateTime12(v) : "—");
 const PAYMENT_BADGE = {
-  paid: "bg-emerald-50 text-emerald-700",
-  unpaid: "bg-amber-50 text-amber-700",
-  overdue: "bg-red-50 text-red-700",
+  paid: PILL.success,
+  unpaid: PILL.warning,
+  overdue: PILL.danger,
 };
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
@@ -206,7 +211,8 @@ export default function DeliveriesPage() {
       setAvailLoading(false);
     }
   }, []);
-  useEffect(() => { if (showForm) fetchAvailability(); }, [showForm, fetchAvailability, live]);
+  // Loaded on open too, for the "Drivers available" KPI card
+  useEffect(() => { fetchAvailability(); }, [showForm, fetchAvailability, live]);
 
   function openAddForm() {
     setBlocks([emptyBlock()]);
@@ -361,8 +367,25 @@ export default function DeliveriesPage() {
 
   const pager = usePagination(filtered);
 
+  // Today at a glance for the KPI cards
+  const today = todayStr();
+  const todays = deliveries.filter((d) => String(d.scheduled_date || d.ordered_at || "").slice(0, 10) === today && d.status !== "cancelled");
+  const todayOf = (s) => todays.filter((d) => d.status === s).length;
+  const driversOn = availability.drivers.filter((d) => d.status !== "unavailable").length;
+  const driversFree = availability.drivers.filter((d) => d.status === "available").length;
+
   return (
     <AdminLayout pageTitle="Deliveries" breadcrumb="Delivery / Deliveries">
+      <KpiGrid cols={5}>
+        <KpiCard label="Stops today" icon="store" tone="cyan" value={todays.length} sub={`${counts.all || 0} deliveries on record`} />
+        <KpiCard label="Delivered today" icon="check" tone="emerald" value={todayOf("delivered")} sub={todays.length ? `${Math.round((todayOf("delivered") / todays.length) * 100)}% of today's stops` : "No stops today"} bar={todays.length ? todayOf("delivered") / todays.length : 0} />
+        <KpiCard label="In transit" icon="truck" tone="cyan" value={todayOf("in_transit")} sub="On the road now" live={todayOf("in_transit") > 0} bar={todays.length ? todayOf("in_transit") / todays.length : 0} />
+        <KpiCard label="Waiting" icon="clock" tone="amber" value={todayOf("pending") + todayOf("queued")} sub={`${todayOf("queued")} queued without a driver`} bar={todays.length ? (todayOf("pending") + todayOf("queued")) / todays.length : 0} />
+        <KpiCard label="Drivers available" icon="users" tone="violet" value={driversFree} sub={`${driversOn} on shift of ${availability.drivers.length} drivers`} bar={availability.drivers.length ? driversOn / availability.drivers.length : 0} />
+      </KpiGrid>
+
+      <AdjustmentRequests onChanged={refreshAll} />
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -393,8 +416,8 @@ export default function DeliveriesPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search delivery, customer, salesman, invoice..."
-                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-56"
+                placeholder="Search delivery, customer, invoice…"
+                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-64"
               />
             </div>
             )}
@@ -443,22 +466,9 @@ export default function DeliveriesPage() {
         )}
 
         {tab === "list" && (<>
-        <div className="px-[18px] pt-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by status">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border transition-colors cursor-pointer ${statusFilter === f.value ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-600 hover:bg-slate-50"}`}
-            >
-              {f.label}{" "}
-              <span className={`ml-1 inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full text-[11px] font-bold tabular-nums ${statusFilter === f.value ? "count-chip is-on" : counts[f.value] > 0 ? "count-chip" : "count-chip is-zero"}`}>
-                {counts[f.value]}
-              </span>
-            </button>
-          ))}
+        <div className="px-[18px] pt-3">
+          <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter}
+            options={STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 }))} />
         </div>
 
         <div className="overflow-x-auto lg:overflow-visible">
@@ -634,7 +644,7 @@ export default function DeliveriesPage() {
                         <label className="text-[11px] text-slate-500 mb-2 block">Items *</label>
                         <div className="flex flex-col gap-2">
                           {block.items.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-[1fr_110px_auto] gap-2 items-center">
+                            <div key={idx} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_110px_auto] gap-2 items-center">
                               <select
                                 value={item.product_type}
                                 onChange={(e) => updateItem(bi, idx, "product_type", e.target.value)}
@@ -732,11 +742,13 @@ export default function DeliveriesPage() {
                   ))}
                 </div>
               </div>
+              <SameDayChanges delivery={viewing} onChanged={refreshAll} />
               {proofs[viewing.id] && <ProofSection proof={proofs[viewing.id]} />}
             </div>
           </div>
         </div>
       )}
+
 
       {editing && (
         <EditDeliveryModal

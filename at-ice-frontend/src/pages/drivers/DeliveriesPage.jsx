@@ -4,6 +4,7 @@ import logo from "../../assets/logo.png";
 import { clearSession } from "../../lib/auth";
 import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
 import LeaveRequestButton from "../../components/LeaveRequestButton";
+import { MemoAlert, MyMemosButton } from "../../components/MyMemos";
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 import { SkeletonList } from "../../components/Skeleton";
@@ -20,6 +21,7 @@ import { usePagination } from "../../lib/usePagination";
 import { StopMeta, ArrivalChips } from "../../components/RouteParts";
 import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
+import FilterSelect from "../../components/FilterSelect";
 
 // Pusher/Echo setup, created once at module load
 window.Pusher = Pusher;
@@ -165,7 +167,7 @@ export function DeliveriesPage() {
   // Real time updates via Pusher, on the public "deliveries" channel, event "delivery.status.updated"
   // Only apply updates that belong to this driver's own deliveries
   useEffect(() => {
-    const channel = echo.channel("deliveries");
+    const channel = echo.private("deliveries");
     channel.listen(".delivery.status.updated", (e) => {
       if (String(e.driver_id) !== String(user?.id)) return;
       setDeliveries((prev) =>
@@ -173,7 +175,7 @@ export function DeliveriesPage() {
       );
     });
     return () => {
-      echo.leaveChannel("deliveries");
+      echo.leave("deliveries");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -264,12 +266,14 @@ export function DeliveriesPage() {
               {/* icon only on phones, so the row fits beside the name */}
               <span className="hidden sm:inline">GPS</span>
             </button>
+            <MyMemosButton />
             <LeaveRequestButton />
             <HeaderAvatar initials={initialsOf(user?.name, "DR")} name={user?.name || "Driver"} subtitle={user?.email || "Driver"} onSignOut={askLogout} mobileSignOut />
           </div>
         </div>
 
         <ScopeStatusRow />
+        <div className="mt-3"><MemoAlert /></div>
         <div className="mt-3">
           <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">My Deliveries</div>
         </div>
@@ -298,17 +302,8 @@ export function DeliveriesPage() {
 
       {/* Filter tabs */}
       <div className="px-4 pt-4 flex-shrink-0">
-        <div className="flex bg-slate-50 rounded-xl overflow-x-auto">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
-              className="flex-1 whitespace-nowrap text-[12px] font-medium text-slate-500 cursor-pointer"
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <FilterSelect label="Status" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
+          options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key === "all" ? "total" : f.key] }))} />
       </div>
 
       {/* Delivery list */}

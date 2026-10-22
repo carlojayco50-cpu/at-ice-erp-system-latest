@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\LiveEvent;
 use App\Support\ArchiveExpiry;
 use App\Support\DeliveryDispatch;
+use App\Support\MemoEngine;
 use App\Support\PayrollCalendar;
 use Illuminate\Http\Request;
 
@@ -24,6 +25,7 @@ class LiveFeedController extends Controller
         if (in_array($user->role, ['hr', 'admin'], true)) {
             PayrollCalendar::notifyCutoff();
             ArchiveExpiry::daily();
+            MemoEngine::run(); // missed Time Outs -> draft memos for HR (every 10 minutes)
         }
 
         // Driver leaves, the delivery queue and store delay notices

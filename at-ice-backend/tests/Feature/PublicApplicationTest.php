@@ -60,9 +60,13 @@ class PublicApplicationTest extends TestCase
 
     public function test_the_form_is_checked_and_cannot_set_hr_fields(): void
     {
+        // an off-list position is refused before anything else is checked
         $this->postJson('/api/apply', $this->form(['position_applied' => 'Manager', 'phone' => '12345']))
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['position_applied', 'phone']);
+            ->assertJsonValidationErrors(['position_applied']);
+        $this->postJson('/api/apply', $this->form(['phone' => '12345']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['phone']);
 
         $this->postJson('/api/apply', $this->form(['status' => 'hired', 'interview_date' => '2030-01-01 09:00:00']))->assertCreated();
         $a = Applicant::first();

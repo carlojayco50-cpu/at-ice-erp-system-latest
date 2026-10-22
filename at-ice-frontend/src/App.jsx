@@ -6,6 +6,7 @@ import SoftPickers from './components/SoftPickers'
 import Toaster from './components/Toaster'
 import ActionGuard from './components/ActionGuard'
 import AttachmentViewer from './components/AttachmentViewer'
+import OverflowTitle from './components/OverflowTitle'
 
 // -- General Pages
 import LoginPage from './pages/LoginPage'
@@ -49,6 +50,7 @@ import HRDashboard from './pages/hr/HRDashboard'
 import EmployeesPage from './pages/hr/EmployeesPage'
 import AttendancePage from './pages/hr/AttendancePage'
 import LeaveRequestsPage from './pages/hr/LeaveRequestsPage'
+import MemoManager from './pages/hr/MemoManager'
 import InterviewsPage from './pages/hr/InterviewsPage'
 import TimesheetsPage from './pages/hr/TimesheetsPage'
 import HolidaysPage from './pages/hr/HolidaysPage'
@@ -76,6 +78,7 @@ function App() {
       <Toaster />
       <ActionGuard />
       <AttachmentViewer />
+      <OverflowTitle />
       <Routes>
 
         {/* -- General (public, no auth needed) -- */}
@@ -267,7 +270,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Support Inbox: customer Contact Support messages (dispatch room). */}
+        {/* Support Tickets: customer Contact Support messages as tickets (dispatch room). */}
         <Route
           path="/admin/support-inbox"
           element={
@@ -332,6 +335,16 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["hr"]}>
               <LeaveRequestsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Memos: disciplinary memos. Missed Time Outs become drafts HR
+            reviews; HR issues, sends, and archives signed copies here. */}
+        <Route
+          path="/hr/memos"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <MemoManager />
             </ProtectedRoute>
           }
         />

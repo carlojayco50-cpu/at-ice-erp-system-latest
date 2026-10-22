@@ -2,12 +2,14 @@
 // Maintenance, Checker and Salesman screens. Components are in
 // components/RoleShell.jsx and components/MobileUi.jsx.
 
-// One meaning, one color, on every role screen.
+import { PILL } from "./statusTones";
+
+// One meaning, one color, on every role screen (colors from lib/statusTones.js).
 export const TONE_CLASS = {
-  pending: "bg-amber-50 text-amber-700 border border-amber-200",   // Pending / Queued / Scheduled
-  progress: "bg-blue-50 text-blue-700 border border-blue-200",     // In progress / Active / On route / Checking
-  done: "bg-emerald-50 text-emerald-700 border border-emerald-200", // Completed / Verified / Delivered / Operational
-  urgent: "bg-rose-50 text-rose-700 border border-rose-200",       // Urgent / Breakdown / Discrepancy / Cancelled
+  pending: PILL.warning,   // Pending / Queued / Scheduled
+  progress: PILL.progress, // In progress / Active / On route / Checking
+  done: PILL.success,      // Completed / Verified / Delivered / Operational
+  urgent: PILL.danger,     // Urgent / Breakdown / Discrepancy / Cancelled
 };
 
 // A record status => tone.

@@ -10,6 +10,7 @@ import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { formatDateTime } from "../../lib/time";
+import FilterSelect from "../../components/FilterSelect";
 
 // Supplies and materials only. Ice is not inventoried.
 const CATEGORIES = ["Packaging", "Truck Parts", "Machine Components", "Cleaning Supplies", "Other"];
@@ -156,14 +157,8 @@ export default function CheckerInventoryManagementPage() {
       <TimeInNotice timedIn={timedIn} />
       <SuccessBanner>{notice}</SuccessBanner>
 
-      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1" role="tablist" aria-label="Show">
-        {FILTERS.map(([v, label]) => (
-          <button key={v} type="button" role="tab" aria-selected={filter === v} onClick={() => setFilter(v)}
-            className={`min-h-[44px] px-4 rounded-full border text-[14px] font-semibold whitespace-nowrap active:scale-[0.98] transition-transform ${filter === v ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-slate-200 text-slate-600"}`}>
-            {label} <span className="tabular-nums opacity-80">{counts[v]}</span>
-          </button>
-        ))}
-      </div>
+      <FilterSelect label="Show" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
+        options={FILTERS.map(([v, label]) => ({ value: v, label, count: counts[v] }))} />
 
       {filter !== "alerts" && (
         <div className="relative">

@@ -9,6 +9,7 @@ import { useLiveTick } from "../../lib/live";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 import { formatDateTime } from "../../lib/time";
+import FilterSelect from "../../components/FilterSelect";
 
 const STATUS_LABEL = { pending: "To confirm", confirmed: "Confirmed", cancelled: "Cancelled" };
 
@@ -122,14 +123,8 @@ export default function CheckerStockMovementsPage() {
     >
       <TimeInNotice timedIn={timedIn} />
 
-      <div className="flex gap-2" role="tablist" aria-label="Show">
-        {[["pending", `To confirm ${pendingCount}`], ["all", `All ${movements.length}`]].map(([v, label]) => (
-          <button key={v} type="button" role="tab" aria-selected={filter === v} onClick={() => setFilter(v)}
-            className={`min-h-[44px] px-4 rounded-full border text-[14px] font-semibold active:scale-[0.98] transition-transform ${filter === v ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-slate-200 text-slate-600"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <FilterSelect label="Show" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
+        options={[{ value: "pending", label: "To confirm", count: pendingCount }, { value: "all", label: "All", count: movements.length }]} />
 
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{error}</ErrorBanner>}

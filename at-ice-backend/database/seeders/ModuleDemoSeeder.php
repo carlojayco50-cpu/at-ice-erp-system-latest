@@ -29,14 +29,15 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 // Example data for every module, to try the system by hand. Local or test
 // databases only; DemoSeeder runs it (php artisan db:seed --class=DemoSeeder).
 // Running it again replaces everything it made. What it makes:
 //
-//   Logins (password demoPassword123!, local only):
-//     demo.driver.ana / demo.driver.ben / demo.driver.carlo @atice.test  Drivers
-//     demo.jollibee@atice.test                                            Customer portal
+//   No logins (owner, 2026-10-22: no demo credentials; sign in with the test
+//     accounts of LocalTestAccountsSeeder). The three demo Drivers are users
+//     with a random password nobody knows, so they cannot sign in.
 //   Customers (code DEMO-...), one or more per customer type, with
 //     reference prices (SM, Alfamart, dealer) and an own price (Jollibee)
 //   Deliveries: driver stores, an approved SM contract (2 weeks, daily), an
@@ -51,8 +52,6 @@ use Illuminate\Support\Facades\Storage;
 //   Support Inbox, Ice Loading, Pickup Log and Expenses entries
 class ModuleDemoSeeder extends Seeder
 {
-    private const PASSWORD = 'demoPassword123!';
-
     private CarbonImmutable $today;
 
     public function run(): void
@@ -86,11 +85,12 @@ class ModuleDemoSeeder extends Seeder
         $this->applicants();
         $this->others($stores, $checker);
 
-        $this->command?->info('Module demo data added. Demo logins use the password '.self::PASSWORD);
+        $this->command?->info('Module demo data added (no demo logins; use the test accounts).');
     }
 
-    // Everything a previous run made.
-    private function clear(): void
+    // Everything a previous run made (also run on its own to take the demo
+    // data out: `(new ModuleDemoSeeder)->clear()` in tinker).
+    public function clear(): void
     {
         $customerIds = Customer::withTrashed()->where('customer_code', 'like', 'DEMO-%')->pluck('id');
         $driverIds = User::where('email', 'like', 'demo.%@atice.test')->pluck('id');
@@ -103,6 +103,11 @@ class ModuleDemoSeeder extends Seeder
         DB::table('delivery_proofs')->whereIn('delivery_id', $deliveryIds)->delete();
         DB::table('ice_loadings')->whereIn('delivery_id', $deliveryIds)->delete();
         DB::table('delivery_notifications')->whereIn('delivery_id', $deliveryIds)->delete();
+        DB::table('delivery_adjustment_requests')->whereIn('delivery_id', $deliveryIds)->delete();
+        DB::table('delivery_adjustments')->whereIn('delivery_id', $deliveryIds)->delete();
+        DB::table('delivery_arrivals')->whereIn('delivery_id', $deliveryIds)->delete();
+        DB::table('deliveries')->whereIn('parent_delivery_id', $deliveryIds)->update(['parent_delivery_id' => null]);
+        DB::table('delivery_crews')->whereIn('driver_id', $driverIds)->delete();
         DB::table('delivery_items')->whereIn('delivery_id', $deliveryIds)->delete();
         DB::table('deliveries')->whereIn('id', $deliveryIds)->delete();
         DB::table('delivery_contracts')->where('contract_no', 'like', 'DEMO-%')->delete();
@@ -122,7 +127,8 @@ class ModuleDemoSeeder extends Seeder
         DB::table('pickup_logs')->where('company_name', 'like', 'Demo %')->delete();
         DB::table('expenses')->where('notes', 'like', '[Demo]%')->delete();
 
-        $employeeIds = Employee::where('employee_id', 'like', 'EMP-91%')->pluck('id');
+        // only its own three Drivers (real staff can get EMP-91xx numbers too)
+        $employeeIds = Employee::whereIn('employee_id', ['EMP-9101', 'EMP-9102', 'EMP-9103'])->whereIn('user_id', $driverIds)->pluck('id');
         DB::table('attendances')->whereIn('employee_id', $employeeIds)->delete();
         DB::table('employees')->whereIn('id', $employeeIds)->delete();
         DB::table('personal_access_tokens')->where('tokenable_type', User::class)->whereIn('tokenable_id', User::where('email', 'like', 'demo.%@atice.test')->pluck('id'))->delete();
@@ -131,7 +137,8 @@ class ModuleDemoSeeder extends Seeder
 
     private function user(string $email, string $name, string $role, ?string $subRole = null): User
     {
-        $u = User::create(['name' => $name, 'email' => $email, 'password' => self::PASSWORD, 'role' => $role, 'sub_role' => $subRole]);
+        // a random password nobody is told: a demo user cannot sign in
+        $u = User::create(['name' => $name, 'email' => $email, 'password' => Str::random(40), 'role' => $role, 'sub_role' => $subRole]);
         $u->forceFill(['must_change_password' => false, 'is_active' => true])->save();
 
         return $u;
@@ -202,9 +209,6 @@ class ModuleDemoSeeder extends Seeder
                 CustomerPrice::create(['customer_id' => $out[$key]->id, 'product_type' => $type, 'unit_price' => $price]);
             }
         }
-        // A customer portal login for Jollibee (delay notices, support).
-        $portal = $this->user('demo.jollibee@atice.test', 'Jollibee Tungko', 'customer');
-        $out['jolly']->update(['user_id' => $portal->id, 'email' => 'demo.jollibee@atice.test']);
 
         return $out;
     }

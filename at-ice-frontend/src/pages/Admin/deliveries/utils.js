@@ -1,5 +1,6 @@
 // Helpers for Admin > Deliveries (Driver View, Store View, Contracts,
 // Driver Stores): API calls, dates and labels. Components are in shared.jsx.
+import { PILL } from "../../../lib/statusTones";
 
 export const API_BASE = "/api";
 
@@ -62,20 +63,20 @@ export function daysLabel(days = []) {
 // on the way deep cyan, done emerald, cancelled gray. A pill, not a solid
 // block, so a status never looks like a button.
 export const STATUS_STYLE = {
-  pending:    { bg: "bg-amber-100 border-amber-200", text: "text-amber-800", label: "Pending" },
-  queued:     { bg: "bg-violet-100 border-violet-200", text: "text-violet-800", label: "Queued" },
-  in_transit: { bg: "bg-cyan-100 border-cyan-200", text: "text-cyan-800", label: "In Transit" },
-  delivered:  { bg: "bg-emerald-100 border-emerald-200", text: "text-emerald-800", label: "Delivered" },
-  cancelled:  { bg: "bg-slate-100 border-slate-200", text: "text-slate-600", label: "Cancelled" },
+  pending:    { bg: "bg-amber-50 border-amber-200", text: "text-amber-700", label: "Pending" },
+  queued:     { bg: "bg-violet-50 border-violet-200", text: "text-violet-700", label: "Queued" },
+  in_transit: { bg: "bg-cyan-50 border-cyan-200", text: "text-cyan-800", label: "In Transit" },
+  delivered:  { bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", label: "Delivered" },
+  cancelled:  { bg: "bg-slate-100 border-slate-200", text: "text-slate-700", label: "Cancelled" },
 };
 
 // Driver status on the board: worked out from attendance, deliveries and
 // leave marks (backend). Only known for today.
 export const DRIVER_STATUS = {
-  available:   { dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "Available" },
-  in_transit:  { dot: "bg-cyan-600",    pill: "bg-cyan-50 text-cyan-800 border-cyan-200",          label: "In transit" },
-  unavailable: { dot: "bg-slate-400",   pill: "bg-slate-100 text-slate-600 border-slate-200",       label: "Not timed in" },
-  off:         { dot: "bg-rose-500",    pill: "bg-rose-50 text-rose-700 border-rose-200",          label: "Off" },
+  available:   { dot: "bg-emerald-500", pill: PILL.success, label: "Available" },
+  in_transit:  { dot: "bg-cyan-600",    pill: PILL.progress, label: "In transit" },
+  unavailable: { dot: "bg-slate-400",   pill: PILL.neutral, label: "Not timed in" },
+  off:         { dot: "bg-rose-500",    pill: PILL.danger, label: "Off" },
 };
 
 export function storeName(c) {

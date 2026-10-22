@@ -294,6 +294,21 @@
   filter: brightness(0.9);
 }
 
+/* Table row buttons (and .table-action-btn): raised, a deeper shadow on hover,
+   pressed in when clicked (the pressed rule above). Badges stay flat. */
+.neu .table-action-btn:not([class^="bg-"], [class*=" bg-"]) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-raised-sm);
+}
+:is(.neu .ice-main, .neu.ice-scope) td button:not(.rounded-full, .text-left, .bg-transparent, :disabled):hover,
+.neu .table-action-btn:not(:disabled):hover {
+  box-shadow: 4px 4px 10px var(--neu-lo), -4px -4px 10px var(--neu-hi);
+}
+:is(.neu .ice-main, .neu.ice-scope) td button:is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600, .bg-blue-500, .bg-blue-600, .bg-amber-500, .bg-violet-500):not(:disabled):hover {
+  box-shadow: 5px 5px 12px var(--neu-lo), -5px -5px 12px var(--neu-hi);
+}
+
 /* Selected toggles, tabs and filters turn blue (the cyan fill of the selected
    filter chip), pressed in, so it is always clear which one is on. Underline
    tabs (border-b-2) keep their underline and take the accent color instead. */

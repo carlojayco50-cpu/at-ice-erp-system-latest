@@ -4,6 +4,7 @@ import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import { initialsOf } from "../lib/initials";
 import { ROLE_NAV, ROLE_LABEL } from "../lib/mobileUi";
 import LeaveRequestButton from "./LeaveRequestButton";
+import { MemoAlert, MyMemosButton } from "./MyMemos";
 import HeaderAvatar from "./HeaderAvatar";
 import { ScopeStatusRow } from "./NightMode";
 import { Icon } from "./MobileUi";
@@ -33,6 +34,7 @@ export default function RoleShell({ role, title, children, actionBar = null, hea
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {headerAction}
           <span className="hidden min-[380px]:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">{label}</span>
+          <MyMemosButton compact />
           <LeaveRequestButton compact />
           <HeaderAvatar initials={initialsOf(user?.name, label.slice(0, 2).toUpperCase())} name={user?.name || label} subtitle={user?.email || label} onSignOut={askLogout} mobileSignOut />
         </div>
@@ -40,6 +42,7 @@ export default function RoleShell({ role, title, children, actionBar = null, hea
 
       <main className="p-4 space-y-4 max-w-md mx-auto md:max-w-none">
         <ScopeStatusRow className="" />
+        <MemoAlert />
         {children}
       </main>
 

@@ -6,9 +6,11 @@ use App\Events\DeliveryStatusUpdated;
 use App\Models\Customer;
 use App\Models\CustomerPrice;
 use App\Models\Delivery;
+use App\Models\DeliveryItem;
 use App\Models\DriverStoreAssignment;
 use App\Models\User;
 use App\Support\Audit;
+use App\Support\DeliveryAdjust;
 use App\Support\DeliveryDispatch;
 use App\Support\DriverAvailability;
 use Carbon\Carbon;
@@ -232,6 +234,7 @@ class DeliveryController extends Controller
                         $booked = Delivery::where('customer_id', $data['customer_id'])
                             ->whereDate('scheduled_date', $data['scheduled_date'])
                             ->where('status', '!=', 'cancelled')
+                            ->where('is_top_up', false)
                             ->first();
                         if ($booked) {
                             return $booked;
@@ -274,8 +277,46 @@ class DeliveryController extends Controller
     public function show($id)
     {
         return response()->json(
-            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'preparedBy'])->findOrFail($id)
+            Delivery::with(['driver', 'customer', 'supplier', 'items.product', 'proofs', 'preparedBy', 'parent:id,delivery_no', 'topUps:id,parent_delivery_id,delivery_no,status,ordered_at', 'adjustments.user:id,name'])->findOrFail($id)
         );
+    }
+
+    // POST /api/deliveries/{id}/top-up (Admin): another delivery today to the
+    // same store, by a later time (App\Support\DeliveryAdjust::topUp)
+    public function topUp(Request $request, $id)
+    {
+        $data = $request->validate([
+            'items' => 'required|array',
+            'items.*' => 'integer|min:0|max:1000',
+            'deliver_by' => 'required|date_format:H:i',
+            'notes' => 'nullable|string|max:200',
+        ]);
+        $parent = Delivery::with('customer')->findOrFail($id);
+        $items = array_intersect_key($data['items'], DeliveryItem::PRODUCT_TYPES);
+
+        $delivery = DeliveryAdjust::topUp($parent, $items, $data['deliver_by'], 'admin', $data['notes'] ?? null);
+
+        return response()->json($delivery->load(['driver', 'customer', 'items']), 201);
+    }
+
+    // POST /api/deliveries/{id}/adjust (Admin): add or reduce sacks on a
+    // delivery not yet delivered, by a count or a percentage, with a reason
+    public function adjust(Request $request, $id)
+    {
+        $data = $request->validate([
+            'mode' => 'required|in:add,reduce',
+            'by' => 'required|in:count,percent',
+            'value' => 'required|integer|min:1|max:1000',
+            'product_type' => ['nullable', Rule::in(array_keys(DeliveryItem::PRODUCT_TYPES))],
+            'reason' => 'required|string|min:3|max:200',
+        ]);
+        $delivery = Delivery::findOrFail($id);
+        $record = DeliveryAdjust::adjust($delivery, $data['mode'], $data['by'], $data['value'], $data['product_type'] ?? null, trim($data['reason']));
+        if (! $record) {
+            return response()->json(['message' => 'Nothing changed: the amount rounds to zero sacks.'], 422);
+        }
+
+        return $this->show($id);
     }
 
     // A delivery in transit can only be cancelled for a real emergency, with

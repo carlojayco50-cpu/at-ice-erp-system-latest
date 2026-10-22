@@ -8,6 +8,7 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { initialsOf } from "../../lib/initials";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
 // Admin > Projects: a monday.com-style board of maintenance and plant jobs.
 // Groups by status, a colored status and priority cell per project, a
@@ -49,13 +50,16 @@ async function api(url, options = {}) {
   return data;
 }
 
-// A colored cell with a hidden select on top, so the status or priority is
+// A status pill with a hidden select on top, so the status or priority is
 // changed right on the board like on monday.com.
 function PickCell({ value, options, onPick, label }) {
   const opt = options[value] || Object.values(options)[0];
   return (
-    <div className="relative h-full">
-      <StatusCell tone={opt.tone}>{opt.label}</StatusCell>
+    <div className="relative inline-flex">
+      <StatusCell tone={opt.tone}>
+        {opt.label}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </StatusCell>
       <select
         aria-label={label}
         value={value}
@@ -73,15 +77,17 @@ function Timeline({ p }) {
   if (!p.start_date && !p.due_date) return <span className="text-slate-300">—</span>;
   const pct = p.progress ?? 0;
   const color = p.overdue ? TONES.stuck.edge : p.status === "done" ? TONES.done.edge : TONES.info.edge;
+  // The used part is a soft tint of the color, so the dates on top stay
+  // readable in light and night mode.
   return (
-    <div className="min-w-[120px]" title={p.overdue ? "Past the due date" : `${pct}% of the time used`}>
-      <div className="relative h-5 rounded-full bg-slate-100 overflow-hidden">
-        <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, background: color }} />
-        <span className="relative z-10 flex items-center justify-center h-full text-[10px] font-semibold text-slate-700">
+    <div className="min-w-[120px] max-w-[220px] mx-auto" title={p.overdue ? "Past the due date" : `${pct}% of the time used`}>
+      <div className="relative h-6 rounded-full bg-slate-100 overflow-hidden" style={{ boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 35%, transparent)` }}>
+        <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, background: `color-mix(in srgb, ${color} 30%, transparent)` }} />
+        <span className="relative z-10 flex items-center justify-center h-full text-[11px] font-semibold text-slate-800">
           {day(p.start_date) || "?"} – {day(p.due_date) || "?"}
         </span>
       </div>
-      {p.overdue && <div className="text-[10px] text-[#b4233c] font-semibold mt-0.5">Overdue</div>}
+      {p.overdue && <div className="text-[11px] text-rose-700 font-semibold mt-1">Overdue</div>}
     </div>
   );
 }
@@ -202,19 +208,20 @@ export default function ProjectsPage() {
       pageTitle="Projects"
       breadcrumb="Inventory / Projects"
     >
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          ["Open projects", totals.open, "info"],
-          ["Stuck", totals.stuck, "stuck"],
-          ["Overdue", totals.overdue, "stuck"],
-          ["Supplies used", peso(totals.cost), "done"],
-        ].map(([label, value, tone]) => (
-          <div key={label} className="bg-white border border-black/[0.09] rounded-xl p-4" style={{ boxShadow: `inset 4px 0 0 ${TONES[tone].edge}` }}>
-            <div className="text-[11px] text-slate-400">{label}</div>
-            <div className="text-[22px] font-semibold text-slate-800 tabular-nums">{value}</div>
-          </div>
-        ))}
-      </div>
+      {(() => {
+        const budget = projects.reduce((s, p) => s + Number(p.budget || 0), 0);
+        const done = projects.filter((p) => p.status === "done").length;
+        const share = (n) => (projects.length ? n / projects.length : 0);
+        return (
+          <KpiGrid cols={5}>
+            <KpiCard label="Open projects" icon="tool" tone="cyan" value={totals.open} sub={`${projects.length} projects in all`} bar={share(totals.open)} />
+            <KpiCard label="Done" icon="check" tone="emerald" value={done} sub={`${Math.round(share(done) * 100)}% completed`} bar={share(done)} />
+            <KpiCard label="Stuck" icon="alert" tone="rose" value={totals.stuck} sub="Need a decision to move on" bar={share(totals.stuck)} />
+            <KpiCard label="Overdue" icon="clock" tone="amber" value={totals.overdue} sub="Past their due date" bar={share(totals.overdue)} />
+            <KpiCard label="Supplies used" icon="box" tone="violet" money value={totals.cost} sub={budget ? `of ${peso(budget)} budget` : "No budgets set"} bar={budget ? totals.cost / budget : null} />
+          </KpiGrid>
+        );
+      })()}
 
       <div className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -248,12 +255,12 @@ export default function ProjectsPage() {
                     title="Show the supplies used"
                     cells={[
                       <div key="n" className="min-w-[180px]">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5">
                           <span className={`text-[10px] text-slate-400 transition-transform ${open.has(p.id) ? "rotate-90" : ""}`} aria-hidden="true">▶</span>
                           {p.name}
                         </div>
-                        {p.description && <div className="text-[11px] font-normal text-slate-400 truncate max-w-[260px]">{p.description}</div>}
-                        {p.location && <div className="text-[11px] font-normal text-slate-500 truncate max-w-[260px]" title={p.location}><svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true" className="inline -mt-0.5 mr-0.5"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></svg>{p.location}</div>}
+                        {p.description && <div className="text-[11px] font-normal text-slate-400 truncate max-w-[260px] mx-auto">{p.description}</div>}
+                        {p.location && <div className="text-[11px] font-normal text-slate-500 truncate max-w-[260px] mx-auto" title={p.location}><svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true" className="inline -mt-0.5 mr-0.5"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></svg>{p.location}</div>}
                       </div>,
                       p.owner ? (
                         <span key="o" title={p.owner} className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#0073ea] text-white text-[10px] font-semibold">{initialsOf(p.owner, "?")}</span>
@@ -269,7 +276,7 @@ export default function ProjectsPage() {
                         <b className="text-slate-800">{peso(p.materials_cost)}</b>
                         {p.budget != null && <span className={p.budget_left < 0 ? "text-[#b4233c]" : "text-slate-400"}> / {peso(p.budget)}</span>}
                       </span>,
-                      <span key="a" className="flex items-center justify-center gap-1">
+                      <span key="a" className="flex items-center justify-end gap-2 whitespace-nowrap">
                         <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(p); }} className="px-2 py-1 text-[11px] rounded border border-black/[0.09] text-slate-600 hover:border-cyan-400 cursor-pointer">Edit</button>
                         <button data-no-confirm type="button" onClick={(e) => { e.stopPropagation(); setDeleting(p); }} className="px-2 py-1 text-[11px] rounded border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer">Delete</button>
                       </span>,
@@ -290,7 +297,7 @@ export default function ProjectsPage() {
                                   <td className="text-slate-600">{r.quantity} {r.product?.unit || ""}</td>
                                   <td className="text-slate-600">{r.requested_by?.name || "—"}</td>
                                   <td className="text-slate-500">{day(r.created_at)}</td>
-                                  <td className="p-0"><StatusCell tone={REQUEST_STATUS[r.status] || "idle"} className="capitalize">{r.status}</StatusCell></td>
+                                  <td><StatusCell tone={REQUEST_STATUS[r.status] || "idle"} className="capitalize">{r.status}</StatusCell></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -377,5 +384,3 @@ export default function ProjectsPage() {
   );
 }
 
-// Fills its board cell edge to edge, like a StatusCell (components/Board.jsx).
-PickCell.boardFill = true;

@@ -12,6 +12,8 @@ import FileField from "../../components/FileField";
 import { PROOF_ACCEPT, PROOF_MAX_BYTES, PROOF_METHODS, PROOF_STATUS, openProofFile } from "../../lib/paymentProof";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -54,15 +56,6 @@ function Badge({ receipt }) {
   );
 }
 
-function StatCard({ label, value, sub }) {
-  return (
-    <div className="bg-white border border-black/[0.09] rounded-xl p-4">
-      <div className="text-[11px] text-slate-400 uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-semibold text-slate-800 mt-1">{value}</div>
-      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
-    </div>
-  );
-}
 
 export default function CustomerReceipts() {
   const [receipts, setReceipts] = useState([]);
@@ -127,23 +120,18 @@ export default function CustomerReceipts() {
         <div className="bg-red-500/[0.06] border border-red-500/20 rounded-md p-6 text-sm text-red-600">{error}</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <StatCard
-              label="Balance Due"
-              value={peso(summary.balance)}
-              sub={summary.balance > 0 ? "Unpaid and overdue invoices" : "No balance"}
-            />
-            <StatCard
-              label="Overdue"
-              value={peso(summary.overdueAmount)}
-              sub={`${summary.overdueCount} receipt${summary.overdueCount === 1 ? "" : "s"}`}
-            />
-            <StatCard
-              label="Paid"
-              value={peso(summary.paidAmount)}
-              sub={`${summary.paidCount} receipt${summary.paidCount === 1 ? "" : "s"}`}
-            />
-          </div>
+          {(() => {
+            const billed = summary.balance + summary.paidAmount;
+            const proofsWaiting = receipts.filter((r) => r.payment_proofs?.[0]?.status === "pending").length;
+            return (
+              <KpiGrid cols={4}>
+                <KpiCard label="Balance due" icon="wallet" tone="amber" money value={summary.balance} sub={summary.balance > 0 ? "Unpaid and overdue invoices" : "No balance"} bar={billed ? summary.balance / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
+                <KpiCard label="Overdue" icon="alert" tone="rose" money value={summary.overdueAmount} sub={`${summary.overdueCount} invoice${summary.overdueCount === 1 ? "" : "s"}`} bar={billed ? summary.overdueAmount / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
+                <KpiCard label="Paid" icon="check" tone="emerald" money value={summary.paidAmount} sub={`${summary.paidCount} invoice${summary.paidCount === 1 ? "" : "s"}`} bar={billed ? summary.paidAmount / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
+                <KpiCard label="Proofs under review" icon="file" tone="violet" value={proofsWaiting} sub={proofsWaiting ? "We are checking your payment" : "Nothing waiting"} live={proofsWaiting > 0} />
+              </KpiGrid>
+            );
+          })()}
 
           <div className="bg-white border border-black/[0.09] rounded-xl px-5 py-4">
             <div className="text-[13px] font-semibold text-slate-800">How to pay</div>
@@ -157,20 +145,9 @@ export default function CustomerReceipts() {
             </p>
           </div>
 
-          <div className="bg-white border border-black/[0.09] rounded-xl p-3 flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
-                className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                  filter === f.key
-                    ? "bg-cyan-500/10 text-cyan-600 border-cyan-500/30 font-medium"
-                    : "bg-white text-slate-500 border-black/[0.09] hover:bg-slate-50"
-                }`}
-              >
-                {f.label} ({counts[f.key] || 0})
-              </button>
-            ))}
+          <div className="bg-white border border-black/[0.09] rounded-xl p-3">
+            <FilterSelect label="Status" value={filter} onChange={setFilter}
+              options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key] || 0 }))} />
           </div>
 
           <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">

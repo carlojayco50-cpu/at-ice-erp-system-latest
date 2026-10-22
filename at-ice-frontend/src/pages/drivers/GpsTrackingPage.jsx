@@ -140,7 +140,7 @@ export function GpsTrackingPage() {
   // DeliveriesPage.jsx: public "deliveries" channel, "delivery.status.updated") ──
   useEffect(() => {
     if (!window.Echo) return;
-    const channel = window.Echo.channel("deliveries");
+    const channel = window.Echo.private("deliveries");
     echoChannelRef.current = channel;
 
     channel.listen(".delivery.status.updated", (e) => {
@@ -152,7 +152,7 @@ export function GpsTrackingPage() {
     });
 
     return () => {
-      window.Echo.leaveChannel("deliveries");
+      window.Echo.leave("deliveries");
     };
   }, [user?.id]);
 

@@ -40,6 +40,7 @@ class Settings
         // Kiosk
         'kiosk.hr_can_override' => [false, 'bool', 'HR may unlock a locked kiosk from the Kiosk PIN page (otherwise Admin only)'],
         'kiosk.max_wrong_pins' => [5, 'int', 'Wrong PINs in a row that lock a kiosk until Admin unlocks it'],
+        'kiosk.max_wrong_pins_per_ip' => [10, 'int', 'Wrong PINs from one network address in an hour (any kiosk) before that address is blocked for the hour'],
         // Leave
         'leave.credits_per_cutoff' => [0.5, 'number', 'Leave credits (days) earned each pay period once regular'],
         'leave.credits_cap' => [15, 'number', 'Most leave credits an employee can hold'],
@@ -51,6 +52,14 @@ class Settings
         'plant.latitude' => [14.8031, 'number', 'Plant location (latitude): each route lists the stores nearest to the plant first'],
         'plant.longitude' => [121.0515, 'number', 'Plant location (longitude)'],
         'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
+        'delivery.max_top_ups_per_day' => [3, 'int', 'Most urgent top-ups one store can get after one delivery in a day'],
+        // Support tickets (SupportMessageController)
+        'support.overdue_hours' => [24, 'int', 'Hours an open support ticket may wait before it is marked Overdue'],
+        'support.max_open_tickets' => [5, 'int', 'Most open or in-progress tickets a customer may have at once (Emergency Ice Shortage is never blocked)'],
+        // Disciplinary memos (App\Support\MemoEngine, EmployeeMemoController)
+        'memo.no_timeout_grace_hours' => [2, 'int', 'Hours after the shift ends before a missing Time Out becomes a draft memo for HR to review'],
+        'memo.strike_window_months' => [12, 'int', 'Months an offense counts toward the next warning level (1st verbal, 2nd first written, 3rd final written, 4th Notice to Explain)'],
+        'memo.lookback_days' => [7, 'int', 'How many days back the system looks for missing Time Outs (older ones are left alone)'],
         // Performance (App\Support\PerformanceScore): weights of the Draft Base Rating and each role's goal per pay period
         'performance.weight_attendance' => [50, 'int', 'Weight of attendance (days with a Time In / work days) in the draft performance rating'],
         'performance.weight_punctuality' => [30, 'int', 'Weight of punctuality (days on time / days with a Time In) in the draft performance rating'],

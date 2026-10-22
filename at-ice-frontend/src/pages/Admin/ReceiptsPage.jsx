@@ -13,6 +13,9 @@ import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 import { formatDateTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
 
 window.Pusher = Pusher;
 const echo = new Echo({
@@ -101,12 +104,12 @@ export default function ReceiptsPage() {
   // Live overdue notifications — public "payments" channel, "payment.overdue"
   // event, one broadcast per receipt from ReceiptController@overdue().
   useEffect(() => {
-    const channel = echo.channel("payments");
+    const channel = echo.private("payments");
     channel.listen(".payment.overdue", (e) => {
       setLiveNotice(e.message || `Invoice ${e.receipt_no} is overdue.`);
       fetchAll();
     });
-    return () => { echo.leaveChannel("payments"); };
+    return () => { echo.leave("payments"); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -182,14 +185,19 @@ export default function ReceiptsPage() {
         </div>
       )}
 
-      {summary && (
-        <div className="grid grid-cols-4 gap-3">
-          <SummaryCard label="Total Sales (Paid)" value={peso(summary.total_sales)} color="text-slate-800" />
-          <SummaryCard label="Unpaid" value={peso(summary.total_unpaid)} color="text-amber-600" />
-          <SummaryCard label="Overdue" value={peso(summary.total_overdue)} color="text-red-600" />
-          <SummaryCard label="Total Invoices" value={summary.receipt_count} color="text-slate-800" />
-        </div>
-      )}
+      {summary && (() => {
+        const billed = Number(summary.total_sales || 0) + Number(summary.total_unpaid || 0) + Number(summary.total_overdue || 0);
+        const n = (s) => receipts.filter((r) => r.payment_status === s).length;
+        return (
+          <KpiGrid cols={5}>
+            <KpiCard label="Collected" icon="wallet" tone="emerald" money value={Number(summary.total_sales || 0)} sub={`${n("paid")} paid invoices`} bar={billed ? Number(summary.total_sales || 0) / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
+            <KpiCard label="Unpaid" icon="clock" tone="amber" money value={Number(summary.total_unpaid || 0)} sub={`${n("unpaid")} within the due days`} bar={billed ? Number(summary.total_unpaid || 0) / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
+            <KpiCard label="Overdue" icon="alert" tone="rose" money value={Number(summary.total_overdue || 0)} sub={`${n("overdue")} past the due days`} bar={billed ? Number(summary.total_overdue || 0) / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
+            <KpiCard label="Invoices" icon="receipt" tone="cyan" value={Number(summary.receipt_count || 0)} sub={`${new Set(receipts.map((r) => r.customer_id)).size} customers billed`} />
+            <KpiCard label="Proofs to review" icon="file" tone="violet" value={proofs.length} sub={proofs.length ? "Waiting for your approval" : "Nothing waiting"} live={proofs.length > 0} />
+          </KpiGrid>
+        );
+      })()}
 
       {proofs.length > 0 && (
         <div className="bg-white border border-sky-200 rounded-xl">
@@ -237,6 +245,41 @@ export default function ReceiptsPage() {
         </div>
       )}
 
+      {/* Middle tier: status shares, who owes the most, and the last 7 days of collections */}
+      {(() => {
+        const n = (s) => receipts.filter((r) => r.payment_status === s).length;
+        const owed = new Map();
+        receipts.filter((r) => r.payment_status !== "paid").forEach((r) => {
+          const key = r.customer?.name || "Customer";
+          owed.set(key, (owed.get(key) || 0) + Number(r.total_amount || 0));
+        });
+        const topOwed = [...owed.entries()].sort((a, b) => b[1] - a[1]).map(([name, amt]) => ({ id: name, title: name, meta: `${peso(amt)} not yet paid`, tone: "amber", icon: "wallet" }));
+        const days = [...Array(7)].map((_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() - (6 - i));
+          const key = d.toDateString();
+          const sum = receipts.filter((r) => r.paid_at && new Date(r.paid_at).toDateString() === key).reduce((s, r) => s + Number(r.total_amount || 0), 0);
+          return { label: d.toLocaleDateString("en-PH", { weekday: "short" }), value: Math.round(sum) };
+        });
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+            <StatusBreakdown
+              title="Invoices by status"
+              items={[
+                { key: "paid", label: "Paid", count: n("paid"), tone: "emerald" },
+                { key: "unpaid", label: "Unpaid", count: n("unpaid"), tone: "amber" },
+                { key: "overdue", label: "Overdue", count: n("overdue"), tone: "rose" },
+              ]}
+              onPick={(i) => setFilter(i.key)}
+              active={filter}
+              empty="No invoices yet. They are made when a Salesman confirms a delivery."
+            />
+            <ActivityFeed title="Largest balances" subtitle="Unpaid and overdue, by customer" items={topOwed} empty="Every invoice is paid." max={5} />
+            <MiniBars title="Collected, last 7 days" subtitle="Invoices marked paid, in pesos" data={days} />
+          </div>
+        );
+      })()}
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div>
@@ -252,23 +295,14 @@ export default function ReceiptsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search invoice or customer code..."
-              className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-44"
+              className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
             />
           </div>
         </div>
 
-        <div className="px-[18px] pt-3 flex gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
-              className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
-                filter === f.key ? "bg-cyan-500 text-white" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="px-[18px] pt-3">
+          <FilterSelect label="Status" value={filter} onChange={setFilter}
+            options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: f.key === "all" ? receipts.length : receipts.filter((r) => r.payment_status === f.key).length }))} />
         </div>
 
         {error && (
@@ -498,15 +532,6 @@ export default function ReceiptsPage() {
         </div>
       )}
     </AdminLayout>
-  );
-}
-
-function SummaryCard({ label, value, color }) {
-  return (
-    <div className="bg-white border border-black/[0.09] rounded-xl px-4 py-3.5">
-      <div className={`text-[18px] font-semibold font-mono ${color}`}>{value}</div>
-      <div className="text-[11px] text-slate-400 mt-0.5">{label}</div>
-    </div>
   );
 }
 

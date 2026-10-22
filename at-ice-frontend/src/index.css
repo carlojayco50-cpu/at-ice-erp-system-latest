@@ -9,6 +9,11 @@
   --surface-card-dark: rgba(15, 23, 42, 0.8);
   --control-height: 2.5rem;
   --control-radius: 0.75rem;
+  /* Table row controls: every button and badge in a table cell is this box */
+  --tbl-ctl-height: 2rem;
+  --tbl-ctl-radius: 9999px;
+  --tbl-ctl-px: 12px;
+  --tbl-ctl-font: 12px;
   --focus-ring: 0 0 0 2px rgba(6, 182, 212, 0.5);
   --accent: rgb(6, 182, 212);
 }
@@ -29,9 +34,24 @@
   filter: drop-shadow(0 2px 6px rgba(34, 211, 238, 0.28)) drop-shadow(0 1px 1px rgba(15, 23, 42, 0.25));
 }
 
-/* Splash snow on the light stage: tinted flakes, since white ones would vanish */
-.snow-on-light .snowflake {
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.6) 0%, rgba(34, 211, 238, 0.35) 45%, rgba(34, 211, 238, 0) 70%);
+/* Logo-only splash (components/SplashScreen.jsx MobileSplash): the logo
+   comes forward and breathes. Transform only, so it runs on the GPU. */
+@keyframes splash-in {
+  from { transform: scale(0.88) translateZ(0); opacity: 0; }
+  to { transform: scale(1) translateZ(0); opacity: 1; }
+}
+@keyframes splash-breathe {
+  from { transform: scale(1) translateZ(0); }
+  to { transform: scale(1.05) translateZ(0); }
+}
+.splash-breathe {
+  will-change: transform, opacity;
+  animation:
+    splash-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both,
+    splash-breathe 1.8s cubic-bezier(0.37, 0, 0.63, 1) 0.7s infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-breathe { animation: none; }
 }
 /* Theme switch fade. NightMode adds .theme-switching to <html> for 350ms. */
 .theme-switching,
@@ -128,41 +148,82 @@
   background-color: var(--neu-bg);
   box-shadow: var(--neu-raised-sm);
 }
-/* Compact: actions inside table rows */
-:is(.ice-main, .ice-scope) td button:not(.rounded-full, .text-left, .bg-transparent) {
-  min-height: 30px !important;
-  height: 30px !important;
+/* ---- Table row actions and status badges: one box (owner, 2026-10-22) ----
+   Every button and every status badge in a table cell is the same size:
+   --tbl-ctl-height tall, 12px text, 12px side padding, one radius, so a
+   Payslip button never sits smaller or larger than the Paid badge beside it.
+   Buttons are raised soft UI (lift on hover, pressed in on click, see the
+   neumorphism section); badges are flat tinted pills with a 1px border.
+   New code can write .table-action-btn / .table-status-badge; these rules give
+   pages written with other classes the same box. */
+:is(.ice-main, .ice-scope) td button:not(.rounded-full, .text-left, .bg-transparent),
+.table-action-btn {
+  min-height: var(--tbl-ctl-height) !important;
+  height: var(--tbl-ctl-height) !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
-  padding-inline: 10px !important;
-  border-radius: 10px !important;
-  font-size: 11px;
+  padding-inline: var(--tbl-ctl-px) !important;
+  border-radius: var(--tbl-ctl-radius) !important;
+  font-size: var(--tbl-ctl-font) !important;
+  font-weight: 500;
+  line-height: 1 !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+:is(.ice-main, .ice-scope) td :is(span, div).rounded-full:is([class*=" px-"], [class^="px-"]):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]),
+.table-status-badge {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
+  min-height: var(--tbl-ctl-height) !important;
+  height: var(--tbl-ctl-height) !important;
+  padding: 0 var(--tbl-ctl-px) !important;
+  border-radius: var(--tbl-ctl-radius) !important;
+  font-size: var(--tbl-ctl-font) !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  white-space: nowrap;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+/* A badge with no border of its own gets a 1px ring in its own text color */
+:is(:is(.ice-main, .ice-scope) td :is(span, div).rounded-full:is([class*=" px-"], [class^="px-"]):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]), .table-status-badge):not(.border, [class*=" border-"], [class^="border-"]) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent);
+}
+/* Row actions: buttons and badges in one row, one line, vertically centered */
+:is(.ice-main, .ice-scope) td :is(div, span).flex:has(> :is(button, .table-status-badge, .rounded-full)) {
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
   white-space: nowrap;
 }
 /* Tables, every page: everything in a row sits in the vertical middle of the
    row (a cell with two lines, e.g. Position + Department, is centered as a
-   block). Badges are 20px tall like a line of text. */
+   block). */
 :is(.ice-main, .ice-scope) :is(td, th) {
   vertical-align: middle;
 }
 :is(.ice-main, .ice-scope) td {
   line-height: 20px;
 }
-:is(.ice-main, .ice-scope) td :is(span, div).rounded-full:is([class*="px-"]) {
-  line-height: 14px; /* + 2px padding and 1px border each side = 20px */
-  vertical-align: top; /* fills its 20px line exactly, so it is centered like text */
-}
-/* Every table, every page: every column centered (headers, text, badges and
-   row actions). */
+/* Every table, every page: every column centered (headers, text and badges);
+   the row actions column is right-aligned (see below). */
 :is(.ice-main, .ice-scope) table :is(th, td) {
   text-align: center !important;
 }
 :is(.ice-main, .ice-scope) table td > :is(div, span).flex {
   justify-content: center !important;
+}
+/* ...and a width-capped line under the main text (a description, a location)
+   sits centered under it instead of hugging the cell's left edge */
+:is(.ice-main, .ice-scope) table td > :is(div, p)[class*="max-w-"] {
+  margin-inline: auto;
 }
 /* Email shown in a table or list: one chip everywhere (Customers, Employees) */
 .email-chip {
@@ -199,17 +260,21 @@
   box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.28);
 }
 /* The row actions column (last column holding buttons) is only as wide as its
-   buttons, so it sits at the right end of the table, with its header and
-   buttons centered on each other. */
+   buttons and sits at the right end of the table; its header, buttons and
+   badges are right-aligned (owner, 2026-10-22), every other column stays
+   centered. */
 :is(.ice-main, .ice-scope) table:has(td:last-child button) :is(th, td):last-child {
   width: 1%;
   white-space: nowrap;
+  text-align: right !important;
 }
-/* Row actions: the buttons line up with each other */
-:is(.ice-main, .ice-scope) td > :is(div, span).flex:has(> button) { align-items: center; }
-/* ...icon-only ones (a set width) are square */
-:is(.ice-main, .ice-scope) td button:is([class*=" w-"], [class^="w-"]):not(.rounded-full) {
-  width: 30px !important;
+:is(.ice-main, .ice-scope) table td:last-child > :is(div, span).flex:has(> button) {
+  justify-content: flex-end !important;
+}
+/* Icon-only row buttons (a small set width) are square. A button with a wider
+   set width (e.g. w-[76px], so a column of buttons lines up) keeps it. */
+:is(.ice-main, .ice-scope) td button:is(.w-6, .w-7, .w-8, .w-9, .w-10):not(.rounded-full) {
+  width: var(--tbl-ctl-height) !important;
   padding-inline: 0 !important;
 }
 /* Chips (filters) */
@@ -571,9 +636,34 @@ select:-webkit-autofill {
   font-size: 13px;
 }
 
+/* Table alignment (owner, 2026-10-22): every cell has the same padding (12px
+   top and bottom, 16px sides) whatever the page wrote, every row is at least
+   56px tall (a 32px button or badge plus the padding), so rows with and
+   without a badge line up, and the buttons of a row stay on one line with an
+   8px gap. Cells of an empty row (colSpan) keep their own padding. */
+:is(.ice-main, .ice-scope) table :is(thead th, tbody td:not([colspan])) {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+:is(.ice-main, .ice-scope) tbody td:not([colspan]) {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+  height: calc(var(--tbl-ctl-height) + 24px);
+}
+:is(.ice-main, .ice-scope) td > :is(div, span).flex:has(> button) {
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+}
+:is(.ice-main, .ice-scope) td :is(span, div).rounded-full {
+  overflow: visible;
+  flex-shrink: 0;
+}
+
 /* Badges: small rounded labels (status, type, counts) are one size. Solid
-   board status cells (rounded-sm / rounded-md blocks) keep their board look. */
-:is(.ice-main, .ice-scope) span.rounded-full:is([class*=" px-"], [class^="px-"]):is([class*="text-[10px]"], [class*="text-[10.5px]"], [class*="text-[11px]"], .text-xs):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]) {
+   board status cells (rounded-sm / rounded-md blocks) keep their board look.
+   Badges in a table cell take the table control box instead (see "Table row
+   actions and status badges"). */
+:is(.ice-main, .ice-scope) span.rounded-full:is([class*=" px-"], [class^="px-"]):is([class*="text-[10px]"], [class*="text-[10.5px]"], [class*="text-[11px]"], .text-xs):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"], td span, .table-status-badge) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -675,6 +765,39 @@ select:-webkit-autofill {
   box-sizing: border-box;
 }
 header:has(> .topbar-chip) { align-items: center; }
+/* ...and so is everything else on the right of the top bar (owner,
+   2026-10-22): a page's own header actions (e.g. Issue memo) and the avatar
+   are 40px tall with the same radius and text, so the row lines up. */
+header:has(> .topbar-chip) > .flex-1 ~ :is(button, a) {
+  height: 40px !important;
+  min-height: 40px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-inline: 14px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+header .topbar-avatar { width: 40px !important; height: 40px !important; }
+/* Toolbars inside a page: a button, link or field in the same row as a
+   filter dropdown (FilterSelect) is as tall as the dropdown (40px). */
+.ice-main .flex:has(> label > select) > :is(button, a, input:not([type="checkbox"], [type="radio"])) {
+  height: 40px !important;
+  min-height: 40px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  box-sizing: border-box;
+}
+.ice-main .flex:has(> label > select) > :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+}
 
 /* ---- Desktop sidebar: white with a thin right border ----------------------- */
 .neu:not(.cp-dark) aside.rail {
@@ -931,6 +1054,19 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 .cp-dark :is(.text-lime-800, .text-lime-900) { color: #d9f99d !important; }
 .cp-dark .bg-slate-100 { background-color: rgba(148,163,184,0.14) !important; }
 .cp-dark .bg-slate-200 { background-color: rgba(148,163,184,0.22) !important; }
+/* Light surfaces written with an opacity (bg-slate-50/70, bg-white/60...) and
+   light hover colors: a dark version too, so a panel or footer inside a dialog
+   never turns into a light band at night (owner, 2026-10-22). */
+.cp-dark :is([class^="bg-slate-50/"], [class*=" bg-slate-50/"], [class^="bg-gray-50/"], [class*=" bg-gray-50/"]) { background-color: rgba(26,35,50,0.85) !important; }
+.cp-dark :is([class^="bg-slate-100/"], [class*=" bg-slate-100/"]) { background-color: rgba(148,163,184,0.12) !important; }
+.cp-dark :is(.hover\:bg-white, .hover\:bg-white\/80, .hover\:bg-white\/60):hover { background-color: rgba(255,255,255,0.06) !important; }
+.cp-dark :is(.hover\:text-slate-900, .hover\:text-black):hover { color: #f8fafc !important; }
+.cp-dark .hover\:border-slate-400:hover { border-color: rgba(255,255,255,0.24) !important; }
+/* Bar tracks and hairlines drawn in black at a low opacity become white */
+.cp-dark .bg-black\/\[0\.06\] { background-color: rgba(255,255,255,0.08) !important; }
+.cp-dark .bg-black\/\[0\.08\] { background-color: rgba(255,255,255,0.10) !important; }
+.cp-dark :is(.border-black\/\[0\.04\], .border-black\/\[0\.05\]) { border-color: rgba(255,255,255,0.06) !important; }
+.cp-dark .border-black\/\[0\.15\] { border-color: rgba(255,255,255,0.18) !important; }
 
 /* Counts inside filter pills (Deliveries > All Deliveries): readable on the
    selected cyan pill and on the raised ones, in both modes */
@@ -1002,3 +1138,40 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 .cp-dark .bg-\[\#e2e8f0\].text-slate-700 { color: #e2e8f0 !important; }
 .cp-dark .bg-\[\#2f6fd6\]\/10 { background-color: rgba(96, 165, 250, 0.16) !important; }
 .cp-dark :is(.bg-\[\#e9eef5\], .bg-\[\#e9eef5\]\/40) { background-color: rgba(148, 163, 184, 0.12) !important; }
+
+/* ---- Text is never cut off, every page (owner, 2026-10-21) ---------------
+   A one-line .truncate text that does not fit wraps onto a second line
+   instead of being cut, and only then ends in an ellipsis; the whole text
+   shows on hover (components/OverflowTitle.jsx). The collapsed sidebar labels
+   and flex/grid boxes (chips with an icon) keep their single line. */
+:is(.ice-main, .ice-scope, .fixed.inset-0) .truncate:not(aside *, .rail-label, .flex, .inline-flex, .grid, .inline-grid, .font-mono, input, select) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-overflow: ellipsis;
+}
+
+/* Phones: the page title in the top bar gets the room it needs. The clock
+   chip is hidden (the phone shows the time) and the title may take two lines. */
+@media (max-width: 639px) {
+  .neu header .topbar-chip:has(.font-mono) { display: none !important; }
+  .neu header.h-14 { height: auto; min-height: 56px; padding-block: 6px; }
+  .neu header .text-base.truncate {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    line-height: 1.2;
+  }
+}
+
+/* ---- KPI cards (components/Kpi.jsx), every module ---------------------------
+   One card look; a card that filters the list is pressed in with a cyan ring
+   while its filter is on (never painted solid, so its label stays readable). */
+.neu .kpi-card { border-color: transparent !important; border-radius: var(--neu-radius) !important; box-shadow: var(--neu-raised) !important; }
+.neu .kpi-card-active { box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(6, 182, 212, 0.65) !important; }
+.neu .insight-panel { border-color: transparent !important; border-radius: var(--neu-radius) !important; box-shadow: var(--neu-raised) !important; }

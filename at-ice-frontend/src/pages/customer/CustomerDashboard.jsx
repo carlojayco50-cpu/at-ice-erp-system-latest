@@ -15,6 +15,8 @@ import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { MiniBars, TipsWidget } from "../../components/Insight";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -38,15 +40,6 @@ const STATUS_BADGE = {
   cancelled: "bg-slate-200 text-slate-500 border-slate-300",
 };
 
-function StatCard({ label, value, sub }) {
-  return (
-    <div className={`${ICE_CARD} p-4`}>
-      <div className="text-[11px] text-slate-400 uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-semibold text-slate-800 mt-1">{value}</div>
-      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
-    </div>
-  );
-}
 
 const ShieldIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>;
 const PinIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
@@ -165,16 +158,12 @@ export default function CustomerDashboard() {
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="Pending" value={pendingCount} sub="Not yet dispatched" />
-            <StatCard label="In Transit" value={inTransitCount} sub="On the way" />
-            <StatCard label="Delivered" value={deliveredCount} sub="Completed" />
-            <StatCard
-              label="Balance Due"
-              value={peso(balanceDue)}
-              sub={overdueCount > 0 ? `${overdueCount} overdue` : "All current"}
-            />
-          </div>
+          <KpiGrid cols={4}>
+            <KpiCard label="Pending" icon="clock" tone="amber" value={pendingCount} sub="Not yet dispatched" bar={deliveries.length ? pendingCount / deliveries.length : 0} />
+            <KpiCard label="In transit" icon="truck" tone="cyan" value={inTransitCount} sub="On the way to you" live={inTransitCount > 0} bar={deliveries.length ? inTransitCount / deliveries.length : 0} />
+            <KpiCard label="Delivered" icon="check" tone="emerald" value={deliveredCount} sub={`${deliveries.length} deliveries in all`} bar={deliveries.length ? deliveredCount / deliveries.length : 0} />
+            <KpiCard label="Balance due" icon="wallet" tone={overdueCount ? "rose" : "violet"} money value={balanceDue} sub={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "All current"} />
+          </KpiGrid>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
             {/* Recent deliveries */}
@@ -227,7 +216,22 @@ export default function CustomerDashboard() {
           </div>
         </div>
 
-        <CompanyCard />
+        <div className="flex flex-col gap-4 min-w-0">
+          <CompanyCard />
+          <MiniBars title="Deliveries, last 6 months" data={[...Array(6)].map((_, i) => {
+            const d = new Date();
+            d.setDate(1);
+            d.setMonth(d.getMonth() - (5 - i));
+            const monthOf = (v) => { const t = new Date(v); return `${t.getFullYear()}-${t.getMonth()}`; };
+            const key = monthOf(d);
+            return { label: d.toLocaleDateString("en-PH", { month: "short" }), value: deliveries.filter((x) => (x.scheduled_date || x.created_at) && monthOf(x.scheduled_date || x.created_at) === key).length };
+          })} />
+          <TipsWidget tips={[
+            { title: "Paid already?", text: "Send a photo of your bank or GCash receipt from Invoices; we mark it paid once checked.", tone: "cyan", icon: "receipt" },
+            { title: "Delivery proof", text: "Every delivery has a photo proof from our Salesman under Delivery Proofs.", tone: "emerald", icon: "file" },
+            { title: "Need help?", text: "Use Contact Support or call the dispatcher hotline.", tone: "violet", icon: "message" },
+          ]} />
+        </div>
       </div>
 
     </CustomerLayout>

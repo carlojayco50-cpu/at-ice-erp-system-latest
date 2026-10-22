@@ -264,15 +264,15 @@ export default function Dashboard() {
   // at once instead of waiting for the next poll.
   useEffect(() => {
     const refresh = () => { fetchActivity(); fetchBI(); };
-    echo.channel('attendance').listen('.attendance.recorded', refresh);
-    echo.channel('inventory').listen('.low.stock.alert', refresh);
-    echo.channel('payments').listen('.payment.overdue', refresh);
-    echo.channel('deliveries').listen('.delivery.status.updated', refresh);
+    echo.private('attendance').listen('.attendance.recorded', refresh);
+    echo.private('inventory').listen('.low.stock.alert', refresh);
+    echo.private('payments').listen('.payment.overdue', refresh);
+    echo.private('deliveries').listen('.delivery.status.updated', refresh);
     return () => {
-      echo.leaveChannel('attendance');
-      echo.leaveChannel('inventory');
-      echo.leaveChannel('payments');
-      echo.leaveChannel('deliveries');
+      echo.leave('attendance');
+      echo.leave('inventory');
+      echo.leave('payments');
+      echo.leave('deliveries');
     };
   }, [fetchBI, fetchActivity]);
 

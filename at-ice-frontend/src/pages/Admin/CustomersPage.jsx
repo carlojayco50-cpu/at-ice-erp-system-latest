@@ -14,6 +14,9 @@ import DraftHint from "../../components/DraftHint";
 import { useDraft } from "../../lib/useDraft";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import { formatDateShort } from "../../lib/time";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/Insight";
 
 const API_BASE = "/api";
 
@@ -304,8 +307,48 @@ export default function CustomersPage() {
 
   const pager = usePagination(filtered);
 
+  // Summary for the KPI cards and insight panels
+  const typeCount = (t) => customers.filter((c) => (c.customer_type || "dealer") === t).length;
+  const withLogin = customers.filter((c) => c.user).length;
+  const noPin = customers.filter((c) => c.latitude == null || c.longitude == null);
+  const noContact = customers.filter((c) => !c.contact_person || !c.contact_number);
+  const share = (n) => (customers.length ? n / customers.length : 0);
+  const attention = customers
+    .filter((c) => !c.user || c.latitude == null || c.longitude == null || !c.contact_person)
+    .map((c) => ({
+      id: c.id,
+      title: c.name,
+      meta: [!c.user && "no portal login", (c.latitude == null || c.longitude == null) && "no map pin", !c.contact_person && "no contact person"].filter(Boolean).join(" · "),
+      tone: "amber",
+      icon: "alert",
+    }));
+  const newest = [...customers]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .map((c) => ({ id: c.id, title: c.name, meta: `${CUSTOMER_TYPES[c.customer_type || "dealer"]?.label} · ${[c.city, c.province].filter(Boolean).join(", ") || "no address"}`, when: c.created_at ? formatDateShort(c.created_at) : "", tone: "cyan", icon: "store" }));
+
   return (
     <AdminLayout pageTitle="Customers" breadcrumb="CRM / Customers">
+      <KpiGrid cols={5}>
+        <KpiCard label="Customers" icon="store" tone="cyan" value={customers.length} sub={`${withLogin} with a portal login`} bar={share(withLogin)} />
+        {Object.entries(CUSTOMER_TYPES).map(([val, t], i) => (
+          <KpiCard key={val} label={t.label} icon={i === 0 ? "users" : i === 1 ? "store" : "box"} tone={["emerald", "violet", "amber"][i] || "slate"} value={typeCount(val)} sub={`${Math.round(share(typeCount(val)) * 100)}% of customers`} bar={share(typeCount(val))} onClick={() => setTypeFilter(typeFilter === val ? "" : val)} active={typeFilter === val} />
+        ))}
+        <KpiCard label="Needs setup" icon="alert" tone={attention.length ? "rose" : "emerald"} value={attention.length} sub={`${noPin.length} without a map pin · ${noContact.length} without a contact`} bar={share(attention.length)} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <StatusBreakdown
+          title="Customers by type"
+          items={Object.entries(CUSTOMER_TYPES).map(([val, t], i) => ({ key: val, label: t.label, count: typeCount(val), tone: ["emerald", "violet", "amber"][i] || "slate" }))}
+          onPick={(i) => setTypeFilter(typeFilter === i.key ? "" : i.key)}
+          active={typeFilter}
+          empty="No customers yet."
+          footer={<ProgressRing value={share(withLogin)} label="Portal logins" caption={`${withLogin} of ${customers.length} customers can sign in to the portal`} />}
+        />
+        <ActivityFeed title="Needs setup" subtitle="Missing a login, map pin or contact" items={attention} empty="Every customer has a login, a map pin and a contact." max={5} />
+        <ActivityFeed title="Newest customers" items={newest} empty="Customers you add show up here." max={5} />
+      </div>
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div>
@@ -316,8 +359,8 @@ export default function CustomersPage() {
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
-              <option value="">All types</option>
-              {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label}</option>)}
+              <option value="">All types ({customers.length})</option>
+              {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label} ({typeCount(val)})</option>)}
             </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
@@ -326,7 +369,7 @@ export default function CustomersPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search customer..."
-                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-44"
+                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
               />
             </div>
             <button
@@ -749,7 +792,7 @@ function MapLinkField({ value, onChange, onPlace, onName }) {
         type="text"
         value={value}
         onChange={(e) => typed(e.target.value)}
-        placeholder="Paste the Google Maps link or coordinates, e.g. 14.7772, 121.0750"
+        placeholder="Google Maps link or coordinates"
         autoComplete="off"
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
       />

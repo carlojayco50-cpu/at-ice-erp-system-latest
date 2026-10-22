@@ -33,7 +33,7 @@ export const ADMIN_NAV = [
       { label: "Customers", to: "/admin/customers" },
       { label: "Customer Prices", to: "/admin/customer-prices" },
       { label: "Invoices", to: "/admin/receipts" },
-      { label: "Support Inbox", to: "/admin/support-inbox" },
+      { label: "Support Tickets", to: "/admin/support-inbox" },
     ] },
   // One page per Settings item (pages/Admin/SettingsPage.jsx).
   // "Rates and rules" also holds the holiday and overtime pay rates.
@@ -52,6 +52,7 @@ export const HR_NAV = [
       { label: "Interviews", to: "/hr/interviews" },
       { label: "Attendance", to: "/hr/attendance" },
       { label: "Leave Requests", to: "/hr/leave-requests" },
+      { label: "Memos", to: "/hr/memos" },
       { label: "Timesheets", to: "/hr/timesheets" },
       { label: "Holidays", to: "/hr/holidays" },
       { label: "Kiosk PIN", to: "/hr/kiosk-pin" },

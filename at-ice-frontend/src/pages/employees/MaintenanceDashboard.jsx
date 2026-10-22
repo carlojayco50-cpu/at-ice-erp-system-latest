@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
 import { Icon, StatusBadge, ErrorBanner, CardSkeleton, EmptyCard } from "../../components/MobileUi";
 import { CARD, CARD_BUTTON } from "../../lib/mobileUi";
@@ -7,6 +7,7 @@ import { useLiveTick } from "../../lib/live";
 import { formatDateTime } from "../../lib/time";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
 const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
 
@@ -14,6 +15,7 @@ const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${lo
 // requests), then the request counts and the way into Parts and Projects.
 export default function MaintenanceDashboard() {
   const timedIn = useTimedIn();
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [projects, setProjects] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | error
@@ -76,14 +78,12 @@ export default function MaintenanceDashboard() {
             </section>
           )}
 
-          <section aria-label="Parts requests by status" className="grid grid-cols-3 gap-3">
-            {[["Pending", "pending"], ["Approved", "approved"], ["Released", "released"]].map(([label, s]) => (
-              <Link key={s} to={`/maintenance/stock-out-request?status=${s}`} className={`${CARD_BUTTON} block text-center !p-3`}>
-                <div className="text-2xl font-bold text-slate-900 tabular-nums">{count(s)}</div>
-                <StatusBadge status={s} className="mt-1">{label}</StatusBadge>
-              </Link>
-            ))}
-          </section>
+          <KpiGrid cols={4}>
+            <KpiCard label="Pending" icon="clock" tone="amber" value={count("pending")} sub="Waiting for Admin" onClick={() => navigate("/maintenance/stock-out-request?status=pending")} />
+            <KpiCard label="Approved" icon="check" tone="cyan" value={count("approved")} sub="Ready to be released" onClick={() => navigate("/maintenance/stock-out-request?status=approved")} />
+            <KpiCard label="Released" icon="box" tone="emerald" value={count("released")} sub={`${requests.length} requests in all`} bar={requests.length ? count("released") / requests.length : 0} onClick={() => navigate("/maintenance/stock-out-request?status=released")} />
+            <KpiCard label="Open projects" icon="tool" tone="violet" value={projects.filter((p) => p.status !== "done").length} sub={`${projects.filter((p) => p.status === "done").length} done`} onClick={() => navigate("/maintenance/projects")} />
+          </KpiGrid>
 
           <div className="grid grid-cols-1 gap-3">
             <Link to="/maintenance/stock-out-request?new=1" className={`${CARD_BUTTON} flex items-center gap-3`}>

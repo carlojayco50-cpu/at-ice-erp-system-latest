@@ -6,6 +6,8 @@ import HrLayout from "../../components/HrLayout";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import { formatTime } from "../../lib/time";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { MiniBars, QuickActions } from "../../components/Insight";
 
 
 const token = () => localStorage.getItem("token") || "";
@@ -57,8 +59,8 @@ export default function HRDashboard() {
   // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["*"]);
   useEffect(() => {
-    echo.channel("attendance").listen(".attendance.recorded", () => fetchAll());
-    return () => echo.leaveChannel("attendance");
+    echo.private("attendance").listen(".attendance.recorded", () => fetchAll());
+    return () => echo.leave("attendance");
   }, [fetchAll, live]);
 
   const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local time
@@ -68,12 +70,21 @@ export default function HRDashboard() {
 
   const show = (list, value) => (loading ? "…" : list === null ? "—" : value);
 
+  const enrolled = data.faces?.length || 0;
   const cards = [
-    { label: "Enrolled Workers", value: show(data.faces, data.faces?.length), context: "Faces registered for attendance" },
-    { label: "Attendance Today", value: show(data.attendances, todayAttendance.length), context: `${lateToday} late` },
-    { label: "Pending Leave Requests", value: show(data.leaves, pendingLeaves.length), context: "Awaiting review" },
-    { label: "Upcoming Interviews", value: show(data.interviews, data.interviews?.length), context: "Scheduled applicants" },
+    { label: "Enrolled workers", icon: "users", tone: "cyan", value: show(data.faces, enrolled), sub: "Faces registered for attendance" },
+    { label: "Timed in today", icon: "check", tone: "emerald", live: todayAttendance.length > 0, value: show(data.attendances, todayAttendance.length), sub: enrolled ? `${Math.round((todayAttendance.length / enrolled) * 100)}% of enrolled workers` : "No faces enrolled yet", bar: enrolled ? todayAttendance.length / enrolled : 0 },
+    { label: "Late today", icon: "clock", tone: "amber", value: show(data.attendances, lateToday), sub: todayAttendance.length ? `${Math.round((lateToday / todayAttendance.length) * 100)}% of today's time-ins` : "Nobody timed in yet", bar: todayAttendance.length ? lateToday / todayAttendance.length : 0 },
+    { label: "Leave to review", icon: "calendar", tone: "violet", value: show(data.leaves, pendingLeaves.length), sub: "Waiting for your approval" },
+    { label: "Upcoming interviews", icon: "user", tone: "slate", value: show(data.interviews, data.interviews?.length), sub: "Scheduled applicants" },
   ];
+  // Time-ins over the last 7 days
+  const week = [...Array(7)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const key = d.toLocaleDateString("en-CA");
+    return { label: d.toLocaleDateString("en-PH", { weekday: "short" }), value: (data.attendances || []).filter((a) => String(a.date || "").slice(0, 10) === key && a.time_in).length };
+  });
 
   const workerName = (a) => fullName(a.employee) || a.face_data?.worker_name || a.faceData?.worker_name || a.worker_name || "Unknown";
   // Live Notifications: every Time In and Time Out since the last paid
@@ -104,19 +115,14 @@ export default function HRDashboard() {
       pageTitle="HR Dashboard"
       breadcrumb="HR Dashboard"
     >
-      {/* STAT CARDS — plain text, no decorative icons/colors */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {cards.map((c) => (
-          <div key={c.label} className="bg-white border border-black/[0.09] rounded-xl p-4 flex flex-col gap-1.5">
-            <span className="text-[11px] font-medium tracking-[0.02em] text-slate-400">{c.label}</span>
-            <div className="text-[26px] font-semibold font-mono tracking-tight leading-none text-slate-800">{c.value}</div>
-            <div className="text-[11px] text-slate-400">{c.context}</div>
-          </div>
-        ))}
-      </div>
+      {/* KPI CARDS */}
+      <KpiGrid cols={5}>
+        {cards.map((c) => <KpiCard key={c.label} {...c} />)}
+      </KpiGrid>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-3 items-start">
 
+        <div className="flex flex-col gap-3 min-w-0">
         {/* ATTENDANCE TODAY */}
         <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
           <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
@@ -152,6 +158,17 @@ export default function HRDashboard() {
                 </tbody>
               </table>
             )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <MiniBars title="Time-ins, last 7 days" subtitle="Workers who timed in at the Attendance Station" data={week} />
+          <QuickActions actions={[
+            { label: "Employees", hint: "Add, edit, enroll faces", icon: "users", onClick: () => navigate("/hr/employees") },
+            { label: "Attendance", hint: "Today and history", icon: "clock", tone: "emerald", onClick: () => navigate("/hr/attendance") },
+            { label: "Leave requests", hint: `${pendingLeaves.length} to review`, icon: "calendar", tone: "violet", onClick: () => navigate("/hr/leave-requests") },
+            { label: "Timesheets", hint: "Approve the pay period", icon: "file", tone: "amber", onClick: () => navigate("/hr/timesheets") },
+          ]} />
+        </div>
         </div>
 
         {/* RIGHT COLUMN */}

@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -10,7 +11,8 @@ use Illuminate\Queue\SerializesModels;
 
 // Sent to a store when its delivery was moved to another driver (the usual
 // driver is off), App\Support\DeliveryDispatch::notifyDelay.
-class DeliveryDelayNotice extends Mailable
+// Sent by the queue worker.
+class DeliveryDelayNotice extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

@@ -64,9 +64,9 @@ export function StorePicker({ stores, value, onChange, note }) {
 
   return (
     <div className="rounded-lg border border-black/[0.09]">
-      <div className="p-2 flex gap-2 border-b border-black/[0.07]">
+      <div className="p-2 flex flex-col sm:flex-row gap-2 border-b border-black/[0.07]">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search store, branch, city…" aria-label="Search stores" className={inputCls} />
-        <select value={chain} onChange={(e) => setChain(e.target.value)} aria-label="Filter by chain" className={`${inputCls} max-w-[150px]`}>
+        <select value={chain} onChange={(e) => setChain(e.target.value)} aria-label="Filter by chain" className={`${inputCls} sm:max-w-[150px]`}>
           <option value="">All chains</option>
           {chains.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>

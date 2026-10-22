@@ -3,9 +3,13 @@ import CustomerLayout from "../../components/CustomerLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
-import { formatDateTime } from "../../lib/time";
+import { formatDateTime, manilaDate, todayManila } from "../../lib/time";
+import TopUpForm from "../../components/TopUpForm";
+import AdjustmentRequestPanel from "./AdjustmentRequestPanel";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -28,6 +32,7 @@ const fmtDateTime = (v) => {
 
 const STATUS_LABEL = {
   pending: "Pending",
+  queued: "Queued",
   in_transit: "In Transit",
   delivered: "Delivered",
   cancelled: "Cancelled",
@@ -35,6 +40,7 @@ const STATUS_LABEL = {
 
 const STATUS_BADGE = {
   pending: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  queued: "bg-violet-500/10 text-violet-700 border-violet-500/20",
   in_transit: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
   delivered: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
   cancelled: "bg-slate-200 text-slate-500 border-slate-300",
@@ -76,6 +82,8 @@ export default function CustomerDeliveries() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [topUp, setTopUp] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   // "may be delayed" notices: the delivery went to another driver
   const [notices, setNotices] = useState([]);
 
@@ -98,7 +106,7 @@ export default function CustomerDeliveries() {
       .then((r) => (r.ok ? r.json() : []))
       .then((n) => setNotices(toList(n)))
       .catch(() => {});
-  }, [live]);
+  }, [live, reloadTick]);
 
   const counts = useMemo(() => {
     const c = { all: deliveries.length };
@@ -137,22 +145,15 @@ export default function CustomerDeliveries() {
         <div className="bg-red-500/[0.06] border border-red-500/20 rounded-md p-6 text-sm text-red-600">{error}</div>
       ) : (
         <>
+          <KpiGrid cols={4}>
+            <KpiCard label="Deliveries" icon="truck" tone="cyan" value={counts.all || 0} sub="All your deliveries" onClick={() => setFilter("all")} active={filter === "all"} />
+            <KpiCard label="Pending" icon="clock" tone="amber" value={counts.pending || 0} sub="Scheduled, not yet on the road" bar={counts.all ? (counts.pending || 0) / counts.all : 0} onClick={() => setFilter("pending")} active={filter === "pending"} />
+            <KpiCard label="In transit" icon="truck" tone="cyan" value={counts.in_transit || 0} sub="On the way to you" live={(counts.in_transit || 0) > 0} bar={counts.all ? (counts.in_transit || 0) / counts.all : 0} onClick={() => setFilter("in_transit")} active={filter === "in_transit"} />
+            <KpiCard label="Delivered" icon="check" tone="emerald" value={counts.delivered || 0} sub="Confirmed with a photo proof" bar={counts.all ? (counts.delivered || 0) / counts.all : 0} onClick={() => setFilter("delivered")} active={filter === "delivered"} />
+          </KpiGrid>
           <div className="bg-white border border-black/[0.09] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex flex-wrap gap-1.5">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
-                  className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                    filter === f.key
-                      ? "bg-cyan-500/10 text-cyan-600 border-cyan-500/30 font-medium"
-                      : "bg-white text-slate-500 border-black/[0.09] hover:bg-slate-50"
-                  }`}
-                >
-                  {f.label} ({counts[f.key] || 0})
-                </button>
-              ))}
-            </div>
+            <FilterSelect label="Status" value={filter} onChange={setFilter}
+              options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key] || 0 }))} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -181,7 +182,10 @@ export default function CustomerDeliveries() {
                   <tbody className="divide-y divide-black/[0.06]">
                     {pager.pageItems.map((d) => (
                       <tr key={d.id} className="hover:bg-slate-50">
-                        <td className="px-5 py-3 font-medium text-slate-800">{d.delivery_no}</td>
+                        <td className="px-5 py-3 font-medium text-slate-800">
+                          {d.delivery_no}
+                          {d.is_top_up && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold border bg-cyan-50 text-cyan-800 border-cyan-200">Top-up</span>}
+                        </td>
                         <td className="px-3 py-3 text-slate-600">{fmtDate(d.scheduled_date)}</td>
                         <td className="px-3 py-3 text-slate-600 hidden md:table-cell">{d.driver_name || "Not yet assigned"}</td>
                         <td className="px-3 py-3"><Badge status={d.status} /></td>
@@ -277,6 +281,36 @@ export default function CustomerDeliveries() {
                 Prices and amounts are shown in Receipts & Balance once your delivery is confirmed.
               </div>
             </div>
+
+            {/* Fewer or more sacks on this delivery before it arrives: a request
+                the plant applies or declines (AdjustmentRequestPanel.jsx) */}
+            <div className="px-5 pb-3 empty:hidden">
+              <AdjustmentRequestPanel
+                key={`${selected.id}-${selected.adjustment_request?.id || 0}-${selected.adjustment_request?.status || ""}`}
+                delivery={selected}
+                onChanged={() => { setSelected(null); setReloadTick((t) => t + 1); }}
+              />
+            </div>
+
+            {/* Ran out after today's delivery: an urgent top-up by a later time
+                (App\Support\DeliveryAdjust::topUp); its own delivery and invoice. */}
+            {selected.status !== "cancelled" && manilaDate(selected.scheduled_date) === todayManila() && (
+              <div className="px-5 pb-5">
+                <div className="rounded-lg border border-cyan-200 bg-cyan-50/50 p-3">
+                  {topUp ? (
+                    <>
+                      <div className="text-[13px] font-semibold text-slate-800 mb-2">Urgent top-up for today</div>
+                      <TopUpForm url={`/api/my-deliveries/${selected.id}/top-up`} onCancel={() => setTopUp(false)} onDone={() => { setTopUp(false); setSelected(null); setReloadTick((t) => t + 1); }} />
+                    </>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="mr-auto text-[12px] text-slate-700">Ran out of ice? Ask for more sacks later today.</div>
+                      <button type="button" data-no-confirm onClick={() => setTopUp(true)} title="Ask for another delivery today" className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium cursor-pointer">Request urgent top-up</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

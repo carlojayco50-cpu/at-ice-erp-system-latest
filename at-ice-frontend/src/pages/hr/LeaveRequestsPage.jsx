@@ -22,6 +22,9 @@ import MessageBubble from "../../components/MessageBubble";
 import { formatDateTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, StatusBreakdown, TipsWidget } from "../../components/Insight";
 
 const SearchIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
@@ -171,8 +174,27 @@ export default function LeaveRequestsPage() {
 
   const pager = usePagination(filtered);
 
+  // Summary for the KPI cards and side panels
+  const share = (n) => (leaves.length ? n / leaves.length : 0);
+  const todayKey = new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
+  const onLeaveToday = leaves.filter((l) => l.status === "approved" && String(l.start_date).slice(0, 10) <= todayKey && String(l.end_date || l.start_date).slice(0, 10) >= todayKey).length;
+  const TYPE_TONES = ["rose", "cyan", "amber", "violet", "emerald", "slate"];
+  const byType = Object.entries(TYPE_LABEL).map(([k, label], i) => ({ label, count: leaves.filter((l) => l.leave_type === k).length, tone: TYPE_TONES[i % TYPE_TONES.length] })).filter((t) => t.count > 0);
+  const recent = [...leaves].sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+    .map((l) => ({ id: l.id, title: empName(l.employee), meta: `${typeLabel(l.leave_type)} · ${STATUS_LABEL[l.status] || l.status} · ${length(l)}`, when: fmtDate(l.start_date), tone: { pending: "amber", approved: "emerald", rejected: "rose" }[l.status] || "slate", icon: "calendar" }));
+
   return (
     <HrLayout pageTitle="Leave Requests" breadcrumb="HRIS / Leave Requests">
+      <KpiGrid cols={5}>
+        <KpiCard label="To review" icon="clock" tone="amber" value={counts.pending} sub="Waiting for your decision" bar={share(counts.pending)} onClick={() => setTab("pending")} active={tab === "pending"} live={counts.pending > 0} />
+        <KpiCard label="Approved" icon="check" tone="emerald" value={counts.approved} sub={`${Math.round(share(counts.approved) * 100)}% of requests`} bar={share(counts.approved)} onClick={() => setTab("approved")} active={tab === "approved"} />
+        <KpiCard label="Rejected" icon="x" tone="rose" value={counts.rejected} sub="With a reason given" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
+        <KpiCard label="On leave today" icon="calendar" tone="violet" value={onLeaveToday} sub="Approved leave covering today" />
+        <KpiCard label="All requests" icon="file" tone="cyan" value={counts.all} sub="Filed by employees" onClick={() => setTab("all")} active={tab === "all"} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+      <div className="xl:col-span-8 min-w-0">
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
           <div>
@@ -187,13 +209,9 @@ export default function LeaveRequestsPage() {
           </div>
         </div>
 
-        <div className="px-[18px] pt-3 flex flex-wrap gap-2" role="group" aria-label="Filter by status">
-          {TABS.map(([key, label]) => (
-            <button key={key} onClick={() => setTab(key)} aria-pressed={tab === key}
-              className={`px-3 py-1 rounded-full text-[11px] font-medium border cursor-pointer transition-colors ${tab === key ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-500 hover:border-cyan-400 hover:text-cyan-500"}`}>
-              {label} ({loading ? "…" : counts[key]})
-            </button>
-          ))}
+        <div className="px-[18px] pt-3">
+          <FilterSelect label="Status" value={tab} onChange={setTab}
+            options={TABS.map(([key, label]) => ({ value: key, label, count: loading ? null : counts[key] }))} />
         </div>
 
         <div className="mt-3 border-t border-black/[0.09]">
@@ -255,6 +273,17 @@ export default function LeaveRequestsPage() {
             </div>
           )}
         </div>
+      </div>
+      </div>
+      <aside className="xl:col-span-4 flex flex-col gap-4 min-w-0">
+        <StatusBreakdown title="Requests by type" items={byType} empty="No leave requests yet." />
+        <ActivityFeed title="Latest requests" items={recent} empty="Requests employees file show up here." max={5} />
+        <TipsWidget tips={[
+          { title: "Sick leave needs a med cert", text: "SL is filed at most 1 day after returning; check the medical certificate before approving.", tone: "rose", icon: "file" },
+          { title: "Credits are paid first", text: "Approved days are paid from the employee's credits; the rest are unpaid and feed payroll.", tone: "cyan", icon: "wallet" },
+          { title: "A reason is required to reject", text: "The employee sees it on their Leave Request page.", tone: "amber", icon: "message" },
+        ]} />
+      </aside>
       </div>
 
       {/* APPROVE / REJECT */}

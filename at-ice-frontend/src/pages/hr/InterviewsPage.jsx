@@ -24,6 +24,9 @@ const DOC_LABEL = { photo: "2x2 photo", resume: "Resume", other: "Document" };
 const monthLabel = (v) => (v ? new Date(`${v}-01T00:00:00`).toLocaleDateString("en-PH", { month: "short", year: "numeric" }) : "");
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, StatusBreakdown } from "../../components/Insight";
 
 const SearchIcon  = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const PlusIcon    = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
@@ -491,6 +494,48 @@ export default function InterviewsPage() {
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg px-4 py-2.5">{notice}</div>
       )}
 
+      {(() => {
+        const share = (n) => (counts.all ? n / counts.all : 0);
+        const decided = counts.hired + counts.rejected;
+        const POS_TONES = ["cyan", "emerald", "violet", "amber", "rose", "slate"];
+        const positions = [...new Set(applicants.map((a) => a.position_applied).filter(Boolean))]
+          .map((p, i) => ({ key: p, label: p, count: applicants.filter((a) => a.position_applied === p).length, tone: POS_TONES[i % POS_TONES.length] }))
+          .sort((a, b) => b.count - a.count);
+        const now = new Date();
+        const upcoming = applicants
+          .filter((a) => a.status === "pending" && parseLocal(a.interview_date) && parseLocal(a.interview_date) >= now)
+          .sort((a, b) => parseLocal(a.interview_date) - parseLocal(b.interview_date))
+          .map((a) => ({ id: a.id, title: a.name, meta: a.position_applied || "Applicant", when: fmtInterview(a.interview_date), tone: "cyan", icon: "calendar" }));
+        const viaQr = applicants.filter((a) => a.source === "qr").length;
+        return (
+          <>
+            <KpiGrid cols={5}>
+              <KpiCard label="Applicants" icon="users" tone="cyan" value={counts.all} sub={`${viaQr} applied through the QR form`} onClick={() => setTab("all")} active={tab === "all"} />
+              <KpiCard label="Upcoming interviews" icon="calendar" tone="violet" value={upcomingCount} sub="Scheduled and not yet held" live={upcomingCount > 0} />
+              <KpiCard label="Interviewed" icon="message" tone="amber" value={counts.interviewed} sub="Waiting for a decision" bar={share(counts.interviewed)} onClick={() => setTab("interviewed")} active={tab === "interviewed"} />
+              <KpiCard label="Hired" icon="check" tone="emerald" value={counts.hired} sub={decided ? `${Math.round((counts.hired / decided) * 100)}% of decided applicants` : "No decisions yet"} bar={decided ? counts.hired / decided : 0} onClick={() => setTab("hired")} active={tab === "hired"} />
+              <KpiCard label="Not hired" icon="x" tone="rose" value={counts.rejected} sub="Closed applications" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
+            </KpiGrid>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+              <StatusBreakdown title="Applicants by position" items={positions} empty="No applicants yet. Share the Application QR so people can apply." />
+              <ActivityFeed title="Next interviews" subtitle="Soonest first" items={upcoming} empty="No interviews scheduled. Use Edit on an applicant to set one." max={5} />
+              <StatusBreakdown
+                title="Pipeline"
+                items={[
+                  { key: "pending", label: "Pending", count: counts.pending, tone: "amber" },
+                  { key: "interviewed", label: "Interviewed", count: counts.interviewed, tone: "violet" },
+                  { key: "hired", label: "Hired", count: counts.hired, tone: "emerald" },
+                  { key: "rejected", label: "Not hired", count: counts.rejected, tone: "rose" },
+                ]}
+                onPick={(i) => setTab(i.key)}
+                active={tab}
+                empty="No applicants yet."
+              />
+            </div>
+          </>
+        );
+      })()}
+
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
         {/* HEADER */}
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
@@ -527,16 +572,9 @@ export default function InterviewsPage() {
         </div>
 
         {/* TABS */}
-        <div className="px-[18px] pt-3 flex flex-wrap gap-2">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)} aria-pressed={tab === t.key}
-              className={`px-3 py-1 rounded-full text-[11px] font-medium border cursor-pointer transition-colors ${tab === t.key ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-500 hover:border-cyan-400 hover:text-cyan-500"}`}
-            >
-              {t.label} ({loading ? "…" : counts[t.key]})
-            </button>
-          ))}
+        <div className="px-[18px] pt-3">
+          <FilterSelect label="Status" value={tab} onChange={setTab}
+            options={TABS.map((t) => ({ value: t.key, label: t.label, count: loading ? null : counts[t.key] }))} />
         </div>
 
         {/* TABLE */}

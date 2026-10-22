@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { PAGE_SIZES } from "../lib/usePagination";
 
 const ChevLeft = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>;
@@ -19,7 +20,23 @@ function pageList(page, count) {
 // `pager`): "Showing 1–10 of 42", Rows per page (10, 25, 50), Previous, the
 // page numbers (current one in indigo) and Next. fixed: the phone screens
 // always show 10 per page, so Rows per page is left out.
+//
+// Stable height (owner, 2026-10-22): the table box right above the bar keeps
+// the height of a full page, so a short last page never pulls the bar up
+// under the mouse. It starts over when the page size or the row count changes.
 export default function Pagination({ pager, label = "rows", fixed = false }) {
+  const navRef = useRef(null);
+  const tallest = useRef({ key: "", height: 0 });
+  useLayoutEffect(() => {
+    const box = navRef.current?.previousElementSibling;
+    if (!box || !pager || !box.querySelector("table")) return;
+    const key = `${pager.pageSize}|${pager.total}`;
+    if (tallest.current.key !== key) tallest.current = { key, height: 0 };
+    box.style.minHeight = "";
+    const height = box.offsetHeight;
+    if (pager.page < pager.pageCount) tallest.current.height = Math.max(tallest.current.height, height);
+    if (tallest.current.height > height) box.style.minHeight = `${tallest.current.height}px`;
+  });
   if (!pager || pager.total === 0) return null;
   const { page, pageCount, pageSize, total, from, to, setPage, setPageSize } = pager;
   const btn = "pager-btn inline-flex items-center justify-center gap-1 h-9 rounded-lg border text-[12px] font-medium tabular-nums transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer";
@@ -28,7 +45,7 @@ export default function Pagination({ pager, label = "rows", fixed = false }) {
   const numBtn = `${btn} w-10 px-0`;
 
   return (
-    <nav aria-label="Pagination" className="pager flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-black/[0.06]">
+    <nav ref={navRef} aria-label="Pagination" className="pager flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-black/[0.06]">
       <div className="flex items-center gap-3 text-[12px] text-slate-500">
         <span>Showing <b className="text-slate-700">{from}–{to}</b> of <b className="text-slate-700">{total}</b> {label}</span>
         {!fixed && <label className="flex items-center gap-1.5">

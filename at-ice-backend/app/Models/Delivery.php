@@ -13,6 +13,7 @@ class Delivery extends Model
         'delivery_no', 'contract_id', 'driver_id', 'reassigned_from_driver_id', 'customer_id', 'delivery_type',
         'supplier_id', 'status', 'scheduled_date', 'ordered_at',
         'dispatched_at', 'delivered_at', 'notes', 'cancel_reason', 'prepared_by',
+        'parent_delivery_id', 'is_top_up',
     ];
 
     // pending: waiting for its Driver to start it; queued: no Driver was free
@@ -21,6 +22,7 @@ class Delivery extends Model
     public const STATUSES = ['pending', 'queued', 'in_transit', 'delivered', 'cancelled'];
 
     protected $casts = [
+        'is_top_up' => 'boolean',
         'scheduled_date' => 'date',
         'ordered_at' => 'datetime',
         'dispatched_at' => 'datetime',
@@ -76,5 +78,28 @@ class Delivery extends Model
     public function arrivals()
     {
         return $this->hasMany(DeliveryArrival::class);
+    }
+
+    // An urgent top-up points at the delivery it followed (App\Support\DeliveryAdjust).
+    public function parent()
+    {
+        return $this->belongsTo(Delivery::class, 'parent_delivery_id');
+    }
+
+    public function topUps()
+    {
+        return $this->hasMany(Delivery::class, 'parent_delivery_id');
+    }
+
+    // Top-ups and add/reduce sacks changes, newest first.
+    public function adjustments()
+    {
+        return $this->hasMany(DeliveryAdjustment::class)->latest();
+    }
+
+    // the store's own requests to change the sacks (newest first)
+    public function adjustmentRequests()
+    {
+        return $this->hasMany(DeliveryAdjustmentRequest::class)->latest();
     }
 }

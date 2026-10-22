@@ -10,6 +10,7 @@ import { useLiveTick } from "../../lib/live";
 import { formatDateTime } from "../../lib/time";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
+import FilterSelect from "../../components/FilterSelect";
 
 const STATUS_LABEL = { pending: "Pending", approved: "Approved", released: "Released", rejected: "Rejected" };
 const FILTERS = [["all", "All"], ["pending", "Pending"], ["approved", "Approved"], ["released", "Released"], ["rejected", "Rejected"]];
@@ -168,14 +169,8 @@ export default function MaintenanceStockOutRequestPage() {
       <SuccessBanner>{notice}</SuccessBanner>
 
       {/* quick status filter */}
-      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1" role="tablist" aria-label="Filter by status">
-        {FILTERS.map(([v, label]) => (
-          <button key={v} type="button" role="tab" aria-selected={filter === v} onClick={() => setFilter(v)}
-            className={`min-h-[44px] px-4 rounded-full border text-[14px] font-semibold whitespace-nowrap active:scale-[0.98] transition-transform ${filter === v ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-slate-200 text-slate-600"}`}>
-            {label} <span className="tabular-nums opacity-80">{countOf(v)}</span>
-          </button>
-        ))}
-      </div>
+      <FilterSelect label="Status" value={filter} onChange={setFilter} className="w-full [&>select]:flex-1"
+        options={FILTERS.map(([v, label]) => ({ value: v, label, count: countOf(v) }))} />
 
       {loading && <CardSkeleton rows={3} />}
       {!loading && loadError && <ErrorBanner onRetry={fetchRequests}>{loadError}</ErrorBanner>}

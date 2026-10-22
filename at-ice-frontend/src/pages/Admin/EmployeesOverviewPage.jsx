@@ -5,6 +5,8 @@ import { fullName, shiftLabel } from "../../lib/names";
 import { useLiveTick } from "../../lib/live";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { StatusBreakdown } from "../../components/Insight";
 
 const API_BASE = "/api";
 
@@ -92,8 +94,30 @@ export default function EmployeesOverviewPage() {
 
   const pager = usePagination(filtered);
 
+  // Team make-up for the KPI cards and panels
+  const withLogin = employees.filter((e) => e.user).length;
+  const dayShift = employees.filter((e) => shiftKind(e) === "day").length;
+  const nightShift = employees.filter((e) => shiftKind(e) === "night").length;
+  const share = (n) => (employees.length ? n / employees.length : 0);
+  const ROLE_TONES = ["cyan", "emerald", "violet", "amber", "rose", "slate"];
+  const byRole = roles.map((r, i) => ({ key: r || "none", label: ROLE_LABEL(r), count: employees.filter((e) => (displayRole(e) || "") === r).length, tone: ROLE_TONES[i % ROLE_TONES.length] }));
+  const byPosition = positions.map((p, i) => ({ key: p, label: p, count: employees.filter((e) => e.position === p).length, tone: ROLE_TONES[(i + 2) % ROLE_TONES.length] }));
+
   return (
     <AdminLayout pageTitle="Employees" breadcrumb="Employees">
+      <KpiGrid cols={5}>
+        <KpiCard label="Active staff" icon="users" tone="cyan" value={employees.length} sub={`${positions.length} positions`} />
+        <KpiCard label="With a login" icon="key" tone="emerald" value={withLogin} sub="System accounts" bar={share(withLogin)} />
+        <KpiCard label="Attendance only" icon="shield" tone="violet" value={employees.length - withLogin} sub="Guards and Baggers" bar={share(employees.length - withLogin)} />
+        <KpiCard label="Day shift" icon="clock" tone="amber" value={dayShift} sub={`${Math.round(share(dayShift) * 100)}% of staff`} bar={share(dayShift)} onClick={() => setFilter((f) => ({ ...f, shift: f.shift === "day" ? "" : "day" }))} active={filter.shift === "day"} />
+        <KpiCard label="Night shift" icon="clock" tone="slate" value={nightShift} sub={`${Math.round(share(nightShift) * 100)}% of staff`} bar={share(nightShift)} onClick={() => setFilter((f) => ({ ...f, shift: f.shift === "night" ? "" : "night" }))} active={filter.shift === "night"} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+        <StatusBreakdown title="Staff by role" items={byRole} onPick={(i) => setFilter((f) => ({ ...f, role: f.role === (i.key === "none" ? "none" : i.key) ? "" : (i.key === "none" ? "none" : i.key) }))} active={filter.role} empty="No employees yet." />
+        <StatusBreakdown title="Staff by position" items={byPosition} onPick={(i) => setFilter((f) => ({ ...f, position: f.position === i.key ? "" : i.key }))} active={filter.position} empty="No employees yet." />
+      </div>
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
           <div>
@@ -118,20 +142,20 @@ export default function EmployeesOverviewPage() {
             />
           </div>
           <select aria-label="Position" value={filter.position} onChange={(e) => setFilter({ ...filter, position: e.target.value })} className={selectCls}>
-            <option value="">All positions</option>
-            {positions.map((p) => <option key={p} value={p}>{p}</option>)}
+            <option value="">All positions ({employees.length})</option>
+            {byPosition.map((p) => <option key={p.key} value={p.key}>{p.label} ({p.count})</option>)}
           </select>
           <select aria-label="Role" value={filter.role} onChange={(e) => setFilter({ ...filter, role: e.target.value })} className={selectCls}>
-            <option value="">All roles</option>
-            {roles.map((r) => <option key={r || "none"} value={r || "none"}>{ROLE_LABEL(r)}</option>)}
+            <option value="">All roles ({employees.length})</option>
+            {byRole.map((r) => <option key={r.key} value={r.key}>{r.label} ({r.count})</option>)}
           </select>
           <select aria-label="Shift" value={filter.shift} onChange={(e) => setFilter({ ...filter, shift: e.target.value })} className={selectCls}>
-            <option value="">All shifts</option>
-            <option value="day">Day shift</option>
-            <option value="night">Night shift</option>
+            <option value="">All shifts ({employees.length})</option>
+            <option value="day">Day shift ({dayShift})</option>
+            <option value="night">Night shift ({nightShift})</option>
             {shiftRanges.length > 0 && (
               <optgroup label="Shift hours">
-                {shiftRanges.map((r) => <option key={r} value={r}>{r}</option>)}
+                {shiftRanges.map((r) => <option key={r} value={r}>{r} ({employees.filter((e) => shiftLabel(e) === r).length})</option>)}
               </optgroup>
             )}
           </select>

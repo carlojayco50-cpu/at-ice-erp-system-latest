@@ -24,6 +24,8 @@ import { COMPANY } from "../../lib/company";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { confirmAction } from "../../lib/confirm";
+import FilterSelect from "../../components/FilterSelect";
+import { todayManila } from "../../lib/time";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -85,7 +87,7 @@ const Chevron = ({ left }) => <svg width="14" height="14" fill="none" stroke="cu
 const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
 const navBtn = "inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 disabled:opacity-40 cursor-pointer";
 // Row action buttons share one width so every row lines up.
-const rowBtn = "w-[76px] py-1 rounded-md text-[11px] font-medium text-center";
+const rowBtn = "w-[84px] table-action-btn";
 
 function AdjustModal({ payroll, onClose, onChanged }) {
   // The earning being typed survives a refresh (per payroll).
@@ -248,7 +250,7 @@ export default function PayrollRecordsPage() {
 
   return (
     <AdminLayout pageTitle="Payroll" breadcrumb="HRIS / Payroll">
-      <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl self-start" role="group" aria-label="View">
+      <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl self-start" role="group" aria-label="View" data-fx-tabs>
         {[["records", "Payroll Records"], ["thirteenth", "13th Month"]].map(([k, l]) => (
           <button key={k} type="button" aria-pressed={view === k} onClick={() => setView(k)}
             className={`px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer ${view === k ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>{l}</button>
@@ -262,14 +264,10 @@ export default function PayrollRecordsPage() {
               <button type="button" aria-label="Previous pay period" title="Previous pay period" disabled={!period} onClick={() => setDate(addDays(period.start, -1))} className={navBtn}><Chevron left /> Previous</button>
               <span className="px-3 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-xs text-slate-800 font-semibold min-w-[180px] text-center" title="Start and end are fixed by the pay period">{period ? payPeriodLabel(period) : "…"}</span>
               <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>
-              <input type="date" aria-label="Go to the pay period of a date" title="Go to the pay period of a date" onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700" />
+              <input type="date" aria-label="Go to the pay period of a date" title="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700" />
             </div>
-            <div className="flex gap-1" role="group" aria-label="Filter by status">
-              {[["all", "All"], ["unpaid", "Unpaid (Approved)"], ["paid", "Paid"]].map(([k, l]) => (
-                <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-medium border cursor-pointer ${status === k ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-500"}`}>{l}</button>
-              ))}
-            </div>
+            <FilterSelect label="Status" value={status} onChange={setStatus}
+              options={[["all", "All"], ["unpaid", "Unpaid (Approved)"], ["paid", "Paid"]].map(([k, l]) => ({ value: k, label: l, count: data ? (data.rows || []).filter((r) => r.payroll && (k === "all" || r.payroll.status === k)).length : null }))} />
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-slate-500 w-full sm:w-60 focus-within:border-cyan-500 focus-within:ring-1 focus-within:ring-cyan-500/20">
               <SearchIcon />
               <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Employee ID or name" aria-label="Search by employee ID or name" className="w-full bg-transparent outline-none text-xs text-slate-800 placeholder:text-slate-500" />
@@ -334,11 +332,11 @@ export default function PayrollRecordsPage() {
                                 <div className="flex justify-end gap-1.5">
                                   {p.status === "unpaid"
                                     ? <button onClick={() => setAdjusting(p)} className={`${rowBtn} border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer`}>Earnings</button>
-                                    : <span className={rowBtn} aria-hidden="true" />}
+                                    : <span className="w-[84px] flex-shrink-0" aria-hidden="true" />}
                                   <button onClick={() => openPayslip(p)} className={`${rowBtn} border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer`}>Payslip</button>
                                   {p.status === "unpaid"
                                     ? <button data-no-confirm onClick={() => markPaid([p.id], r.employee_id)} disabled={busy} className={`${rowBtn} bg-emerald-500 hover:bg-emerald-600 text-white font-semibold disabled:opacity-40 cursor-pointer`}>Mark paid</button>
-                                    : <span className={`${rowBtn} border border-emerald-200 bg-emerald-50 text-emerald-700`}>Paid</span>}
+                                    : <span className="w-[84px] table-status-badge border border-emerald-200 bg-emerald-50 text-emerald-700">Paid</span>}
                                 </div>
                               </td>
                             </>

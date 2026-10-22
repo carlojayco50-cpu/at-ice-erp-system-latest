@@ -18,6 +18,8 @@ const GROUPS = [
   ["leave.", "Leave"],
   ["kiosk.", "Kiosk"],
   ["delivery.", "Deliveries"],
+  ["support.", "Support tickets"],
+  ["memo.", "Disciplinary memos"],
   ["thirteenth.", "13th month"],
   ["retention.", "Records"],
 ];

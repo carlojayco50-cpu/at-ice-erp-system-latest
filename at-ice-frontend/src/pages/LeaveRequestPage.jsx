@@ -21,6 +21,7 @@ import { useDraft } from "../lib/useDraft";
 import DraftHint from "../components/DraftHint";
 import FileField from "../components/FileField";
 import { confirmAction } from "../lib/confirm";
+import { PILL } from "../lib/statusTones";
 
 const TYPE_LABEL = {
   sick: "Sick Leave (SL)",
@@ -32,9 +33,9 @@ const TYPE_LABEL = {
 };
 
 const STATUS_STYLE = {
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
+  pending: PILL.warning,
+  approved: PILL.success,
+  rejected: PILL.danger,
 };
 
 const todayStr = () => new Date().toLocaleDateString("en-CA");

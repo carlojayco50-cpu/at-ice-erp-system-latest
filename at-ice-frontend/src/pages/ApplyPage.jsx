@@ -350,7 +350,7 @@ export default function ApplyPage() {
                     <div key={i} className="neu-inset rounded-2xl p-3 flex flex-col gap-3">
                       <input value={w.company} onChange={setWork(i, "company")} placeholder="Company" aria-label="Company" className={fieldCls} />
                       <input value={w.position} onChange={setWork(i, "position")} placeholder="Position" aria-label="Position" className={fieldCls} />
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
                         <input type="month" value={w.from} onChange={setWork(i, "from")} aria-label="From" className={fieldCls} />
                         <input type="month" value={w.to} onChange={setWork(i, "to")} aria-label="To (blank: present)" className={fieldCls} />
                       </div>

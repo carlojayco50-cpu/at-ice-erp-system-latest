@@ -39,7 +39,7 @@ export async function printBiodata(emp, documents = []) {
   const photoDoc = documents.find((d) => d.type === "photo");
   const photo = photoDoc
     ? await asDataUrl(`/api/employees/${emp.id}/documents/${photoDoc.id}`, true)
-    : emp.face_data?.photo_path ? await asDataUrl(`${BACKEND_URL}/storage/${emp.face_data.photo_path}`, false) : null;
+    : emp.face_data?.photo_path ? await asDataUrl(`/api/face-data/${emp.face_data.id}/photo`, true) : null;
 
   const row = (label, value) => `<tr><th>${esc(label)}</th><td>${esc(value) || "&nbsp;"}</td></tr>`;
   const section = (title, rows) => `<h2>${esc(title)}</h2><table class="kv">${rows.join("")}</table>`;

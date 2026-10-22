@@ -16,7 +16,7 @@ import AddressFields from "../../components/AddressFields";
 import ScanDropZone from "../../components/ScanDropZone";
 import DraftHint from "../../components/DraftHint";
 import { useDraft } from "../../lib/useDraft";
-import { filledFrom } from "../../lib/scanDocument";
+import { biodataFilledFrom, filledFrom } from "../../lib/scanDocument";
 import { formatLicense, licenseError, expiryError, tomorrowStr } from "../../lib/license";
 import { formatDateTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
@@ -27,6 +27,8 @@ import {
   biodataFrom, biodataPayload, daysUntil, formatGov, govComplete, uploadWithProgress,
 } from "../../lib/biodata";
 import { printBiodata } from "../../lib/printBiodata";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
 const API_BASE = "/api";
 
@@ -357,9 +359,12 @@ export default function EmployeesPage() {
     setForm((f) => ({ ...f, [field]: e.target.value }));
   const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
   // Name, mobile number and address read from a PDF or Word resume
+  // Everything the resume shows: name, mobile, address, personal details,
+  // emergency contact, highest attainment, school and work history.
   const handleScan = (result) => setForm((f) => ({
     ...f,
     ...filledFrom(result, { first_name: "first_name", middle_initial: "middle_initial", last_name: "last_name", suffix: "suffix", phone: "phone" }),
+    ...biodataFilledFrom(result, f),
   }));
   // License number and expiry read from a Driver's license (the name only when not typed yet)
   const handleLicenseScan = (result) => setForm((f) => ({
@@ -367,6 +372,8 @@ export default function EmployeesPage() {
     ...filledFrom(result, f.first_name || f.last_name
       ? { license_number: "license_number", license_expiry: "license_expiry" }
       : { first_name: "first_name", middle_initial: "middle_initial", last_name: "last_name", suffix: "suffix", license_number: "license_number", license_expiry: "license_expiry" }),
+    // Restriction codes, and the birthday, sex and nationality printed on the license
+    ...biodataFilledFrom(result, f),
   }));
 
   // Choosing a Position also sets the login role.
@@ -612,8 +619,22 @@ export default function EmployeesPage() {
   );
   const pager = usePagination(filtered);
 
+  // Team summary for the KPI cards
+  const enrolledCount = employees.length - unenrolledCount;
+  const probationary = employees.filter((e) => e.employment_status === "probationary").length;
+  const licenseSoon = employees.filter((e) => { const d = daysUntil(e.license_expiry); return d != null && d <= EXPIRY_ALERT_DAYS; }).length;
+  const shareOf = (n) => (employees.length ? n / employees.length : 0);
+
   return (
     <HrLayout pageTitle="Employees" breadcrumb="HRIS / Employees">
+      <KpiGrid cols={5}>
+        <KpiCard label={statusView === "inactive" ? "Archived" : "Active staff"} icon="users" tone="cyan" value={employees.length} sub={`${Object.keys(roleCounts).length} roles`} />
+        <KpiCard label="Face enrolled" icon="check" tone="emerald" value={enrolledCount} sub="Can time in at the kiosk" bar={shareOf(enrolledCount)} />
+        <KpiCard label="Not enrolled" icon="alert" tone={unenrolledCount ? "rose" : "emerald"} value={unenrolledCount} sub={unenrolledCount ? "Enroll their face to time in" : "Everyone can time in"} bar={shareOf(unenrolledCount)} onClick={() => setUnenrolledFirst((v) => !v)} active={unenrolledFirst} />
+        <KpiCard label="Probationary" icon="clock" tone="amber" value={probationary} sub={`${employees.length - probationary} regular`} bar={shareOf(probationary)} />
+        <KpiCard label="Licenses expiring" icon="key" tone={licenseSoon ? "rose" : "violet"} value={licenseSoon} sub={`Within ${EXPIRY_ALERT_DAYS} days or already expired`} />
+      </KpiGrid>
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
           <div>
@@ -644,33 +665,10 @@ export default function EmployeesPage() {
 
         {/* Filters: Active or Archived, role chips, and a button that puts employees with no enrolled face on top */}
         <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
-          <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-lg mr-2" role="group" aria-label="Active or archived">
-            {[["active", "Active"], ["inactive", "Archived"]].map(([key, label]) => (
-              <button key={key} type="button" aria-pressed={statusView === key} onClick={() => setStatusView(key)}
-                className={`px-3 py-1 rounded-md text-[11px] font-medium cursor-pointer ${statusView === key ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by role">
-            {ROLE_FILTERS.map((r) => {
-              const active = roleFilter === r;
-              const count = r === "all" ? employees.length : roleCounts[r] || 0;
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setRoleFilter(r)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
-                    active ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {r === "all" ? "All" : roleLabel(r)} <span className={active ? "opacity-80" : "text-slate-400"}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
+          <FilterSelect label="Show" value={statusView} onChange={setStatusView}
+            options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Archived" }]} />
+          <FilterSelect label="Role" value={roleFilter} onChange={setRoleFilter}
+            options={ROLE_FILTERS.map((r) => ({ value: r, label: r === "all" ? "All" : roleLabel(r), count: r === "all" ? employees.length : roleCounts[r] || 0 }))} />
           <div className="flex-1" />
           <button
             type="button"
@@ -814,7 +812,7 @@ export default function EmployeesPage() {
       {/* ── ADD / EDIT MODAL: six steps (owner, 2026-10-20) ── */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-black/[0.09]">
               <div className="text-[15px] font-semibold text-slate-800">
                 {editingId ? `Edit Employee · ${[form.first_name, form.last_name].filter(Boolean).join(" ")}` : "Add Employee"}
@@ -835,7 +833,7 @@ export default function EmployeesPage() {
 
             {/* Step bar: Personal → Contact → Payroll → Technical → History → Attachments */}
             <nav aria-label="Form steps" className="px-5 pt-4">
-              <ol className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              <ol className="grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-6 gap-2">
                 {FORM_STEPS.map((label, i) => {
                   const state = i === step ? "current" : i < step ? "done" : "todo";
                   // a passed step is done only when it has everything it needs
@@ -852,7 +850,7 @@ export default function EmployeesPage() {
                         <span className={`flex-shrink-0 w-5 h-5 rounded-full grid place-items-center text-[10px] ${state === "current" ? "bg-cyan-600 text-white" : state === "done" && !hasError ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"}`}>
                           {state === "done" && !hasError ? "✓" : i + 1}
                         </span>
-                        <span className="truncate">{label}</span>
+                        <span className="truncate" title={label}>{label}</span>
                       </button>
                     </li>
                   );
@@ -876,7 +874,7 @@ export default function EmployeesPage() {
               {/* 1. PERSONAL */}
               {step === 0 && (
                 <>
-                  <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number and address" />
+                  <ScanDropZone kind="resume" onScan={handleScan} fills="name, mobile number, address, birthday, sex, civil status, emergency contact, highest attainment, school and work history" />
                   <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
                     <Field label="First Name" required error={formErrors.first_name}>
                       <input required value={form.first_name} onChange={handleChange("first_name")} className={inputCls} />
@@ -1068,7 +1066,7 @@ export default function EmployeesPage() {
                   {isDriverForm && (
                     <>
                       <div className="text-[12px] font-semibold text-slate-700 mt-1">Driver's license</div>
-                      <ScanDropZone kind="license" onScan={handleLicenseScan} fills="license number and expiry date" />
+                      <ScanDropZone kind="license" onScan={handleLicenseScan} fills="license number, expiry date and restriction codes" />
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field label="Driver's License No." required error={formErrors.license_number || (form.license_number && licenseError(form.license_number) ? [licenseError(form.license_number)] : null)}>
                           <input required value={form.license_number} onChange={(e) => setForm((f) => ({ ...f, license_number: formatLicense(e.target.value) }))}
@@ -1133,13 +1131,17 @@ export default function EmployeesPage() {
                   {(form.work_history || []).map((w, i) => {
                     const set = (k) => (e) => setForm((f) => ({ ...f, work_history: (f.work_history || []).map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)) }));
                     return (
-                      <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_130px_130px_auto] gap-2 items-end rounded-lg border border-black/[0.09] p-2.5">
-                        <Field label="Company" error={formErrors[`work_history.${i}.company`]}><input value={w.company} onChange={set("company")} className={inputCls} /></Field>
-                        <Field label="Position"><input value={w.position} onChange={set("position")} className={inputCls} /></Field>
-                        <Field label="From"><input type="month" value={w.from} onChange={set("from")} className={inputCls} /></Field>
-                        <Field label="To"><input type="month" value={w.to} onChange={set("to")} className={inputCls} /></Field>
-                        <button type="button" onClick={() => setForm((f) => ({ ...f, work_history: (f.work_history || []).filter((_, j) => j !== i) }))}
-                          className="px-2.5 py-1.5 text-[11px] text-rose-700 hover:underline">Remove</button>
+                      // Company and position on one row, the dates and Remove under them,
+                      // so long names and month names are never cut off
+                      <div key={i} className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border border-black/[0.09] p-2.5">
+                        <Field label="Company" error={formErrors[`work_history.${i}.company`]}><input value={w.company} onChange={set("company")} title={w.company} className={inputCls} /></Field>
+                        <Field label="Position"><input value={w.position} onChange={set("position")} title={w.position} className={inputCls} /></Field>
+                        <div className="sm:col-span-2 grid grid-cols-1 min-[420px]:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                          <Field label="From"><input type="month" value={w.from} onChange={set("from")} className={inputCls} /></Field>
+                          <Field label="To"><input type="month" value={w.to} onChange={set("to")} className={inputCls} /></Field>
+                          <button type="button" onClick={() => setForm((f) => ({ ...f, work_history: (f.work_history || []).filter((_, j) => j !== i) }))}
+                            className="justify-self-end px-2.5 py-1.5 text-[11px] text-rose-700 hover:underline">Remove</button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1297,7 +1299,6 @@ function Field({ label, error, required, children }) {
 // replace it) and Remove Face.
 // Saved pictures are on the backend's public disk, served at /storage/...
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
-const storageUrl = (p) => (p ? `${BACKEND_URL}/storage/${String(p).replace(/^\/+/, "")}` : null);
 const fmtDateTime = (d) =>
   d ? formatDateTime(d) : "—";
 
@@ -1310,7 +1311,18 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
   const [capturing, setCapturing] = useState(!enrolled);
   const [photoBroken, setPhotoBroken] = useState(false);
   const name = fullName(employee);
-  const savedPhoto = enrolled && !photoBroken ? storageUrl(enrolled.photo_path) : null;
+  // The enrolled face picture is private: fetched with the login token (face-data/{id}/photo)
+  const [photoUrl, setPhotoUrl] = useState(null);
+  useEffect(() => {
+    if (!enrolled?.photo_path) return undefined;
+    let url = null, stop = false;
+    fetch(`/api/face-data/${enrolled.id}/photo`, { headers: { Authorization: authHeaders.Authorization } })
+      .then((res) => (res.ok ? res.blob() : null))
+      .then((blob) => { if (!stop && blob) { url = URL.createObjectURL(blob); setPhotoUrl(url); } })
+      .catch(() => {});
+    return () => { stop = true; if (url) URL.revokeObjectURL(url); };
+  }, [enrolled?.id, enrolled?.photo_path, authHeaders.Authorization]);
+  const savedPhoto = enrolled && !photoBroken ? photoUrl : null;
   const onCapture = (d, p) => { setDescriptor(d); setPhoto(p); };
 
   const send = async (url, method, body) => {

@@ -89,6 +89,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Time-based jobs every minute (routes/console.php): driver reassignment and
+  # delay notices, missed-Time-Out memos, payroll cut-off notice, archive expiry.
+  scheduler:
+    build: ./at-ice-backend
+    command: ["php", "artisan", "schedule:work"]
+    environment:
+      <<: *laravel-env
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
   mysql:
     image: mysql:8.4
     environment:

@@ -185,6 +185,8 @@ class PaymentProofTest extends TestCase
 
     public function test_support_topics_include_the_new_reasons(): void
     {
+        // one ticket per topic is allowed; the 3-per-10-minutes limit is tested in SupportTicketTest
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         Sanctum::actingAs($this->customerUser);
         foreach (['late_delivery', 'damaged_ice', 'payment_proof', 'staff_conduct', 'other'] as $topic) {
             $this->postJson('/api/my-support-messages', ['topic' => $topic, 'message' => 'Please check this.'])->assertCreated();

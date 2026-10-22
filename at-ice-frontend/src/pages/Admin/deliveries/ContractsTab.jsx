@@ -239,7 +239,7 @@ function ContractForm({ stores, onClose, onSaved }) {
           <label className={labelCls}>Items per store per delivery *</label>
           <div className="flex flex-col gap-2">
             {form.items.map((it, i) => (
-              <div key={i} className="grid grid-cols-[1fr_110px_auto] gap-2">
+              <div key={i} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_110px_auto] gap-2">
                 <select value={it.product_type} aria-label={`Product ${i + 1}`} onChange={(e) => set({ items: form.items.map((x, j) => (j === i ? { ...x, product_type: e.target.value } : x)) })} className={inputCls}>
                   <option value="">Select product…</option>
                   {PRODUCT_TYPES.map((p) => <option key={p.value} value={p.value} disabled={form.items.some((o, j) => j !== i && o.product_type === p.value)}>{p.label}</option>)}

@@ -4,7 +4,6 @@ import bgImage from "../assets/iceproduct.png";
 import logo from "../assets/logo.png";
 import { clearKioskToken, kioskHeaders } from "../lib/kiosk";
 import { playKioskSound, primeKioskSound } from "../lib/kioskSound";
-import { STEP_TEXT, advance, currentStep, failure, isDone, loadLivenessModels, newChallenge, readFrame } from "../lib/liveness";
 import { formatTime } from "../lib/time";
 
 const ScanIcon = () => (
@@ -44,9 +43,10 @@ const LogOutIcon = () => (
 );
 
 const MATCH_THRESHOLD = 0.5;
-const DETECTION_INTERVAL_MS = 1500;
-// Frames are read this often during the liveness challenge (a blink is short).
-const LIVENESS_FRAME_MS = 120;
+// How often the camera is scanned for a face: often, so time in and out are
+// recorded right away (owner, 2026-10-22). A scan is skipped while the
+// previous one still runs.
+const DETECTION_INTERVAL_MS = 400;
 // The result pop-up in the middle of the screen stays this long.
 const RESULT_DISPLAY_MS = 3500;
 
@@ -98,19 +98,16 @@ export default function AttendanceStation() {
   const [descriptorsLoaded, setDescriptorsLoaded] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  // nobody enrolled yet: the camera still turns on (so the kiosk can be set
+  // up and the camera checked), but there is no one to match
+  const [noFaces, setNoFaces] = useState(false);
   const [result, setResult] = useState(null);
   const [clock, setClock] = useState(new Date());
   const [mode, setMode] = useState("time_in");
   const resultTimerRef = useRef(null);
-  // The liveness challenge in progress: { label, mode, descriptor, info, c } (ref,
-  // read by the loop) and { step, index, total, name } (state, for the screen).
-  const challengeRef = useRef(null);
-  const [challenge, setChallenge] = useState(null);
 
   const changeMode = (next) => {
     modeRef.current = next; // the detection loop reads the ref, not the state
-    challengeRef.current = null; // a challenge started for the other mode is dropped
-    setChallenge(null);
     setMode(next);
     clearTimeout(resultTimerRef.current);
     setResult(null);
@@ -145,7 +142,6 @@ export default function AttendanceStation() {
           faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-          loadLivenessModels(),
         ]);
         if (cancelled) return;
         setModelsLoaded(true);
@@ -165,7 +161,7 @@ export default function AttendanceStation() {
         );
 
         if (labeledDescriptors.length === 0) {
-          setLoadError("No enrolled faces found. Enroll workers first in HR > Employees (Face).");
+          setNoFaces(true);
           return;
         }
 
@@ -183,9 +179,10 @@ export default function AttendanceStation() {
     return () => { cancelled = true; };
   }, []);
 
-  // Start webcam
+  // Start webcam as soon as the models are in; it does not wait for the
+  // enrolled faces, so the camera turns on even when nobody is enrolled yet
   useEffect(() => {
-    if (!modelsLoaded || !descriptorsLoaded) return;
+    if (!modelsLoaded) return;
     let cancelled = false;
     (async () => {
       try {
@@ -203,19 +200,27 @@ export default function AttendanceStation() {
       cancelled = true;
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
-  }, [modelsLoaded, descriptorsLoaded]);
+  }, [modelsLoaded]);
 
   // Records attendance via POST /api/attendances (no user login, this is a kiosk;
   // the kiosk token in the X-Kiosk-Token header proves the terminal was unlocked by HR). The kiosk sends the matched face id and the
   // selected mode (time_in or time_out). The server decides the date and
   // the time. Returns { type, hours } where type is time_in, time_out,
   // already_timed_in, no_time_in, completed, inactive or error.
-  const recordAttendance = useCallback(async (faceDataId, type) => {
+  // seenAt (performance.now() when the face was recognized): the server
+  // records that moment, not the request's arrival, so the network never makes
+  // anyone late. Only the elapsed milliseconds are sent (a stopwatch, not this
+  // computer's clock); the server caps them.
+  const recordAttendance = useCallback(async (faceDataId, type, seenAt) => {
     try {
       const res = await fetch("/api/attendances", {
         method: "POST",
         headers: kioskHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ face_data_id: Number(faceDataId), type }),
+        body: JSON.stringify({
+          face_data_id: Number(faceDataId),
+          type,
+          elapsed_ms: seenAt ? Math.max(0, Math.round(performance.now() - seenAt)) : 0,
+        }),
       });
       if (res.status === 403) {
         // Locked while someone was scanning: nothing was recorded. Ask for the PIN again.
@@ -238,64 +243,21 @@ export default function AttendanceStation() {
     }
   }, []);
 
-  // Detection loop. A recognized face is not recorded straight away: the
-  // worker first passes the liveness challenge (lib/liveness.js: blink and
-  // turn the head left and right, in a random order), so a photo or a phone
-  // screen held to the camera is refused. The face at the end must still be
-  // the same worker.
+  // Detection loop. A recognized face is recorded right away: no blink or
+  // other live check (owner, 2026-10-22: time in and out must be instant, so
+  // nobody is late because of the check). The recorded time is the moment the
+  // face was recognized.
   useEffect(() => {
-    if (!cameraReady || !faceMatcherRef.current) return;
-    let fastTimer = null;
-
-    const endChallenge = () => {
-      clearInterval(fastTimer);
-      fastTimer = null;
-      challengeRef.current = null;
-      setChallenge(null);
-    };
-
-    // Fast frames while a challenge runs
-    const fastTick = async () => {
-      const ch = challengeRef.current;
-      if (!ch || ch.busy || !videoRef.current) return;
-      ch.busy = true;
-      try {
-        const frame = await readFrame(videoRef.current);
-        if (challengeRef.current !== ch) return;
-        advance(ch.c, frame);
-        const failed = failure(ch.c);
-        if (failed) {
-          endChallenge();
-          showResult({ status: "liveness", name: ch.info?.name, role: ch.info?.role, detail: failed });
-          return;
-        }
-        setChallenge({ step: currentStep(ch.c), index: ch.c.index, total: ch.c.steps.length, name: ch.info?.name, hint: ch.c.hint });
-        if (!isDone(ch.c)) return;
-
-        // Passed: check it is still the same face, then record.
-        const last = await faceapi.detectSingleFace(videoRef.current).withFaceLandmarks().withFaceDescriptor();
-        endChallenge();
-        if (!last || faceapi.euclideanDistance(last.descriptor, ch.descriptor) > MATCH_THRESHOLD
-            || faceMatcherRef.current.findBestMatch(last.descriptor).label !== ch.label) {
-          showResult({ status: "liveness", name: ch.info?.name, detail: "The face changed during the check. Try again." });
-          return;
-        }
-        const { type, hours, at } = await recordAttendance(ch.label, ch.mode);
-        if (type !== "error") recentlyMarkedRef.current.set(`${ch.label}:${ch.mode}`, Date.now());
-        showResult({ status: type, name: ch.info?.name, role: ch.info?.role, hours, at });
-      } catch (err) {
-        console.error("Liveness tick error:", err);
-      } finally {
-        ch.busy = false;
-      }
-    };
+    // the camera may be on before the enrolled faces arrive: wait for both
+    if (!cameraReady || !descriptorsLoaded || !faceMatcherRef.current) return;
 
     const tick = async () => {
-      if (busyRef.current || challengeRef.current || !videoRef.current) return;
+      if (busyRef.current || !videoRef.current) return;
       busyRef.current = true;
       try {
         const detection = await faceapi.detectSingleFace(videoRef.current).withFaceLandmarks().withFaceDescriptor();
         if (!detection) return;
+        const seenAt = performance.now();
 
         const bestMatch = faceMatcherRef.current.findBestMatch(detection.descriptor);
 
@@ -311,18 +273,10 @@ export default function AttendanceStation() {
           return;
         }
 
-        clearTimeout(resultTimerRef.current);
-        setResult(null);
-        challengeRef.current = {
-          label: faceDataId,
-          mode: currentMode,
-          descriptor: detection.descriptor,
-          info: window.__faceLookup?.[faceDataId],
-          c: newChallenge(),
-          busy: false,
-        };
-        setChallenge({ step: currentStep(challengeRef.current.c), index: 0, total: challengeRef.current.c.steps.length, name: challengeRef.current.info?.name });
-        fastTimer = setInterval(fastTick, LIVENESS_FRAME_MS);
+        const info = window.__faceLookup?.[faceDataId];
+        const { type, hours, at } = await recordAttendance(faceDataId, currentMode, seenAt);
+        if (type !== "error") recentlyMarkedRef.current.set(`${faceDataId}:${currentMode}`, Date.now());
+        showResult({ status: type, name: info?.name, role: info?.role, hours, at });
       } catch (err) {
         console.error("Detection tick error:", err);
       } finally {
@@ -331,12 +285,8 @@ export default function AttendanceStation() {
     };
 
     intervalRef.current = setInterval(tick, DETECTION_INTERVAL_MS);
-    return () => {
-      clearInterval(intervalRef.current);
-      clearInterval(fastTimer);
-      challengeRef.current = null;
-    };
-  }, [cameraReady, recordAttendance, showResult]);
+    return () => clearInterval(intervalRef.current);
+  }, [cameraReady, descriptorsLoaded, recordAttendance, showResult]);
 
   const statusConfig = {
     time_in:          { label: "Time In Recorded",    sub: "Proceed to the fingerprint scanner", bg: "bg-emerald-600/90", tone: "#059669", icon: <CheckIcon /> },
@@ -346,7 +296,6 @@ export default function AttendanceStation() {
     completed:        { label: "Done for Today",      sub: "Time In and Time Out are already recorded", bg: "bg-amber-600/90", tone: "#d97706", icon: <ClockIcon /> },
     inactive:         { label: "Not Active",          sub: "This employee is no longer active. Please inform HR.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
     "no-match":       { label: "Face Not Recognized", sub: "Not enrolled in the system. Please see HR.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
-    liveness:         { label: "Live Check Not Passed", sub: "Nothing was recorded. Face the camera and follow the steps.", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
     error:            { label: "Could Not Record",    sub: "Please try again or inform HR", bg: "bg-red-600/90", tone: "#dc2626", icon: <XIcon /> },
   };
   const active = result ? statusConfig[result.status] || statusConfig.error : null;
@@ -379,7 +328,7 @@ export default function AttendanceStation() {
           <div className="px-5 sm:px-8 pt-6 sm:pt-7 pb-5 border-b border-[rgba(163,177,198,0.4)] flex items-start justify-between gap-4">
             <div>
               <h2 className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">Face Recognition Check-In</h2>
-              <p className="text-[13px] text-[var(--neu-faint)] mt-1">Choose Time In or Time Out below, face the camera, then blink and turn your head when asked.</p>
+              <p className="text-[13px] text-[var(--neu-faint)] mt-1">Choose Time In or Time Out below, then face the camera. It records as soon as your face is recognized.</p>
             </div>
             <div className="text-right flex-shrink-0">
               <div className="text-[15px] font-semibold text-slate-800 font-mono">
@@ -393,25 +342,19 @@ export default function AttendanceStation() {
 
           <div className="px-5 sm:px-8 py-6">
             <div className={`relative w-full aspect-video bg-slate-900 rounded-2xl overflow-hidden shadow-[var(--neu-inset)] ring-4 ${m.ring} transition-shadow`}>
-              {/* Shown like a mirror, so "turn left" matches what the worker sees */}
+              {/* Shown like a mirror, as the worker expects */}
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover -scale-x-100" />
 
-              {/* Liveness challenge: only the oval guide and a greeting sit on the
-                  camera, so nothing covers the face; the step to do is shown
-                  under the camera */}
-              {challenge && (
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute top-3 left-1/2 -translate-x-1/2 max-w-[90%] truncate px-3.5 py-1.5 rounded-full bg-black/55 text-white text-[12px] font-medium backdrop-blur-sm">
-                    {challenge.name ? `Hi ${challenge.name.split(" ")[0]}! ` : ""}Quick live check
-                  </div>
-                  <div className="absolute inset-0 m-auto h-[64%] aspect-[3/4] rounded-[50%] border-[3px] border-dashed border-white/80 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]" />
+              {(!modelsLoaded || (!descriptorsLoaded && !noFaces) || !cameraReady) && !loadError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-[13px] gap-2.5 flex-col">
+                  <span className="w-6 h-6 border-2 border-cyan-400/40 border-t-cyan-400 rounded-full animate-spin" />
+                  {!modelsLoaded ? "Loading face recognition models..." : !cameraReady ? "Starting camera..." : "Loading enrolled workers..."}
                 </div>
               )}
 
-              {(!modelsLoaded || !descriptorsLoaded || !cameraReady) && !loadError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-[13px] gap-2.5 flex-col">
-                  <span className="w-6 h-6 border-2 border-cyan-400/40 border-t-cyan-400 rounded-full animate-spin" />
-                  {!modelsLoaded ? "Loading face recognition models..." : !descriptorsLoaded ? "Loading enrolled workers..." : "Starting camera..."}
+              {noFaces && cameraReady && !loadError && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 max-w-[92%] px-3.5 py-1.5 rounded-full bg-amber-500/90 text-slate-900 text-[12px] font-semibold text-center">
+                  Camera is on. No faces are enrolled yet: enroll workers in HR &gt; Employees (Face).
                 </div>
               )}
 
@@ -421,7 +364,7 @@ export default function AttendanceStation() {
                 </div>
               )}
 
-              {!result && !challenge && cameraReady && !loadError && (
+              {!result && cameraReady && !loadError && !noFaces && (
                 <div className={`absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 backdrop-blur-sm rounded-full ${m.pill}`}>
                   <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${m.dot}`} />
                   <span className="text-[11px] font-medium tracking-wide">Scanning for {m.label}</span>
@@ -429,31 +372,11 @@ export default function AttendanceStation() {
               )}
             </div>
 
-            {/* What to do now: the live-check step, or what the camera is
-                waiting for. Always the same height, so the page never jumps. */}
+            {/* What the camera is waiting for. Always the same height, so the
+                page never jumps. */}
             <div className="mt-4 min-h-[76px] rounded-2xl px-4 py-3 shadow-[var(--neu-inset-sm)] flex flex-col items-center justify-center text-center" aria-live="polite">
-              {challenge ? (
-                <>
-                  <div className="flex items-center gap-2 text-[17px] font-semibold text-slate-800">
-                    {challenge.step === "left" && <span aria-hidden="true">←</span>}
-                    {STEP_TEXT[challenge.step]?.title}
-                    {challenge.step === "right" && <span aria-hidden="true">→</span>}
-                  </div>
-                  <div className="text-[12px] text-[var(--neu-muted)]">
-                    {challenge.hint ? <span className="font-medium text-amber-700">{challenge.hint}</span> : STEP_TEXT[challenge.step]?.sub}
-                  </div>
-                  <div className="flex gap-1.5 mt-1.5" aria-label={`Step ${challenge.index + 1} of ${challenge.total}`}>
-                    {Array.from({ length: challenge.total }, (_, i) => (
-                      <span key={i} className={`h-1.5 w-8 rounded-full ${i < challenge.index ? "bg-emerald-500" : i === challenge.index ? "bg-cyan-600" : "bg-slate-300"}`} />
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="text-[15px] font-semibold text-slate-800">{cameraReady && !loadError ? `Ready for ${m.label}` : "Getting ready…"}</div>
-                  <div className="text-[12px] text-[var(--neu-muted)]">Stand in front of the camera. The live check starts when your face is found.</div>
-                </>
-              )}
+              <div className="text-[15px] font-semibold text-slate-800">{noFaces ? "No faces enrolled yet" : cameraReady && !loadError ? `Ready for ${m.label}` : "Getting ready…"}</div>
+              <div className="text-[12px] text-[var(--neu-muted)]">{noFaces ? "HR enrolls each worker's face in HR > Employees (Face); then reopen this page." : "Stand in front of the camera. It records as soon as your face is recognized."}</div>
             </div>
 
             {/* Time In / Time Out toggle: Time In green, Time Out orange */}

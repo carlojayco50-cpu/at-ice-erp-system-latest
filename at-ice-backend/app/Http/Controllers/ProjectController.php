@@ -72,6 +72,8 @@ class ProjectController extends Controller
     // Maintenance: a new project. It starts as Planned; Admin fills in the rest.
     public function store(Request $request)
     {
+        // Admin passes every role check, but only Maintenance adds projects (owner, 2026-10-17)
+        abort_if($request->user()->role === 'admin', 403, 'Only Maintenance adds projects. Admin edits them on the board.');
         $rules = array_intersect_key($this->rules(true), array_flip(self::MAINTENANCE_FIELDS));
         $rules['description'] = 'required|string|max:2000';
         $rules['location'] = 'required|string|max:500';

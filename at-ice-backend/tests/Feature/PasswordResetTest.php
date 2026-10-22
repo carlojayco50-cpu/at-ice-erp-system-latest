@@ -27,7 +27,7 @@ class PasswordResetTest extends TestCase
     {
         $this->postJson('/api/forgot-password', ['email' => $email])->assertOk();
         $code = null;
-        Mail::assertSent(PasswordResetCode::class, function ($mail) use (&$code) {
+        Mail::assertQueued(PasswordResetCode::class, function ($mail) use (&$code) {
             $code = $mail->code;
 
             return true;
@@ -84,7 +84,7 @@ class PasswordResetTest extends TestCase
         Mail::fake();
         $this->postJson('/api/forgot-password', ['email' => 'nobody@atice.cloud'])
             ->assertOk()->assertJsonStructure(['message']);
-        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
     }
 
     public function test_wrong_code_and_expired_code_are_refused_and_five_wrong_tries_cancel_it(): void
@@ -123,7 +123,7 @@ class PasswordResetTest extends TestCase
         ])->assertCreated();
 
         $this->assertSame('sent', $res->json('login.emailed'));
-        Mail::assertSent(AccountCredentials::class, fn ($mail) => $mail->hasTo('alfamart@gmail.com')
+        Mail::assertQueued(AccountCredentials::class, fn ($mail) => $mail->hasTo('alfamart@gmail.com')
             && $mail->password === $res->json('login.password'));
     }
 
@@ -141,7 +141,7 @@ class PasswordResetTest extends TestCase
         ])->assertCreated();
 
         $this->assertSame('off', $res->json('login.emailed'));
-        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
     }
 
     public function test_a_customer_email_whose_account_does_not_exist_is_not_saved(): void
@@ -159,7 +159,7 @@ class PasswordResetTest extends TestCase
         $this->assertDatabaseCount('customers', 0);
         $this->assertDatabaseMissing('users', ['email' => 'no-such-user-123@gmail.com']);
         $this->getJson('/api/customers/check-email?email=no-such-user-123@gmail.com')->assertOk()->assertJson(['result' => 'invalid']);
-        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
     }
 
     public function test_a_company_address_is_not_a_customer_email(): void
@@ -175,6 +175,6 @@ class PasswordResetTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors(['email' => 'not an @atice.cloud address']);
 
         $this->assertDatabaseCount('customers', 0);
-        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
     }
 }

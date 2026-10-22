@@ -44,6 +44,10 @@ class Employee extends Model
         'is_active',
         'deactivated_at',
         'deactivated_by',
+        // disciplinary memos (App\Support\MemoEngine, EmployeeMemoController)
+        'no_timeout_count',
+        'investigation_status',
+        'investigation_since',
         'employment_status',
         'regularized_at',
         'pay_basis',

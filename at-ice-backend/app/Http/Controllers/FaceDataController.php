@@ -20,8 +20,9 @@ class FaceDataController extends Controller
     // The face picture comes from the webcam as a JPEG data URL (up to ~1.5 MB).
     private const PHOTO_RULE = ['nullable', 'string', 'max:2000000', 'starts_with:data:image/jpeg;base64,'];
 
-    // Saves the picture on the public disk (served at /storage/face-photos/...)
-    // under a random name, and returns its path.
+    // Saves the picture on the private disk under a random name and returns its
+    // path. Face pictures are biometric data: never public, HR opens them
+    // through photo() (owner, 2026-10-22).
     private function storePhoto(?string $dataUrl): ?string
     {
         if (! $dataUrl) {
@@ -32,7 +33,7 @@ class FaceDataController extends Controller
             throw ValidationException::withMessages(['photo' => 'The face picture could not be read. Capture it again.']);
         }
         $path = 'face-photos/'.Str::uuid().'.jpg';
-        Storage::disk('public')->put($path, $bytes);
+        Storage::disk('local')->put($path, $bytes);
 
         return $path;
     }
@@ -40,7 +41,8 @@ class FaceDataController extends Controller
     private function deletePhoto(?string $path): void
     {
         if ($path) {
-            Storage::disk('public')->delete($path);
+            Storage::disk('local')->delete($path);
+            Storage::disk('public')->delete($path); // older pictures were public
         }
     }
 
@@ -127,6 +129,21 @@ class FaceDataController extends Controller
             'message' => 'Face data updated.',
             'face_data' => $faceData,
         ]);
+    }
+
+    // GET /api/face-data/{id}/photo (HR): the enrolled face picture
+    public function photo($id)
+    {
+        $faceData = FaceData::findOrFail($id);
+        $path = $faceData->photo_path;
+        $disk = $path && Storage::disk('local')->exists($path) ? 'local' : ($path && Storage::disk('public')->exists($path) ? 'public' : null);
+        abort_unless($disk, 404, 'No picture for this enrollment.');
+
+        return Storage::disk($disk)->response($path, 'face.jpg', [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
     }
 
     // Delete enrolled face

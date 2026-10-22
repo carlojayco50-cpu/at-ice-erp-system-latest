@@ -10,6 +10,7 @@ use App\Support\PayPeriod;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 // Demo data for testing attendance, leave and payroll without real Time Ins
 // (docs/REVIEW-DECISIONS.md). Local or test databases only:
@@ -28,6 +29,8 @@ use Illuminate\Database\Seeder;
 // ModuleDemoSeeder: example data for every other module.
 class DemoSeeder extends Seeder
 {
+    public const DEMO_IDS = ['EMP-9001', 'EMP-9002', 'EMP-9003', 'EMP-9004', 'EMP-9005'];
+
     public function run(): void
     {
         if (app()->environment('production')) {
@@ -36,7 +39,13 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        Employee::where('employee_id', 'like', 'EMP-90%')->get()->each->delete();
+        // only its own five (never EMP-9006 and up: real staff can get those
+        // numbers), with their payroll, leave and attendance
+        $demoIds = Employee::whereIn('employee_id', self::DEMO_IDS)->whereNull('user_id')->pluck('id');
+        DB::table('payrolls')->whereIn('employee_id', $demoIds)->delete();
+        DB::table('leave_requests')->whereIn('employee_id', $demoIds)->delete();
+        DB::table('attendances')->whereIn('employee_id', $demoIds)->delete();
+        DB::table('employees')->whereIn('id', $demoIds)->delete();
 
         $period = PayPeriod::previous(now('Asia/Manila')->toDateString());
         $start = CarbonImmutable::parse($period['start']);

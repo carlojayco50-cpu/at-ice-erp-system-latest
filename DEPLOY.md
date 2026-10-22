@@ -18,7 +18,8 @@ Internet ─▶ reverse proxy (TLS) ─▶ frontend (nginx :80)
 |------------|----------------------------|-------|
 | `frontend` | `at-ice-frontend/Dockerfile` | Only public service. Domains: `https://www.atice.cloud` (canonical) and `https://atice.cloud` (301 to www). |
 | `backend`  | `at-ice-backend/Dockerfile`  | Runs `migrate --force` and caches config/routes on every start. |
-| `worker`   | same as backend              | Required: broadcast events (attendance, deliveries, low stock, overdue) are queued. |
+| `worker`   | same as backend              | Required: broadcast events and every email are queued. |
+| `scheduler` | same as backend             | Required: `php artisan schedule:work` runs the time-based jobs every minute (driver reassignment and delay notices, missed-Time-Out memos, payroll cut-off notice, archive expiry). |
 | `mysql`    | `mysql:8.4`                  | Must be MySQL; BI queries use `MONTH()`. Data in the `mysql-data` volume. |
 
 ## Environment
@@ -28,6 +29,7 @@ panel's environment variables for the stack. `PUSHER_APP_KEY` is compiled into
 the frontend, so **redeploy** after changing it. The maps use OpenStreetMap and
 need no key.
 
+Realtime channels are private: the browser signs each subscription at `POST /api/broadcasting/auth` with its login token (roles in `routes/channels.php`).
 Realtime stays on `BROADCAST_CONNECTION=log` until `PUSHER_APP_ID` and
 `PUSHER_APP_SECRET` are set; then switch it to `pusher`.
 

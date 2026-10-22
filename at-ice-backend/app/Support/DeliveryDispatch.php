@@ -324,6 +324,7 @@ class DeliveryDispatch
         $booked = Delivery::whereIn('customer_id', $stores->pluck('id'))
             ->whereBetween('scheduled_date', [reset($dates), end($dates)])
             ->where('status', '!=', 'cancelled')
+            ->where('is_top_up', false) // an urgent top-up never takes the store's day
             ->get(['customer_id', 'scheduled_date'])
             ->map(fn ($d) => $d->customer_id.'|'.$d->scheduled_date->toDateString())
             ->flip();

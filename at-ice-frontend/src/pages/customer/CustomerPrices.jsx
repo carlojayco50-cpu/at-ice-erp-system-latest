@@ -3,6 +3,7 @@ import CustomerLayout from "../../components/CustomerLayout";
 import { ICE_CARD, ICE_INSET } from "../../lib/company";
 import { SkeletonList } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
+import { MiniBars, TipsWidget } from "../../components/Insight";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -78,6 +79,22 @@ export default function CustomerPrices() {
             Prices are set by the Bella Erin office for your account. To ask about a rate, send a Contract Rate or
             Volume Discount Review message from Contact Support.
           </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+            <MiniBars
+              title="Price per kilo"
+              subtitle="The bigger the pack, the less each kilo costs (₱ per kg)"
+              data={PRODUCTS.map((p) => {
+                const price = data?.prices?.[p.key];
+                const kg = { bags: 5, small_sack: 30, big_sack: 50 }[p.key];
+                return { label: p.label, value: price ? Math.round((Number(price) / kg) * 100) / 100 : 0 };
+              })}
+            />
+            <TipsWidget title="Good to know" tips={[
+              { title: "Your contract rate", text: "These prices apply to every delivery to your store, and they show on each invoice.", tone: "cyan", icon: "tag" },
+              { title: "Ordering more?", text: "Ask for a Volume Discount Review from Contact Support.", tone: "emerald", icon: "chart" },
+              { title: "A product not priced yet", text: "The office sets it before your first delivery of that size.", tone: "amber", icon: "alert" },
+            ]} />
+          </div>
         </>
       )}
     </CustomerLayout>

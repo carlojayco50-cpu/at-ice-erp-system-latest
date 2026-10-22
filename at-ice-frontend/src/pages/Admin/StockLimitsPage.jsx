@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import EmptyState from "../../components/EmptyState";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, StatusBreakdown, TipsWidget } from "../../components/Insight";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { useDraft } from "../../lib/useDraft";
@@ -109,8 +111,43 @@ export default function StockLimitsPage() {
 
   const pager = usePagination(rows);
 
+  // Stock health for the KPI cards and side panels
+  const levelOf = (p) => {
+    const cur = Number(p.current_stock ?? 0);
+    const min = p.minimum_stock == null ? null : Number(p.minimum_stock);
+    const max = p.maximum_stock == null ? null : Number(p.maximum_stock);
+    if (cur <= 0) return "out";
+    if (min != null && cur <= min) return "low";
+    if (max != null && max > 0 && cur > max) return "over";
+    return "ok";
+  };
+  const health = { ok: 0, low: 0, out: 0, over: 0 };
+  products.forEach((p) => { health[levelOf(p)] += 1; });
+  const noLimits = products.filter((p) => p.minimum_stock == null || p.maximum_stock == null).length;
+  const lowest = [...products]
+    .filter((p) => levelOf(p) === "out" || levelOf(p) === "low")
+    .sort((a, b) => Number(a.current_stock ?? 0) - Number(b.current_stock ?? 0))
+    .map((p) => ({
+      id: p.id,
+      title: p.name,
+      meta: `${p.current_stock ?? 0} ${p.unit || ""} on hand · minimum ${p.minimum_stock ?? "not set"}`,
+      tone: levelOf(p) === "out" ? "rose" : "amber",
+      icon: "alert",
+    }));
+  const share = (n) => (products.length ? n / products.length : 0);
+
   return (
     <AdminLayout pageTitle="Stock Limits" breadcrumb="Inventory / Stock Limits">
+      <KpiGrid cols={5}>
+        <KpiCard label="Items" icon="box" tone="cyan" value={products.length} sub={`${noLimits} without limits set`} bar={share(products.length - noLimits)} />
+        <KpiCard label="Healthy" icon="check" tone="emerald" value={health.ok} sub="Between minimum and maximum" bar={share(health.ok)} />
+        <KpiCard label="Low stock" icon="alert" tone="amber" value={health.low} sub="At or under the minimum" bar={share(health.low)} />
+        <KpiCard label="Out of stock" icon="x" tone="rose" value={health.out} sub="Nothing on hand" bar={share(health.out)} />
+        <KpiCard label="Over maximum" icon="chart" tone="violet" value={health.over} sub="More than the maximum" bar={share(health.over)} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+      <div className="xl:col-span-8 min-w-0">
       <div className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -208,6 +245,27 @@ export default function StockLimitsPage() {
             <Pagination pager={pager} />
           </div>
         )}
+      </div>
+      </div>
+
+      <aside className="xl:col-span-4 flex flex-col gap-4 min-w-0">
+        <StatusBreakdown
+          title="Stock health"
+          items={[
+            { label: "Healthy", count: health.ok, tone: "emerald" },
+            { label: "Low stock", count: health.low, tone: "amber" },
+            { label: "Out of stock", count: health.out, tone: "rose" },
+            { label: "Over maximum", count: health.over, tone: "violet" },
+          ]}
+          empty="No inventory items yet. The Checker adds them."
+        />
+        <ActivityFeed title="Needs restocking" subtitle="Lowest first" items={lowest} empty="Every item is above its minimum." />
+        <TipsWidget tips={[
+          { title: "Minimum = alert level", text: "When an item reaches its minimum the Checker and you get a low stock alert.", tone: "amber", icon: "alert" },
+          { title: "Maximum = room on the shelf", text: "Stock In above the maximum is flagged so supplies do not pile up.", tone: "violet", icon: "box" },
+          ...(noLimits ? [{ title: `${noLimits} item${noLimits === 1 ? "" : "s"} without limits`, text: "Set both numbers so the alerts work for them too.", tone: "cyan", icon: "tag" }] : []),
+        ]} />
+      </aside>
       </div>
     </AdminLayout>
   );

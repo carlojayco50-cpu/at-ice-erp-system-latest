@@ -8,6 +8,8 @@ import { toast } from "../../lib/toast";
 import { CUSTOMER_TYPES } from "../../lib/customerTypes";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { MiniBars, StatusBreakdown, TipsWidget } from "../../components/Insight";
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -176,8 +178,50 @@ export default function CustomerPriceManagement() {
 
   const pager = usePagination(filteredRows);
 
+  // Price coverage and averages for the KPI cards and panels
+  const coverage = { complete: 0, partial: 0, none: 0 };
+  rows.forEach((r) => {
+    const n = setCount(r);
+    coverage[n === PRODUCT_ORDER.length ? "complete" : n > 0 ? "partial" : "none"] += 1;
+  });
+  const avgOf = (p) => {
+    const vals = rows.map((r) => r.prices[p]).filter((v) => v !== null && v !== undefined).map(Number);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  };
+  const share = (n) => (rows.length ? n / rows.length : 0);
+
   return (
     <AdminLayout pageTitle="Customer Prices" breadcrumb="CRM / Customer Prices">
+      <KpiGrid cols={5}>
+        <KpiCard label="Customers" icon="store" tone="cyan" value={rows.length} sub={`${coverage.complete} fully priced`} bar={share(coverage.complete)} />
+        <KpiCard label="Complete" icon="check" tone="emerald" value={coverage.complete} sub="All three products priced" bar={share(coverage.complete)} />
+        <KpiCard label="Partial" icon="clock" tone="amber" value={coverage.partial} sub="Some products priced" bar={share(coverage.partial)} />
+        <KpiCard label="Unpriced" icon="alert" tone="rose" value={coverage.none} sub="No price for any product" bar={share(coverage.none)} />
+        <KpiCard label="Average bag price" icon="tag" tone="violet" value={avgOf("bags")} money sub={`${PRODUCT_LABELS.bags}`} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <StatusBreakdown
+          title="Price coverage"
+          items={[
+            { label: "Complete", count: coverage.complete, tone: "emerald" },
+            { label: "Partial", count: coverage.partial, tone: "amber" },
+            { label: "Unpriced", count: coverage.none, tone: "rose" },
+          ]}
+          empty="No customers yet."
+        />
+        <MiniBars
+          title="Average price per product"
+          subtitle="Across customers with a price set, in pesos"
+          data={PRODUCT_ORDER.map((p) => ({ label: PRODUCT_LABELS[p].replace(/\s*\(.*\)/, ""), value: Math.round(avgOf(p)) }))}
+        />
+        <TipsWidget tips={[
+          { title: "Reference prices fill the gaps", text: "A customer without its own price pays its type's reference price (table below).", tone: "cyan", icon: "tag" },
+          { title: "Apply to all", text: "Removes the own prices of a whole type so everyone pays the reference prices.", tone: "violet", icon: "users" },
+          ...(coverage.none ? [{ title: `${coverage.none} customer${coverage.none === 1 ? "" : "s"} unpriced`, text: "Their deliveries use the reference price until you set one.", tone: "amber", icon: "alert" }] : []),
+        ]} />
+      </div>
+
       {/* Header */}
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
@@ -191,8 +235,8 @@ export default function CustomerPriceManagement() {
           <div className="flex items-center gap-2">
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by customer type"
             className="bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500">
-            <option value="">All types</option>
-            {Object.entries(CUSTOMER_TYPES).map(([v, t]) => <option key={v} value={v}>{t.label}</option>)}
+            <option value="">All types ({rows.length})</option>
+            {Object.entries(CUSTOMER_TYPES).map(([v, t]) => <option key={v} value={v}>{t.label} ({rows.filter((r) => (r.customer_type || "dealer") === v).length})</option>)}
           </select>
           <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
             <SearchIcon />
@@ -201,7 +245,7 @@ export default function CustomerPriceManagement() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search customer..."
-              className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-44"
+              className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
             />
           </div>
           </div>
@@ -433,7 +477,7 @@ function ReferencePrices({ onChanged }) {
                 <tr key={type} className={`border-t border-black/[0.06] align-top ${on ? "bg-cyan-50/60" : ""}`}>
                   <td className="px-[18px] py-2.5">
                     <div className="text-slate-800">{t.label}</div>
-                    <div className="text-[11px] text-slate-400 max-w-[300px]">{t.examples}</div>
+                    <div className="text-[11px] text-slate-400 max-w-[300px] mx-auto">{t.examples}</div>
                   </td>
                   {PRODUCT_ORDER.map((p) => (
                     <td key={p} className="px-[18px] py-2.5 font-mono text-slate-700">

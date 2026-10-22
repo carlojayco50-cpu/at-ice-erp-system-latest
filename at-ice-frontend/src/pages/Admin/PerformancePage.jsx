@@ -6,6 +6,9 @@ import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { Modal } from "./deliveries/shared";
 import { toast } from "../../lib/toast";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, InsightPanel, ProgressRing, StatusBreakdown } from "../../components/Insight";
+import { PILL } from "../../lib/statusTones";
 
 // Admin > HRIS > Performance (owner, 2026-10-20). Every active employee gets a
 // Draft Base Rating each pay period from the records (attendance, punctuality
@@ -25,8 +28,8 @@ const RATING_STYLE = {
   "Poor": "bg-rose-100 border-rose-200 text-rose-800",
 };
 const STATUS_STYLE = {
-  draft: ["Draft", "bg-violet-100 border-violet-200 text-violet-800"],
-  published: ["Published", "bg-blue-100 border-blue-200 text-blue-800"],
+  draft: ["Draft", PILL.queued],
+  published: ["Published", PILL.info],
 };
 const ROLE_LABEL = { driver: "Deliveries", salesman: "Confirmations", checker: "Counts and movements", maintenance: "Requests and projects" };
 
@@ -82,8 +85,36 @@ export default function PerformancePage() {
     setReviewing(null);
   };
 
+  // Team summary for the KPI cards and panels
+  const rated = data.rows.filter((r) => r.rating != null);
+  const avg = rated.length ? rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length : null;
+  const published = data.rows.filter((r) => r.status === "published").length;
+  const top = rated.filter((r) => Number(r.rating) >= 4.5).length;
+  const low = rated.filter((r) => Number(r.rating) < 2.5).length;
+  const share = (n) => (data.rows.length ? n / data.rows.length : 0);
+  const RATING_TONE = { "Outstanding": "emerald", "Very Satisfactory": "cyan", "Satisfactory": "violet", "Needs Improvement": "amber", "Poor": "rose" };
+  const byRating = Object.keys(RATING_STYLE).map((label) => ({ key: label, label, count: data.rows.filter((r) => r.rating_label === label).length, tone: RATING_TONE[label] }));
+  const best = [...rated].sort((a, b) => Number(b.rating) - Number(a.rating))
+    .map((r) => ({ id: r.employee_id, title: r.name, meta: `${r.code} · ${r.rating_label}`, when: Number(r.rating).toFixed(1), tone: RATING_TONE[r.rating_label] || "slate", icon: "star" }));
+
   return (
     <AdminLayout pageTitle="Performance" breadcrumb="HRIS / Performance">
+      <KpiGrid cols={5}>
+        <KpiCard label="Average rating" icon="star" tone="cyan" value={avg == null ? "—" : avg.toFixed(2)} sub={`${rated.length} of ${data.rows.length} rated this period`} bar={avg == null ? 0 : avg / 5} />
+        <KpiCard label="Outstanding" icon="check" tone="emerald" value={top} sub="Rated 4.5 and up" bar={share(top)} onClick={() => setFilter((f) => ({ ...f, rating: f.rating === "Outstanding" ? "" : "Outstanding" }))} active={filter.rating === "Outstanding"} />
+        <KpiCard label="Needs support" icon="alert" tone="amber" value={low} sub="Rated under 2.5" bar={share(low)} />
+        <KpiCard label="Published" icon="file" tone="violet" value={published} sub={`${data.rows.length - published} still drafts`} bar={share(published)} />
+        <KpiCard label="Employees" icon="users" tone="slate" value={data.rows.length} sub={`${departments.length} departments`} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <StatusBreakdown title="Ratings this period" items={byRating} onPick={(i) => setFilter((f) => ({ ...f, rating: f.rating === i.key ? "" : i.key }))} active={filter.rating} empty="No ratings yet. They appear once employees have work days in the period." />
+        <ActivityFeed title="Top performers" subtitle="Highest rating first" items={best} empty="No ratings yet this period." max={5} />
+        <InsightPanel title="Review progress" subtitle="Drafts become final once you publish them">
+          <ProgressRing value={share(published)} label="Published" caption={`${published} of ${data.rows.length} appraisals published for this pay period`} tone="violet" />
+        </InsightPanel>
+      </div>
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
           <div>

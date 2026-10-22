@@ -21,6 +21,10 @@ use Throwable;
 // gets every notice. The person who did the action never gets their own.
 class LiveFeed
 {
+    // Set by the scheduler (routes/console.php): its work, like reassigning a
+    // Driver's stops, must notify people like a web request would.
+    public static bool $fromScheduler = false;
+
     /** Fields whose change counts as an update worth a notice (others are silent). */
     private const WATCH = [
         Models\LeaveRequest::class => ['status'],
@@ -33,6 +37,7 @@ class LiveFeed
         Models\Payroll::class => ['status'],
         Models\StockMovement::class => ['status'],
         Models\SupportMessage::class => ['status'],
+        Models\EmployeeMemo::class => ['status'],
         Models\Product::class => ['name', 'is_active', 'unit_price', 'minimum_stock'],
         Models\CustomerPrice::class => ['unit_price'],
         Models\Employee::class => null, // null = any change
@@ -52,12 +57,13 @@ class LiveFeed
             Models\PickupLog::class,
             Models\IceLoading::class,
             Models\InventoryAlert::class,
+            Models\SupportReply::class,
         ]);
     }
 
     public static function record(Model $m, string $action): void
     {
-        if (app()->runningInConsole() && ! app()->runningUnitTests()) {
+        if (app()->runningInConsole() && ! app()->runningUnitTests() && ! self::$fromScheduler) {
             return; // migrations, seeders, artisan commands
         }
 
@@ -296,10 +302,42 @@ class LiveFeed
                     return ['support', 'New support message from '.($m->customer?->name ?? 'a customer').': '.$m->topic_label, []];
                 }
                 if ($a === 'updated') {
-                    return ['support', "Your support message ({$m->topic_label}) was ".self::label($m->status), [], [$m->user_id]];
+                    return ['support', "Your ticket {$m->ticket_no} ({$m->topic_label}) is now ".self::label($m->status), [], [$m->user_id]];
                 }
 
                 return null;
+
+            case Models\EmployeeMemo::class:
+                $who = $m->employee?->full_name ?? 'an employee';
+                if ($a === 'created' && $m->status === 'draft') {
+                    // drafts go to HR only; a draft Notice to Explain is urgent
+                    return ['memos', ($m->level === 'nte' ? 'URGENT: draft Notice to Explain' : "Draft {$m->level_label}")." for {$who} ({$m->memo_no}) is waiting for review", ['hr']];
+                }
+                if ($a !== 'updated') {
+                    return null;
+                }
+                if (in_array($m->status, ['sent', 'awaiting_physical'], true)) {
+                    $msg = "New memo from HR: {$m->level_label}".($m->status === 'awaiting_physical' ? '. Report to the HR office for sign-off.' : '. Please read and acknowledge it.');
+
+                    return ['memos', $msg, [], [$m->employee?->user_id]];
+                }
+                if ($m->status === 'acknowledged') {
+                    return ['memos', "{$who} acknowledged memo {$m->memo_no}", ['hr']];
+                }
+
+                return null;
+
+            case Models\SupportReply::class:
+                // a reply reaches the customer, a customer's reply reaches the
+                // Admin (who gets every notice); internal notes stay silent
+                if ($a !== 'created' || $m->kind === 'note') {
+                    return null;
+                }
+                if ($m->kind === 'customer') {
+                    return ['support', 'New reply from '.($m->ticket?->customer?->name ?? 'a customer')." on ticket {$m->ticket?->ticket_no}", []];
+                }
+
+                return ['support', "New reply on your ticket {$m->ticket?->ticket_no}", [], [$m->ticket?->user_id]];
 
             case Models\Expense::class:
                 return ['expenses', 'Expense '.self::label($m->category)." {$verb}{$by}", []];

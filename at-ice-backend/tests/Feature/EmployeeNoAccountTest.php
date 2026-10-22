@@ -136,6 +136,7 @@ class EmployeeNoAccountTest extends TestCase
     public function test_face_picture_is_saved_replaced_and_deleted(): void
     {
         \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::fake('local'); // face pictures are private
         $this->actingAsHr();
         $id = $this->postJson('/api/employees', $this->payload(['position' => 'Guard']))->json('employee.id');
 
@@ -146,20 +147,20 @@ class EmployeeNoAccountTest extends TestCase
 
         $first = collect($this->getJson('/api/employees')->json())->firstWhere('id', $id)['face_data']['photo_path'];
         $this->assertStringStartsWith('face-photos/', $first);
-        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($first);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($first);
 
         // Re-enroll with a new picture: the old file is removed
         $this->putJson("/api/face-data/{$faceId}", ['descriptor' => $this->descriptor(), 'photo' => $this->jpegDataUrl()])->assertOk();
         $second = \App\Models\FaceData::find($faceId)->photo_path;
         $this->assertNotSame($first, $second);
-        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($first);
-        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($second);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($first);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($second);
 
         // Not a picture: refused
         $this->putJson("/api/face-data/{$faceId}", ['descriptor' => $this->descriptor(), 'photo' => 'data:image/jpeg;base64,bm90IGFuIGltYWdl'])
             ->assertStatus(422)->assertJsonValidationErrors('photo');
 
         $this->deleteJson("/api/face-data/{$faceId}")->assertOk();
-        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($second);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($second);
     }
 }
