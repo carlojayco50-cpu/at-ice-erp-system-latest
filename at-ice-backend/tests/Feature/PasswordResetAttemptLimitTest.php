@@ -34,7 +34,7 @@ class PasswordResetAttemptLimitTest extends TestCase
     {
         $this->postJson('/api/forgot-password', ['email' => 'shop@atice.cloud'])->assertOk();
         $code = null;
-        Mail::assertSent(PasswordResetCode::class, function ($mail) use (&$code) {
+        Mail::assertQueued(PasswordResetCode::class, function ($mail) use (&$code) {
             $code = $mail->code;
 
             return true;
@@ -112,7 +112,7 @@ class PasswordResetAttemptLimitTest extends TestCase
         $reply = $this->postJson('/api/forgot-password', ['email' => 'shop@atice.cloud'])->assertOk()->json('message');
 
         $this->assertSame('If that email has an account, a 6-digit code was sent to it. Check your inbox and spam folder.', $reply);
-        Mail::assertNotSent(PasswordResetCode::class);
+        Mail::assertNotQueued(PasswordResetCode::class);
         $this->assertFalse($this->codeStored());
     }
 

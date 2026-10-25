@@ -14,6 +14,9 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
+import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { MiniBars, TipsWidget } from "../../components/Insight";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -37,15 +40,6 @@ const STATUS_BADGE = {
   cancelled: "bg-slate-200 text-slate-500 border-slate-300",
 };
 
-function StatCard({ label, value, sub }) {
-  return (
-    <div className={`${ICE_CARD} p-4`}>
-      <div className="text-[11px] text-slate-400 uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-semibold text-slate-800 mt-1">{value}</div>
-      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
-    </div>
-  );
-}
 
 const ShieldIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>;
 const PinIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
@@ -55,7 +49,7 @@ const PhoneIcon = () => <svg width="13" height="13" fill="none" stroke="currentC
 function CompanyCard() {
   const navigate = useNavigate();
   return (
-    <div className={`${ICE_CARD} p-5`}>
+    <div className={`${ICE_CARD} p-5 h-full flex flex-col`}>
       <div className="flex items-center gap-2 text-[14px] font-semibold text-slate-800">
         <span className="text-cyan-600"><ShieldIcon /></span> {COMPANY.name}
       </div>
@@ -149,7 +143,9 @@ export default function CustomerDashboard() {
 
   return (
     <CustomerLayout pageTitle="Dashboard" breadcrumb="Overview">
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-start">
+      {/* Left: profile, counts and the two recent lists, stretched to the
+          height of the company card on the right, so there is no dead space */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-4 items-stretch">
         <div className="flex flex-col gap-4 min-w-0">
           {/* Profile card */}
           <div className={`${ICE_CARD} px-5 py-4`}>
@@ -162,74 +158,82 @@ export default function CustomerDashboard() {
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="Pending" value={pendingCount} sub="Not yet dispatched" />
-            <StatCard label="In Transit" value={inTransitCount} sub="On the way" />
-            <StatCard label="Delivered" value={deliveredCount} sub="Completed" />
-            <StatCard
-              label="Balance Due"
-              value={peso(balanceDue)}
-              sub={overdueCount > 0 ? `${overdueCount} overdue` : "All current"}
-            />
+          <KpiGrid cols={4}>
+            <KpiCard label="Pending" icon="clock" tone="amber" value={pendingCount} sub="Not yet dispatched" bar={deliveries.length ? pendingCount / deliveries.length : 0} />
+            <KpiCard label="In transit" icon="truck" tone="cyan" value={inTransitCount} sub="On the way to you" live={inTransitCount > 0} bar={deliveries.length ? inTransitCount / deliveries.length : 0} />
+            <KpiCard label="Delivered" icon="check" tone="emerald" value={deliveredCount} sub={`${deliveries.length} deliveries in all`} bar={deliveries.length ? deliveredCount / deliveries.length : 0} />
+            <KpiCard label="Balance due" icon="wallet" tone={overdueCount ? "rose" : "violet"} money value={balanceDue} sub={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "All current"} />
+          </KpiGrid>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
+            {/* Recent deliveries */}
+            <div className={`${ICE_CARD} overflow-hidden h-full flex flex-col`}>
+              <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
+                Recent Deliveries
+              </div>
+              {recentDeliveries.length === 0 ? (
+                <EmptyState icon="truck" compact>No deliveries yet.</EmptyState>
+              ) : (
+                <div className="divide-y divide-black/[0.06]">
+                  {recentDeliveries.map((d) => (
+                    <div key={d.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-slate-800">{d.delivery_no}</div>
+                        <div className="text-[11px] text-slate-400">{d.driver_name || "Driver not yet assigned"}</div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${STATUS_BADGE[d.status] || ""}`}>
+                        {STATUS_LABEL[d.status] || d.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recent receipts */}
+            <div className={`${ICE_CARD} overflow-hidden h-full flex flex-col`}>
+              <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
+                Recent Receipts
+              </div>
+              {recentReceipts.length === 0 ? (
+                <EmptyState icon="receipt" compact>No invoices yet.</EmptyState>
+              ) : (
+                <div className="divide-y divide-black/[0.06]">
+                  {recentReceipts.map((r) => (
+                    <div key={r.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-slate-800">{r.receipt_no}</div>
+                        <div className="text-[11px] text-slate-400">{peso(r.total_amount)}</div>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${PAYMENT_BADGE[paymentState(r)].cls}`}>
+                        {PAYMENT_BADGE[paymentState(r)].label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <CompanyCard />
+        <div className="flex flex-col gap-4 min-w-0">
+          <CompanyCard />
+          <MiniBars title="Deliveries, last 6 months" data={[...Array(6)].map((_, i) => {
+            const d = new Date();
+            d.setDate(1);
+            d.setMonth(d.getMonth() - (5 - i));
+            const monthOf = (v) => { const t = new Date(v); return `${t.getFullYear()}-${t.getMonth()}`; };
+            const key = monthOf(d);
+            return { label: d.toLocaleDateString("en-PH", { month: "short" }), value: deliveries.filter((x) => (x.scheduled_date || x.created_at) && monthOf(x.scheduled_date || x.created_at) === key).length };
+          })} />
+          <TipsWidget tips={[
+            { title: "Paid already?", text: "Send a photo of your bank or GCash receipt from Invoices; we mark it paid once checked.", tone: "cyan", icon: "receipt" },
+            { title: "Delivery proof", text: "Every delivery has a photo proof from our Salesman under Delivery Proofs.", tone: "emerald", icon: "file" },
+            { title: "Need help?", text: "Use Contact Support or call the dispatcher hotline.", tone: "violet", icon: "message" },
+          ]} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent deliveries */}
-        <div className={`${ICE_CARD} overflow-hidden`}>
-          <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
-            Recent Deliveries
-          </div>
-          {recentDeliveries.length === 0 ? (
-            <EmptyState icon="truck" compact>No deliveries yet.</EmptyState>
-          ) : (
-            <div className="divide-y divide-black/[0.06]">
-              {recentDeliveries.map((d) => (
-                <div key={d.id} className="px-5 py-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-medium text-slate-800">{d.delivery_no}</div>
-                    <div className="text-[11px] text-slate-400">{d.driver_name || "Driver not yet assigned"}</div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${STATUS_BADGE[d.status] || ""}`}>
-                    {STATUS_LABEL[d.status] || d.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Recent receipts */}
-        <div className={`${ICE_CARD} overflow-hidden`}>
-          <div className="px-5 py-3.5 border-b border-black/[0.06] text-[13px] font-semibold text-slate-800">
-            Recent Receipts
-          </div>
-          {recentReceipts.length === 0 ? (
-            <EmptyState icon="receipt" compact>No invoices yet.</EmptyState>
-          ) : (
-            <div className="divide-y divide-black/[0.06]">
-              {recentReceipts.map((r) => (
-                <div key={r.id} className="px-5 py-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-medium text-slate-800">{r.receipt_no}</div>
-                    <div className="text-[11px] text-slate-400">{peso(r.total_amount)}</div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-                    r.payment_status === "paid" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                    : r.payment_status === "overdue" ? "bg-red-500/10 text-red-600 border-red-500/20"
-                    : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                  }`}>
-                    {String(r.payment_status || "unpaid").charAt(0).toUpperCase() + String(r.payment_status || "unpaid").slice(1)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </CustomerLayout>
   );
 }

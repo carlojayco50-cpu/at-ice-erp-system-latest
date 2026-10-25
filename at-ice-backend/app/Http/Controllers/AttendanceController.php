@@ -131,15 +131,23 @@ class AttendanceController extends Controller
         ]);
     }
 
+    // The kiosk may say how long ago the worker blinked (elapsed_ms): the face
+    // checks and the network take a moment, and that must never make anyone
+    // late (owner, 2026-10-22). At most this much is taken off the server time.
+    private const MAX_ELAPSED_MS = 5000;
+
     // POST /api/attendances (public, used by the Attendance Station kiosk)
     // The kiosk now sends which button was selected: "time_in" or
     // "time_out". Date and time always come from the server clock
-    // (config('atice.timezone')), never from the browser.
+    // (config('atice.timezone')), never from the browser: the kiosk only sends how many
+    // milliseconds ago the blink finished (a stopwatch, not its clock), and
+    // the recorded time is the server time minus that, capped.
     public function store(Request $request)
     {
         $request->validate([
             'face_data_id' => 'required|exists:face_data,id',
             'type' => 'required|in:time_in,time_out',
+            'elapsed_ms' => 'nullable|integer|min:0|max:600000',
         ]);
 
         $faceData = FaceData::select('id', 'worker_name', 'role', 'employee_id')
@@ -151,7 +159,8 @@ class AttendanceController extends Controller
                 'This employee is no longer active. Please inform HR.');
         }
 
-        $now = now(config('atice.timezone'));
+        // the moment of the blink (server clock minus the kiosk's short delay)
+        $now = now(config('atice.timezone'))->subMilliseconds(min((int) $request->input('elapsed_ms', 0), self::MAX_ELAPSED_MS));
         $today = $now->toDateString();
 
         // A new hire whose start date has not come yet cannot time in.

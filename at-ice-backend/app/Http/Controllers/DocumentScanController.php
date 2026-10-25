@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\DriverLicense;
+use App\Support\Biodata;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -39,8 +40,12 @@ class DocumentScanController extends Controller
         Read the details of the person it belongs to (not an employer, school or reference).
         Reply with JSON only, in this shape:
         {"document_type": "", "first_name": "", "middle_name": "", "last_name": "", "suffix": "", "mobile": "", "email": "",
-         "license_number": "", "license_expiry": "",
-         "block_lot": "", "street": "", "subdivision": "", "barangay": "", "city": "", "province": "", "postal_code": ""}
+         "license_number": "", "license_expiry": "", "license_restrictions": [],
+         "block_lot": "", "street": "", "subdivision": "", "barangay": "", "city": "", "province": "", "postal_code": "",
+         "birth_date": "", "sex": "", "civil_status": "", "nationality": "", "place_of_birth": "",
+         "emergency_name": "", "emergency_relationship": "", "emergency_mobile": "",
+         "education_level": "", "school": "", "course": "", "year_graduated": "",
+         "work_history": [{"company": "", "position": "", "from": "", "to": ""}]}
         - document_type: "resume" for a resume, CV or bio-data; "drivers_license" for a Philippine LTO driver's license;
           "other_id" for any other ID card; "other" for anything else
         - first_name: given name(s), e.g. "Juan Carlo"
@@ -59,7 +64,22 @@ class DocumentScanController extends Controller
         - city: city or municipality (e.g. "San Jose del Monte", "Caloocan City")
         - province: province, or "Metro Manila" for NCR
         - postal_code: 4-digit ZIP code, if shown
-        Copy the text as written; leave a field "" when it is not in the document. Do not guess.
+        - license_restrictions: on a driver's license, the restriction / DL codes shown, e.g. ["A", "B", "B1"] or the older
+          numbers ["1", "2"]; [] when none are shown
+        - birth_date: date of birth as YYYY-MM-DD
+        - sex: "male" or "female"
+        - civil_status: "single", "married", "widowed" or "separated"
+        - nationality / citizenship, e.g. "Filipino"
+        - place_of_birth: city or town of birth
+        - emergency_name, emergency_relationship, emergency_mobile: the person to contact in case of emergency, if given
+          (not a character reference)
+        - education_level: the HIGHEST level reached, one of "elementary", "high_school", "senior_high", "vocational"
+          (TESDA, NC II, technical-vocational), "college_undergraduate" (college not finished), "college_graduate"
+          (finished a bachelor's degree), "postgraduate" (master's or doctorate)
+        - school, course, year_graduated: the school, course or strand, and year (YYYY) of that highest level
+        - work_history: past jobs, most recent first, at most 5: company, position, and from / to as YYYY-MM
+          (YYYY-01 when only the year is shown; to is "" for the present job)
+        Copy the text as written; leave a field "" (or [] for lists) when it is not in the document. Do not guess.
         TXT;
 
     public function scan(Request $request)
@@ -115,7 +135,8 @@ class DocumentScanController extends Controller
                 ]],
                 'response_format' => ['type' => 'json_object'],
                 'temperature' => 0,
-                'max_tokens' => 700,
+                // Room for the education and up to five jobs
+                'max_tokens' => 1400,
             ]);
         } catch (\Throwable $e) {
             Log::warning('Groq document scan failed', ['error' => $e->getMessage()]);
@@ -151,14 +172,19 @@ class DocumentScanController extends Controller
             if (($result['person']['license_number'] ?? '') === '') {
                 return response()->json(['message' => 'The license number could not be read. Use a clearer, straight photo of the license.'], 422);
             }
-            // The license fills the name and license details; the address comes from the resume.
+            // The license fills the name, license details and the personal details
+            // printed on it; the address, schooling and work come from the resume.
             $result['address'] = null;
+            $result['biodata'] = array_intersect_key($result['biodata'], array_flip(['birth_date', 'sex', 'nationality', 'license_restrictions']));
         } elseif (in_array($type, ['drivers_license', 'other_id'], true)) {
             return response()->json(['message' => 'This looks like an ID, not a resume. Upload the resume or CV here (PDF or Word).'], 422);
         } elseif ($result['person']) {
             // A resume does not fill the license fields.
             $result['person']['license_number'] = '';
             $result['person']['license_expiry'] = '';
+        }
+        if ($kind === 'resume') {
+            unset($result['biodata']['license_restrictions']);
         }
 
         if (! $result['person'] && ! $result['address']) {
@@ -170,10 +196,13 @@ class DocumentScanController extends Controller
 
     // The model's JSON reply as clean form values:
     // { document_type, person: {first_name, middle_initial, last_name, suffix, phone, email,
-    //   license_number, license_expiry} | null, address: {...} | null }
+    //   license_number, license_expiry} | null, address: {...} | null,
+    //   biodata: {birth_date, sex, civil_status, nationality, place_of_birth, emergency_name,
+    //   emergency_relationship, emergency_phone, education_level, school, course, year_graduated,
+    //   work_history, license_restrictions} (only the fields that were found, in App\Support\Biodata's values) }
     private function parse(string $reply, ?string $sourceText = null): array
     {
-        $empty = ['document_type' => '', 'person' => null, 'address' => null];
+        $empty = ['document_type' => '', 'person' => null, 'address' => null, 'biodata' => []];
         // JSON mode returns plain JSON; the first {...} is taken in case of extra text.
         if (! preg_match('/\{.*\}/s', $reply, $m)) {
             return $empty;
@@ -226,7 +255,90 @@ class DocumentScanController extends Controller
             'document_type' => in_array($type, self::DOCUMENT_TYPES, true) ? $type : '',
             'person' => $hasPerson ? $person : null,
             'address' => $address,
+            'biodata' => self::biodata($data, $get),
         ];
+    }
+
+    // The personal details, schooling and work found in the document, as the
+    // Add/Edit form's values (App\Support\Biodata). A value that does not fit
+    // the form's choices or format is left out rather than guessed.
+    private static function biodata(array $data, callable $get): array
+    {
+        $out = [];
+        $date = function (string $s, string $format) {
+            if ($s === '') {
+                return '';
+            }
+            try {
+                $d = \Carbon\Carbon::parse($s);
+            } catch (\Throwable) {
+                return '';
+            }
+
+            return $d->year >= 1940 && $d->lte(now(config('atice.timezone'))) ? $d->format($format) : '';
+        };
+
+        $birth = $date($get('birth_date'), 'Y-m-d');
+        if ($birth !== '' && \Carbon\Carbon::parse($birth)->diffInYears(now(config('atice.timezone'))) >= 15) {
+            $out['birth_date'] = $birth;
+        }
+        $sex = strtolower($get('sex'));
+        $sex = ['m' => 'male', 'f' => 'female'][$sex] ?? $sex;
+        if (in_array($sex, Biodata::SEXES, true)) {
+            $out['sex'] = $sex;
+        }
+        $civil = strtolower($get('civil_status'));
+        if (in_array($civil, Biodata::CIVIL_STATUSES, true)) {
+            $out['civil_status'] = $civil;
+        }
+        foreach (['nationality', 'place_of_birth', 'emergency_name', 'emergency_relationship', 'school', 'course'] as $field) {
+            if (($v = self::properCase($get($field))) !== '') {
+                $out[$field] = mb_substr($v, 0, 120);
+            }
+        }
+        if (($phone = self::mobile($get('emergency_mobile'))) !== '') {
+            $out['emergency_phone'] = $phone;
+        }
+        $level = strtolower(str_replace([' ', '-'], '_', $get('education_level')));
+        if (in_array($level, Biodata::EDUCATION_LEVELS, true)) {
+            $out['education_level'] = $level;
+        }
+        if (preg_match('/\b(19[4-9]\d|20\d\d)\b/', $get('year_graduated'), $y) && (int) $y[1] <= (int) now(config('atice.timezone'))->year) {
+            $out['year_graduated'] = $y[1];
+        }
+
+        $jobs = [];
+        foreach (is_array($data['work_history'] ?? null) ? $data['work_history'] : [] as $row) {
+            if (! is_array($row) || ! is_string($row['company'] ?? null) || trim($row['company']) === '') {
+                continue;
+            }
+            $month = fn ($k) => is_string($row[$k] ?? null) ? $date(preg_match('/^\d{4}$/', trim($row[$k])) ? trim($row[$k]).'-01' : trim($row[$k]), 'Y-m') : '';
+            $jobs[] = [
+                'company' => mb_substr(trim($row['company']), 0, 160),
+                'position' => is_string($row['position'] ?? null) ? mb_substr(trim($row['position']), 0, 120) : '',
+                'from' => $month('from'),
+                'to' => $month('to'),
+            ];
+            if (count($jobs) === 5) {
+                break;
+            }
+        }
+        if ($jobs) {
+            $out['work_history'] = $jobs;
+        }
+
+        $codes = [];
+        foreach (is_array($data['license_restrictions'] ?? null) ? $data['license_restrictions'] : [] as $code) {
+            $code = strtoupper(trim((string) $code));
+            if (in_array($code, Biodata::RESTRICTIONS, true)) {
+                $codes[] = $code;
+            }
+        }
+        if ($codes) {
+            $out['license_restrictions'] = array_values(array_unique($codes));
+        }
+
+        return $out;
     }
 
     // IDs print in capitals: "DELA CRUZ" -> "Dela Cruz", "RIZAL ST." -> "Rizal St.".

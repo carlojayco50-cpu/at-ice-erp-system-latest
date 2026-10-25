@@ -4,7 +4,9 @@ import { NightScope } from './components/NightMode'
 import SplashScreen from './components/SplashScreen'
 import SoftPickers from './components/SoftPickers'
 import Toaster from './components/Toaster'
+import ActionGuard from './components/ActionGuard'
 import AttachmentViewer from './components/AttachmentViewer'
+import OverflowTitle from './components/OverflowTitle'
 
 // -- General Pages
 import LoginPage from './pages/LoginPage'
@@ -21,7 +23,9 @@ import CustomerPriceManagement from './pages/Admin/CustomerPriceManagement'
 import StockOutApprovalPage from './pages/Admin/StockOutApprovalPage'
 import StockLimitsPage from './pages/Admin/StockLimitsPage'
 import ProjectsPage from './pages/Admin/ProjectsPage'
+import MaintenanceProjectsPage from './pages/employees/MaintenanceProjectsPage'
 import EmployeesOverviewPage from './pages/Admin/EmployeesOverviewPage'
+import PerformancePage from './pages/Admin/PerformancePage'
 import CustomersPage from './pages/Admin/CustomersPage'
 import DeliveriesPage from './pages/Admin/DeliveriesPage'
 import ReceiptsPage from './pages/Admin/ReceiptsPage'
@@ -46,6 +50,7 @@ import HRDashboard from './pages/hr/HRDashboard'
 import EmployeesPage from './pages/hr/EmployeesPage'
 import AttendancePage from './pages/hr/AttendancePage'
 import LeaveRequestsPage from './pages/hr/LeaveRequestsPage'
+import MemoManager from './pages/hr/MemoManager'
 import InterviewsPage from './pages/hr/InterviewsPage'
 import TimesheetsPage from './pages/hr/TimesheetsPage'
 import HolidaysPage from './pages/hr/HolidaysPage'
@@ -71,7 +76,9 @@ function App() {
       <SplashScreen />
       <SoftPickers />
       <Toaster />
+      <ActionGuard />
       <AttachmentViewer />
+      <OverflowTitle />
       <Routes>
 
         {/* -- General (public, no auth needed) -- */}
@@ -212,6 +219,15 @@ function App() {
         {/* View-only Employees overview for Admin: Name/Position/Role/Shift
             only, backed by GET /api/employees-summary. Full CRUD + Payroll
             live under HR at /hr/employees below. */}
+        {/* Performance appraisals: draft ratings from the records, Admin only */}
+        <Route
+          path="/admin/performance"
+          element={
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <PerformancePage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/employees"
           element={
@@ -254,7 +270,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Support Inbox: customer Contact Support messages (dispatch room). */}
+        {/* Support Tickets: customer Contact Support messages as tickets (dispatch room). */}
         <Route
           path="/admin/support-inbox"
           element={
@@ -275,7 +291,7 @@ function App() {
           }
         />
         <Route
-          path="/admin/settings"
+          path="/admin/settings/:section?"
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <SettingsPage />
@@ -319,6 +335,16 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["hr"]}>
               <LeaveRequestsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Memos: disciplinary memos. Missed Time Outs become drafts HR
+            reviews; HR issues, sends, and archives signed copies here. */}
+        <Route
+          path="/hr/memos"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <MemoManager />
             </ProtectedRoute>
           }
         />
@@ -462,6 +488,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
               <NightScope><MaintenanceStockOutRequestPage /></NightScope>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/maintenance/projects"
+          element={
+            <ProtectedRoute allowedRoles={["employee"]} allowedSubRoles={["maintenance"]}>
+              <NightScope><MaintenanceProjectsPage /></NightScope>
             </ProtectedRoute>
           }
         />

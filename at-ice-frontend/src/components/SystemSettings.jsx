@@ -5,6 +5,7 @@ import { formatDateTime } from "../lib/time";
 import { toast } from "../lib/toast";
 import { useDraft } from "../lib/useDraft";
 import { downloadProtectedFile } from "../lib/openFile";
+import { confirmAction } from "../lib/confirm";
 
 // Admin > Settings: the rates and rules the system uses (GET/PUT /api/settings,
 // App\Support\Settings) with the holiday and overtime pay rates on the same
@@ -16,6 +17,9 @@ const GROUPS = [
   ["attendance.", "Attendance"],
   ["leave.", "Leave"],
   ["kiosk.", "Kiosk"],
+  ["delivery.", "Deliveries"],
+  ["support.", "Support tickets"],
+  ["memo.", "Disciplinary memos"],
   ["thirteenth.", "13th month"],
   ["retention.", "Records"],
 ];
@@ -223,8 +227,8 @@ function RetentionReview() {
   useEffect(() => { load(); }, [load]);
 
   const act = async (action, kind, ref, label) => {
-    if (action === "delete" && !window.confirm(`Delete ${label} for good? Download the CSV first if you need it.`)) return;
-    if (action === "anonymize" && !window.confirm(`Remove ${label}'s name, contact details, address, face and documents? The employee ID and pay history stay.`)) return;
+    if (action === "delete" && !(await confirmAction({ title: `Delete ${label}?`, message: "It is deleted for good. Download the CSV first if you need it.", confirmLabel: "Delete", danger: true }))) return;
+    if (action === "anonymize" && !(await confirmAction({ title: `Anonymize ${label}?`, message: "Name, contact details, address, face and documents are removed. The employee ID and pay history stay.", confirmLabel: "Anonymize", danger: true }))) return;
     try {
       const res = await api(`/api/retention-review/${action}`, { method: "POST", body: JSON.stringify({ kind, ref }) });
       toast.success(res.message);
@@ -266,8 +270,8 @@ function RetentionReview() {
             <span className="flex-1" />
             <button type="button" className={btn} onClick={() => downloadProtectedFile(r.csv, r.file)}>Download CSV</button>
             <button type="button" className={btn} onClick={() => act("keep", r.kind, r.ref, r.label)}>Keep</button>
-            {r.kind === "employee" && <button type="button" className={btn} onClick={() => act("anonymize", r.kind, r.ref, r.label)}>Anonymize</button>}
-            <button type="button" className="px-2.5 py-1 rounded-md border border-red-200 text-[11px] text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => act("delete", r.kind, r.ref, r.label)}>Delete</button>
+            {r.kind === "employee" && <button type="button" data-no-confirm className={btn} onClick={() => act("anonymize", r.kind, r.ref, r.label)}>Anonymize</button>}
+            <button type="button" data-no-confirm className="px-2.5 py-1 rounded-md border border-red-200 text-[11px] text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => act("delete", r.kind, r.ref, r.label)}>Delete</button>
           </li>
         ))}
       </ul>
@@ -275,7 +279,15 @@ function RetentionReview() {
   );
 }
 
-export default function SystemSettings() {
+// One Settings page at a time (Admin > Settings > Rates and rules, Admin PIN,
+// Old records); "section" is the page.
+export default function SystemSettings({ section = "rates" }) {
+  if (section === "admin-pin") return <div className="max-w-4xl"><OverridePinForm /></div>;
+  if (section === "old-records") return <div className="max-w-4xl"><RetentionReview /></div>;
+  return <RatesAndRules />;
+}
+
+function RatesAndRules() {
   const [settings, setSettings] = useState(null);
   const [error, setError] = useState("");
 
@@ -309,8 +321,6 @@ export default function SystemSettings() {
         })}
         <PayRates />
       </div>
-      <div id="settings-admin-pin" className="scroll-mt-20"><OverridePinForm /></div>
-      <div id="settings-retention" className="scroll-mt-20"><RetentionReview /></div>
     </div>
   );
 }

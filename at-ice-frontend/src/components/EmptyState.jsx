@@ -15,7 +15,9 @@ const ICONS = {
   store: <path d="M3 9l1.5-5h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6" />,
 };
 
-export default function EmptyState({ icon = "box", compact = false, children }) {
+// Optional: title (a short bold line above the message) and action (a button
+// or link that tells the user what to do next).
+export default function EmptyState({ icon = "box", compact = false, title, action, children }) {
   return (
     <div className={`flex flex-col items-center justify-center text-center ${compact ? "gap-2 py-4" : "gap-3 px-6 py-10"}`} role="status">
       <div className={`${compact ? "w-10 h-10" : "w-14 h-14"} rounded-full bg-slate-50 border border-black/[0.06] flex items-center justify-center text-slate-400`}>
@@ -23,7 +25,9 @@ export default function EmptyState({ icon = "box", compact = false, children }) 
           {ICONS[icon] || ICONS.box}
         </svg>
       </div>
-      <div className={`${compact ? "text-[12px]" : "text-[13px]"} text-slate-500 max-w-[280px] leading-snug`}>{children}</div>
+      {title && <div className={`${compact ? "text-[12.5px]" : "text-[14px]"} font-semibold text-slate-700`}>{title}</div>}
+      <div className={`${compact ? "text-[12px]" : "text-[13px]"} text-slate-500 max-w-[300px] leading-snug`}>{children}</div>
+      {action}
     </div>
   );
 }

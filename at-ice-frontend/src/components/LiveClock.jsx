@@ -17,7 +17,7 @@ export default function LiveClock({ compact = false, className = "" }) {
 
   return (
     <div
-      className={`flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 whitespace-nowrap ${className}`}
+      className={`topbar-chip inline-flex items-center gap-1.5 h-10 px-3 bg-white border border-black/[0.09] rounded-lg text-xs font-medium leading-none text-slate-500 whitespace-nowrap ${className}`}
       aria-label={`${date} ${time}`}
       role="timer"
     >

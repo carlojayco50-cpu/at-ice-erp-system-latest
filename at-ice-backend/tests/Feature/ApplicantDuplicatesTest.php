@@ -20,6 +20,7 @@ class ApplicantDuplicatesTest extends TestCase
         return $overrides + [
             'name' => 'Maria Clara Reyes', 'phone' => '09171234567', 'email' => 'maria@example.com', 'position_applied' => 'Driver',
             'street' => 'Rizal St', 'barangay' => 'Muzon', 'city' => 'San Jose Del Monte', 'province' => 'Bulacan',
+            'consent' => true, 'license_number' => 'N01-23-456789', 'license_expiry' => now()->addYears(2)->toDateString(),
         ];
     }
 

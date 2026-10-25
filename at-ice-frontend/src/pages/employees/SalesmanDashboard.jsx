@@ -1,369 +1,288 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import logo from "../../assets/logo.png";
-import { clearSession } from "../../lib/auth";
-import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
-import LeaveRequestButton from "../../components/LeaveRequestButton";
-import { SkeletonList } from "../../components/Skeleton";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import RoleShell from "../../components/RoleShell";
+import { StatusBadge, LoadingButton, ActionBar, ErrorBanner, EmptyCard, CardSkeleton, Icon, BottomSheet } from "../../components/MobileUi";
+import { CARD } from "../../lib/mobileUi";
 import { useLiveTick } from "../../lib/live";
-import HeaderAvatar from "../../components/HeaderAvatar";
-import { ScopeStatusRow } from "../../components/NightMode";
-import { initialsOf } from "../../lib/initials";
-import EmptyState from "../../components/EmptyState";
 import { printDeliveryConfirmation } from "../../lib/printDelivery";
-import { formatDateTime, formatTime } from "../../lib/time";
+import { formatDateTime } from "../../lib/time";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import { StopMeta, ArrivalChips } from "../../components/RouteParts";
+import { pressArrived } from "../../lib/route";
+import { toast } from "../../lib/toast";
 
-// Icons 
-const PrinterIcon = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="6 9 6 2 18 2 18 9" />
-    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-    <rect x="6" y="14" width="12" height="8" />
-  </svg>
-);
-const MapPinIcon = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-    <circle cx="12" cy="10" r="3" />
-  </svg>
-);
-const UserIcon = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
-const PackageIcon = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <line x1="12" y1="22.08" x2="12" y2="12" />
-  </svg>
-);
-const ChevronRightIcon = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
-const ClockIcon = () => (
-  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-const CameraIcon = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-    <circle cx="12" cy="13" r="4" />
-  </svg>
-);
-
-// Helpers
 const token = () => localStorage.getItem("token") || "";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 const PRODUCT_LABEL = { bags: "Bags (5kg)", small_sack: "Small Sack (30kg)", big_sack: "Big Sack (50kg)" };
+const STATUS_LABEL = { pending: "Waiting for driver", in_transit: "On route", delivered: "Delivered", cancelled: "Cancelled" };
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const STATUS_CONFIG = {
-  pending:    { bg: "bg-amber-50",  text: "text-amber-600",  dot: "bg-amber-400",  label: "Pending"    },
-  in_transit: { bg: "bg-blue-50",   text: "text-blue-600",   dot: "bg-blue-500",   label: "In Transit" },
-  delivered:  { bg: "bg-green-50",  text: "text-green-600",  dot: "bg-green-500",  label: "Delivered"  },
-  cancelled:  { bg: "bg-slate-100", text: "text-slate-400",  dot: "bg-slate-300",  label: "Cancelled"  },
-};
-
-const FILTERS = ["All", "Pending", "In Transit", "Delivered"];
-
+// Salesman > Deliveries (owner, 2026-10-20).
+// "To deliver" (?view unset): the route of the Driver this Salesman rides with
+// today, the same list the Driver sees, nearest the plant first. The system
+// picks a Driver who has timed in; the Salesman may change it to any other
+// Driver on shift. A stop is confirmed only after the Driver and the Salesman
+// both pressed Arrived at the store (GPS checked by the server).
+// "Delivered" (?view=delivered): what this Salesman confirmed, with the
+// invoice and proof photo. Both lists show 10 per page.
 export default function SalesmanDashboard() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
   const navigate = useNavigate();
-  const [deliveries, setDeliveries] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [params] = useSearchParams();
+  const delivered = params.get("view") === "delivered";
+  const [route, setRoute] = useState({ crew: null, drivers: [], route: [], radius_m: 150 });
+  const [done, setDone] = useState([]);
+  const [status, setStatus] = useState("loading");
   const [loadError, setLoadError] = useState("");
-  const [filter, setFilter] = useState("All");
-  const [expanded, setExpanded] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [picking, setPicking] = useState(false);
+  const [arriving, setArriving] = useState(false);
+  const timedIn = useTimedIn();
 
-  const fetchDeliveries = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
     setLoadError("");
     try {
-      const res = await fetch("/api/my-deliveries", {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token()}` },
-      });
-      if (!res.ok) throw new Error("Failed to load deliveries.");
-      const data = await res.json();
-      setDeliveries(Array.isArray(data) ? data : data.data || []);
+      const headers = { Accept: "application/json", Authorization: `Bearer ${token()}` };
+      if (delivered) {
+        const res = await fetch("/api/my-deliveries", { headers });
+        if (!res.ok) throw new Error("Failed to load deliveries.");
+        const data = await res.json();
+        setDone((Array.isArray(data) ? data : data.data || []).filter((d) => d.status === "delivered"));
+      } else {
+        const res = await fetch("/api/my-route", { headers });
+        if (!res.ok) throw new Error("Failed to load your route.");
+        setRoute(await res.json());
+      }
+      setStatus("ready");
     } catch (err) {
       setLoadError(err.message || "Could not load deliveries.");
-    } finally {
-      setLoading(false);
+      setStatus("error");
     }
-  };
+  }, [delivered]);
+  const live = useLiveTick(["deliveries", "attendance"]);
+  useEffect(() => { load(); }, [load, live]);
 
-  // reload when a live notice for this page arrives (lib/live.js)
-  const live = useLiveTick(["deliveries"]);
-  useEffect(() => {
-    fetchDeliveries();
-  }, [live]);
+  const stops = route.route || [];
+  const visible = delivered ? done : stops;
+  const pager = usePagination(visible, { initialSize: 10 });
+  const selected = visible.find((d) => d.id === selectedId) || null;
+  const crew = route.crew;
 
-  // Sign out: clear the session first (same as the Checker and Driver pages).
-  // Previously this only navigated to the login page and kept the token.
-  const handleLogout = () => {
-    clearSession();
-    navigate("/login");
-  };
-  const [askLogout, logoutDialog] = useLogoutConfirm(handleLogout);
+  async function arrive(d) {
+    setArriving(true);
+    try {
+      const res = await pressArrived(`/api/my-route/deliveries/${d.id}/arrive`);
+      toast.success(res.message || "Arrived.");
+      load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setArriving(false);
+    }
+  }
 
-  const statusLabel = (s) => STATUS_CONFIG[s]?.label || s;
-  const visible =
-    filter === "All"
-      ? deliveries
-      : deliveries.filter((d) => statusLabel(d.status) === filter);
+  const sacks = (d) => (d.items || []).reduce((sum, i) => sum + Number(i.quantity_ordered || 0), 0);
+  const summary = delivered
+    ? [["Delivered", done.length, "done"], ["Sacks", done.reduce((sum, d) => sum + sacks(d), 0), "done"]]
+    : [["On route", stops.filter((d) => d.status === "in_transit").length, "progress"], ["Waiting for driver", stops.filter((d) => d.status === "pending").length, "pending"]];
 
-  const summary = [
-    { label: "Total", value: deliveries.length, color: "text-slate-800" },
-    { label: "Pending", value: deliveries.filter((d) => d.status === "pending").length, color: "text-amber-500" },
-    { label: "In Transit", value: deliveries.filter((d) => d.status === "in_transit").length, color: "text-blue-500" },
-    { label: "Delivered", value: deliveries.filter((d) => d.status === "delivered").length, color: "text-green-500" },
-  ];
+  let actionBar = null;
+  if (selected) {
+    const arrived = selected.arrival || {};
+    actionBar = (
+      <ActionBar>
+        {selected.status === "pending" && <LoadingButton disabled>Waiting for the driver to start</LoadingButton>}
+        {selected.status === "in_transit" && !arrived.salesman && (
+          <LoadingButton loading={arriving} disabled={timedIn === false} onClick={() => arrive(selected)} data-no-confirm
+            data-tip={`Shares your location. You must be within ${route.radius_m} m of the store.`}>
+            <Icon name="pin" /> I am at the store
+          </LoadingButton>
+        )}
+        {selected.status === "in_transit" && arrived.salesman && !arrived.driver && <LoadingButton disabled>Waiting for the driver to arrive</LoadingButton>}
+        {selected.status === "in_transit" && arrived.salesman && arrived.driver && (
+          <LoadingButton disabled={timedIn === false} onClick={() => navigate(`/salesman/deliveries/${selected.id}/confirm`)}><Icon name="camera" /> Confirm delivery · {selected.customer?.name || "store"}</LoadingButton>
+        )}
+        {selected.status === "delivered" && <PrintButton delivery={selected} />}
+      </ActionBar>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {logoutDialog}
+    <RoleShell role="salesman" title={delivered ? "Delivered" : "To deliver"} actionBar={actionBar}>
+      <TimeInNotice timedIn={timedIn} />
 
-      {/* ── Top Bar ── */}
-      <header className="bg-white border-b border-black/[0.08] px-5 pt-4 pb-4 flex-shrink-0 sticky top-0 z-20">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <div className="brand-logo w-11 h-11 flex-shrink-0 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
-             <img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold text-slate-800 leading-tight">
-                {JSON.parse(localStorage.getItem("user") || "{}")?.name || "Salesman"}
-              </div>
-              <div className="text-[11px] text-slate-400 tracking-wide">Salesman</div>
-            </div>
+      {!delivered && status === "ready" && (
+        <section className={`${CARD} flex items-center justify-between gap-3`} aria-label="Your driver today">
+          <div className="min-w-0">
+            <div className="text-[12px] text-slate-500">You ride with</div>
+            {crew?.on_shift ? (
+              <>
+                <div className="text-[16px] font-semibold text-slate-900 truncate">{crew.driver?.name}</div>
+                <div className="text-[12px] text-slate-500 truncate">
+                  {[crew.driver?.vehicle_plate, crew.chosen_by === "salesman" ? "Your pick" : "Picked by the system"].filter(Boolean).join(" · ")}
+                </div>
+              </>
+            ) : (
+              <div className="text-[14px] font-semibold text-amber-800">No driver has timed in yet</div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <LeaveRequestButton />
-            <HeaderAvatar initials={initialsOf(user?.name, "SA")} name={user?.name || "Salesman"} subtitle={user?.email || "Salesman"} onSignOut={askLogout} mobileSignOut />
+          <LoadingButton variant="secondary" className="!w-auto flex-shrink-0" disabled={timedIn === false || route.drivers.length === 0}
+            onClick={() => setPicking(true)} data-no-confirm data-tip="Pick another driver who has timed in today">
+            Change
+          </LoadingButton>
+        </section>
+      )}
+
+      <div className="grid grid-cols-1 gap-3">
+        {summary.map(([label, value, tone]) => (
+          <div key={label} className={`${CARD} flex items-center justify-between`}>
+            <StatusBadge tone={tone}>{label}</StatusBadge>
+            <span className="text-2xl font-bold text-slate-900 tabular-nums">{value}</span>
           </div>
-        </div>
-
-        <ScopeStatusRow />
-        <div className="mt-3">
-          <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">My Deliveries</div>
-          <div className="text-[12px] text-slate-400 mt-0.5">
-            {new Date().toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-          </div>
-        </div>
-
-        {/* Summary pills */}
-        <div className="flex gap-2 mt-3">
-          {summary.map((s) => (
-            // Tap a count to show only those deliveries (same as the tabs below)
-            <button
-              key={s.label}
-              type="button"
-              onClick={() => setFilter(s.label === "Total" ? "All" : s.label)}
-              title={`Show ${s.label === "Total" ? "all" : s.label.toLowerCase()} deliveries`}
-              className={`stat-pill flex-1 bg-slate-50 border border-black/[0.08] rounded-xl px-2 py-2 text-center cursor-pointer ${filter === (s.label === "Total" ? "All" : s.label) ? "is-active" : ""}`}
-            >
-              <div className={`text-[16px] font-semibold font-mono leading-none ${s.color}`}>{s.value}</div>
-              <div className="text-[9px] text-slate-400 mt-0.5 tracking-wide">{s.label}</div>
-            </button>
-          ))}
-        </div>
-      </header>
-
-      {/* ── Filter Tabs ── */}
-      <div className="px-4 pt-4 flex-shrink-0">
-        <div className="flex bg-slate-50 rounded-xl overflow-x-auto">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)} aria-pressed={filter === f}
-              className="flex-1 whitespace-nowrap text-[12px] font-medium text-slate-500 cursor-pointer"
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        ))}
       </div>
 
-      {/* ── Delivery List ── */}
-      <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
-        {loading && (
-          <SkeletonList />
-        )}
+      {status === "loading" && <CardSkeleton rows={3} />}
+      {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
+      {status === "ready" && visible.length === 0 && (
+        <EmptyCard icon="truck" title={delivered ? "Nothing delivered yet" : "No stops right now"}>
+          {delivered ? "Deliveries you confirm show here." : crew?.on_shift ? "Your driver has no stops left today." : "Your route shows once a driver has timed in."}
+        </EmptyCard>
+      )}
 
-        {!loading && loadError && (
-          <div className="text-center text-[13px] text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3 mt-4">
-            {loadError}
-          </div>
-        )}
-
-        {!loading && !loadError && visible.length === 0 && (
-          <EmptyState icon="truck">No deliveries found.</EmptyState>
-        )}
-
-        {!loading &&
-          visible.map((d) => {
-            const cfg = STATUS_CONFIG[d.status] || STATUS_CONFIG.pending;
-            const open = expanded === d.id;
-            const storeName = d.store_name || d.customer?.name || "Store";
-            const address = d.address || d.customer?.address || "—";
-            // Real delivery number (DEL-0007). Previously this was built
-            // from the database id, which showed DEL-0008 for id 8.
-            const orderCode = d.delivery_no || `#${d.id}`;
-
+      {status === "ready" && visible.length > 0 && (
+        <div className="grid grid-cols-1 gap-3">
+          {pager.pageItems.map((d) => {
+            const isSel = selectedId === d.id;
             return (
-              <div key={d.id} className="bg-white border border-black/[0.08] rounded-2xl overflow-hidden shadow-sm">
-
-                {/* Card header */}
-                <button
-                  className="w-full text-left px-4 py-4 flex items-start gap-3 cursor-pointer active:bg-slate-50 transition-colors"
-                  onClick={() => setExpanded(open ? null : d.id)}
-                >
-                  <div className="mt-1 flex-shrink-0">
-                    <span className={`w-2 h-2 rounded-full inline-block ${cfg.dot}`} />
+              <article key={d.id} data-selected={isSel || undefined} className={`${CARD} !p-0 overflow-hidden`}>
+                <button type="button" onClick={() => setSelectedId(isSel ? null : d.id)} aria-expanded={isSel}
+                  className="w-full text-left p-4 active:scale-[0.98] transition-transform">
+                  {!delivered && <StopMeta delivery={d} className="mb-2" />}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-[15px] font-semibold text-slate-900 truncate">{d.customer?.name || d.store_name || "Store"}</h2>
+                      <div className="text-[13px] text-slate-500 truncate flex items-center gap-1"><Icon name="pin" size={14} className="flex-shrink-0" />{d.customer?.address || d.address || "—"}</div>
+                    </div>
+                    <StatusBadge status={d.status}>{STATUS_LABEL[d.status] || d.status}</StatusBadge>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-semibold text-slate-800 truncate">{storeName}</span>
-                      <span className={`flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text}`}>
-                        {cfg.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
-                      <MapPinIcon />
-                      <span className="truncate">{address}</span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      {d.created_at && (
-                        <>
-                          <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                            <ClockIcon />
-                            {formatTime(d.created_at)}
-                          </span>
-                          <span className="text-[10px] text-slate-300">·</span>
-                        </>
-                      )}
-                      <span className="text-[10px] font-mono text-slate-400">{orderCode}</span>
-                    </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {(d.items || []).map((i) => (
+                      <div key={i.id} className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1.5 text-center">
+                        <div className="text-[17px] font-bold tabular-nums text-slate-900">{i.quantity_ordered}</div>
+                        <div className="text-[11px] text-slate-500 leading-tight">{PRODUCT_LABEL[i.product_type] || i.product_type}</div>
+                      </div>
+                    ))}
                   </div>
-                  <span className={`text-slate-300 flex-shrink-0 mt-1 transition-transform duration-200 ${open ? "rotate-90" : ""}`}>
-                    <ChevronRightIcon />
-                  </span>
+                  <div className="text-[12px] text-slate-400 mt-2">{d.delivery_no}{d.driver?.name ? ` · Driver ${d.driver.name}` : ""}</div>
+                  {!delivered && d.status === "in_transit" && <div className="mt-2"><ArrivalChips arrival={d.arrival} salesmanLabel="You" /></div>}
                 </button>
-
-                {/* Expanded detail */}
-                {open && (
-                  <div className="border-t border-black/[0.07] px-4 py-4 flex flex-col gap-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-0.5 col-span-2">
-                        <span className="text-[10px] text-slate-400 uppercase tracking-widest">Store</span>
-                        <div className="flex items-center gap-1.5 text-[12px] text-slate-700 font-medium">
-                          <UserIcon />{storeName}
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-0.5 col-span-2">
-                        <span className="text-[10px] text-slate-400 uppercase tracking-widest">Address</span>
-                        <div className="flex items-center gap-1.5 text-[12px] text-slate-700 font-medium">
-                          <MapPinIcon />{address}
-                        </div>
-                      </div>
-                      {Array.isArray(d.items) && d.items.length > 0 && d.status !== "delivered" && (
-                        <div className="flex flex-col gap-0.5 col-span-2">
-                          <span className="text-[10px] text-slate-400 uppercase tracking-widest">Items</span>
-                          <div className="flex items-center gap-1.5 text-[12px] text-slate-700 font-medium">
-                            <PackageIcon />
-                            {d.items
-                              .map((item) => `${PRODUCT_LABEL[item.product_type] || item.product?.name || "Item"}${item.quantity_ordered ? ` (${item.quantity_ordered})` : ""}`)
-                              .join(", ")}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                      
-                    {/* The salesman can confirm only after the driver has started the delivery. */}
-                    {d.status === "pending" && (
-                      <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
-                        <span className="text-[12px] text-amber-700 font-medium">Waiting for the driver to start this delivery. You can confirm it once it is In Transit.</span>
-                      </div>
-                    )}
-                    {d.status === "in_transit" && (
-                      <button
-                        onClick={() => navigate(`/salesman/deliveries/${d.id}/confirm`)}
-                        className="w-full py-3 bg-cyan-500 active:bg-cyan-600 text-white text-[12px] font-semibold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        <CameraIcon />
-                        Confirm Delivery
-                      </button>
-                    )}
-
-                    {d.status === "delivered" && <SubmittedProof delivery={d} />}
-                  </div>
-                )}
-              </div>
+                {isSel && d.status === "delivered" && <div className="px-4 pb-4"><SubmittedProof delivery={d} /></div>}
+              </article>
             );
           })}
-      </div>
-    </div>
+          <div className="rounded-2xl overflow-hidden"><Pagination pager={pager} label={delivered ? "deliveries" : "stops"} fixed /></div>
+        </div>
+      )}
+
+      <BottomSheet open={picking} onClose={() => setPicking(false)} title="Ride with another driver">
+        <p className="text-[14px] text-slate-500">Only drivers who have timed in today are listed. Your route becomes theirs.</p>
+        <div className="space-y-2">
+          {route.drivers.map((dr) => (
+            <DriverOption key={dr.id} driver={dr} current={crew?.driver_id === dr.id} onPicked={() => { setPicking(false); setSelectedId(null); load(); }} />
+          ))}
+        </div>
+      </BottomSheet>
+    </RoleShell>
   );
 }
 
-// What this Salesman submitted for a delivered stop: receipt, quantities,
-// total and the proof photo.
+// One Driver on shift in the picker: name, truck, stops and Salesmen with them.
+function DriverOption({ driver, current, onPicked }) {
+  const [busy, setBusy] = useState(false);
+  async function pick() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/my-route/driver", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ driver_id: driver.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "Could not change your driver.");
+      toast.success(data.message || "Driver changed.");
+      onPicked();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button type="button" onClick={pick} disabled={busy || current}
+      data-confirm={`Your route becomes ${driver.name}'s stops for today.`} data-confirm-title={`Ride with ${driver.name}?`}
+      className={`${CARD} w-full text-left flex items-center justify-between gap-3 disabled:opacity-100`}>
+      <div className="min-w-0">
+        <div className="text-[15px] font-semibold text-slate-900 truncate">{driver.name}</div>
+        <div className="text-[12px] text-slate-500 truncate">
+          {[driver.vehicle_plate, `${driver.open_stops} open ${driver.open_stops === 1 ? "stop" : "stops"}`, `${driver.salesmen} ${driver.salesmen === 1 ? "salesman" : "salesmen"}`].filter(Boolean).join(" · ")}
+        </div>
+      </div>
+      {current
+        ? <StatusBadge tone="done">Current</StatusBadge>
+        : <StatusBadge tone={driver.status === "in_transit" ? "progress" : "done"}>{driver.status === "in_transit" ? "On the road" : "Available"}</StatusBadge>}
+    </button>
+  );
+}
+
+function PrintButton({ delivery }) {
+  const proof = (delivery.proofs || [])[0];
+  return (
+    <LoadingButton variant="secondary" onClick={() => printDeliveryConfirmation({
+      delivery, proof, receipt: proof?.receipt,
+      photoUrl: proof?.photo_path ? `${BACKEND_URL}/storage/${proof.photo_path}` : null,
+    })}>
+      <Icon name="print" /> Print delivery confirmation
+    </LoadingButton>
+  );
+}
+
+// What this Salesman submitted for a delivered stop: invoice and proof photo.
 function SubmittedProof({ delivery }) {
   const proof = (delivery.proofs || [])[0];
   const receipt = proof?.receipt;
-  const items = receipt?.items || [];
   const when = proof?.confirmed_at || delivery.delivered_at;
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3 py-2.5">
-        <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-        <span className="text-[12px] text-green-600 font-medium">
-          Confirmed{when ? ` on ${formatDateTime(when, { year: false })}` : ""}. Sent to Admin.
-        </span>
+    <div className="space-y-3">
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-[14px] text-emerald-700">
+        Confirmed{when ? ` on ${formatDateTime(when, { year: false })}` : ""}. Sent to Admin.
       </div>
       {receipt && (
-        <div className="border border-black/[0.08] rounded-xl overflow-hidden">
-          <div className="bg-slate-50 border-b border-black/[0.08] px-3 py-2 flex items-center justify-between">
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest">Invoice</span>
-            <span className="text-[12px] font-mono font-semibold text-slate-800">{receipt.receipt_no || "—"}</span>
+        <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between">
+            <span className="text-[13px] text-slate-500">Invoice</span>
+            <span className="text-[14px] font-mono font-semibold text-slate-900">{receipt.receipt_no || "—"}</span>
           </div>
-          <div className="px-3 py-2 flex flex-col gap-1.5">
-            {items.map((it) => (
-              <div key={it.id} className="flex items-center justify-between text-[12px]">
+          <div className="px-3 py-2 space-y-1.5">
+            {(receipt.items || []).map((it) => (
+              <div key={it.id} className="flex items-center justify-between text-[14px]">
                 <span className="text-slate-600">{PRODUCT_LABEL[it.product_type] || it.product_type} × {it.quantity}</span>
-                <span className="font-mono text-slate-700">{peso(it.line_total)}</span>
+                <span className="font-mono text-slate-800">{peso(it.line_total)}</span>
               </div>
             ))}
-            <div className="flex items-center justify-between text-[12px] font-semibold border-t border-black/[0.06] pt-1.5 mt-0.5">
-              <span className="text-slate-700">Total</span>
-              <span className="font-mono text-slate-800">{peso(receipt.total_amount)}</span>
+            <div className="flex items-center justify-between text-[15px] font-semibold border-t border-slate-200 pt-1.5">
+              <span>Total</span><span className="font-mono">{peso(receipt.total_amount)}</span>
             </div>
           </div>
         </div>
       )}
       {proof?.photo_path && (
-        <a href={`${BACKEND_URL}/storage/${proof.photo_path}`} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden border border-black/[0.08]">
+        <a href={`${BACKEND_URL}/storage/${proof.photo_path}`} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden border border-slate-200">
           <img src={`${BACKEND_URL}/storage/${proof.photo_path}`} alt="Proof of delivery" className="w-full max-h-48 object-cover" />
         </a>
       )}
-      <button
-        type="button"
-        onClick={() => printDeliveryConfirmation({
-          delivery, proof, receipt,
-          photoUrl: proof?.photo_path ? `${BACKEND_URL}/storage/${proof.photo_path}` : null,
-        })}
-        className="w-full py-3 bg-white border border-black/[0.09] text-slate-700 text-[12px] font-semibold rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
-      >
-        <PrinterIcon /> Print delivery confirmation
-      </button>
     </div>
   );
 }

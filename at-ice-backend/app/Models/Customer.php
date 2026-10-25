@@ -17,15 +17,78 @@ class Customer extends Model
         'mop', 'is_active', 'notes',
     ];
 
-    // Customer type (filter on Admin > Customers). The chain/group (SM,
-    // Alfamart, Independent...) is free text.
+    // Customer type: the three groups of the client's reference pricing
+    // (owner, 2026-10-20); it picks the reference prices
+    // (App\Models\ReferencePrice). Supermarkets, malls and big restaurant
+    // chains pay the SM Malls prices, convenience stores the Alfamart prices,
+    // and dealers, resellers and every independent store the Dealers prices.
+    // The chain is worked out from the name. Same list as src/lib/customerTypes.js.
     public const TYPES = [
-        'supermarket' => 'Supermarket / Mall',
-        'convenience_store' => 'Convenience Store',
-        'restaurant' => 'Restaurant / Food',
-        'dealer' => 'Dealer / Reseller',
-        'other' => 'Other',
+        'dealer' => 'Dealers',
+        'supermarket' => 'SM Malls',
+        'convenience_store' => 'Alfamart',
     ];
+
+    // Known chains and their type, used to fill in a blank chain and type
+    // from the chain or from the start of the customer's name.
+    public const KNOWN_CHAINS = [
+        // Supermarkets and malls: SM Malls prices
+        'SM' => 'supermarket', 'Savemore' => 'supermarket', 'Puregold' => 'supermarket', 'Robinsons' => 'supermarket',
+        'Shopwise' => 'supermarket', 'WalterMart' => 'supermarket', 'Landmark' => 'supermarket', 'Metro' => 'supermarket',
+        'Gaisano' => 'supermarket', 'S&R' => 'supermarket', 'Ever' => 'supermarket', 'Super8' => 'supermarket',
+        'AllDay' => 'supermarket', "Rustan's" => 'supermarket', 'Unimart' => 'supermarket',
+        // Convenience stores: Alfamart prices
+        '7-Eleven' => 'convenience_store', 'Alfamart' => 'convenience_store', 'Ministop' => 'convenience_store',
+        'Lawson' => 'convenience_store', 'FamilyMart' => 'convenience_store', "Uncle John's" => 'convenience_store',
+        'Dali' => 'convenience_store', 'Puregold Jr.' => 'convenience_store',
+        // Big restaurant chains (corporate accounts): SM Malls prices
+        'Jollibee' => 'supermarket', "McDonald's" => 'supermarket', 'Chowking' => 'supermarket', 'Mang Inasal' => 'supermarket',
+        'Greenwich' => 'supermarket', 'Red Ribbon' => 'supermarket', 'KFC' => 'supermarket', "Max's" => 'supermarket',
+        "Shakey's" => 'supermarket', 'Bonchon' => 'supermarket', 'Army Navy' => 'supermarket', 'Potato Corner' => 'supermarket',
+        'Zagu' => 'supermarket', 'Fruitas' => 'supermarket', 'Dunkin' => 'supermarket', 'Goto ni Juan' => 'supermarket',
+        'Siomai House' => 'supermarket', 'Zarks Burger' => 'supermarket', 'Chooks to Go' => 'supermarket', 'Cabalen' => 'supermarket',
+        "Giligan's" => 'supermarket', 'Kyu Kyu Ramen' => 'supermarket', 'Hongkong Noodles' => 'supermarket', 'Paotsin' => 'supermarket',
+        'Rice N Box' => 'supermarket', 'Buko Juan' => 'supermarket', 'Infinitea' => 'supermarket', 'Jessie Cane' => 'supermarket',
+        'Coco Shake' => 'supermarket', 'Samgyeop Masarap' => 'supermarket', 'Gong Cha' => 'supermarket', 'Chatime' => 'supermarket',
+        'Starbucks' => 'supermarket', 'Yellow Cab' => 'supermarket', 'Pizza Hut' => 'supermarket', "Angel's Burger" => 'supermarket',
+        'Savory' => 'supermarket',
+    ];
+
+    // The type a customer most likely is: its known chain's type, else
+    // Dealers (an independent store).
+    public static function guessType(?string $chain, ?string $name): string
+    {
+        if ($known = self::knownChain($chain, $name)) {
+            return self::KNOWN_CHAINS[$known];
+        }
+
+        return 'dealer';
+    }
+
+    private static function normChain(?string $v): string
+    {
+        return trim(preg_replace('/[^a-z0-9&]+/', ' ', mb_strtolower((string) $v)));
+    }
+
+    // The known chain this chain is, or that the name starts with (the
+    // longest match: "Puregold Jr. Muzon" is Puregold Jr.), or null.
+    public static function knownChain(?string $chain, ?string $name = null): ?string
+    {
+        foreach (array_keys(self::KNOWN_CHAINS) as $k) {
+            if ($chain && self::normChain($k) === self::normChain($chain)) {
+                return $k;
+            }
+        }
+        $n = ' '.self::normChain($name).' ';
+        $best = null;
+        foreach (array_keys(self::KNOWN_CHAINS) as $k) {
+            if (str_starts_with($n, ' '.self::normChain($k).' ') && strlen($k) > strlen((string) $best)) {
+                $best = $k;
+            }
+        }
+
+        return $best;
+    }
 
     // Invoice code: 2 to 5 capital letters that start each of the customer's
     // invoice numbers (PG-20261013-001), so an invoice shows at once whose it is.

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { CUSTOMER_TYPES, typeForChain } from "../../lib/customerTypes";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import PhoneInput from "../../components/PhoneInput";
@@ -11,6 +12,11 @@ import AddressFields from "../../components/AddressFields";
 import LoginEmailChip from "../../components/LoginEmailChip";
 import DraftHint from "../../components/DraftHint";
 import { useDraft } from "../../lib/useDraft";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import { formatDateShort } from "../../lib/time";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, ProgressRing, StatusBreakdown } from "../../components/Insight";
 
 const API_BASE = "/api";
 
@@ -24,11 +30,10 @@ const CopyIcon = () => <svg width="13" height="13" fill="none" stroke="currentCo
 const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const CheckIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
 
-// Customer type and chain/group (filters on the list). Keys match Customer::TYPES.
-const CUSTOMER_TYPES = { supermarket: "Supermarket / Mall", convenience_store: "Convenience Store", restaurant: "Restaurant / Food", dealer: "Dealer / Reseller", other: "Other" };
-// Offered under Chain / Group next to the chains already saved.
-const CHAIN_SUGGESTIONS = ["SM", "Puregold", "WalterMart", "Robinsons", "Alfamart", "7-Eleven", "Ministop", "Independent"];
-const NOT_SET = "__none";
+// Customer type (filter on the list, sets the reference prices). Keys match
+// Customer::TYPES; lib/customerTypes.js has the same list. There is no chain
+// field (owner, 2026-10-20): the type is filled in from the name (a known
+// chain's group, else Dealers) and Admin may change it.
 
 // Create Login needs what Add Customer requires (CustomerController::LOGIN_REQUIRED).
 // The login is the customer's own email, checked on the server to be an existing account.
@@ -43,7 +48,7 @@ const EMPTY_FORM = {
   name: "", block_lot: "", street: "", subdivision: "", barangay: "",
   city: "", province: "", region: "", barangay_code: "", postal_code: "", contact_person: "",
   contact_number: "", email: "", notes: "",
-  customer_type: "", chain: "",
+  customer_type: "",
   invoice_code: "", // starts every invoice number, e.g. PG-20261013-001 (blank: made from the name)
   latitude: "", longitude: "",
   _customerCode: "", _branchCode: "", _legacy: false, _legacyAddress: "", _mapLink: "",
@@ -90,7 +95,6 @@ export default function CustomersPage() {
   const [error, setError]         = useState("");
   const [search, setSearch]       = useState("");
   const [typeFilter, setTypeFilter]   = useState("");
-  const [chainFilter, setChainFilter] = useState("");
 
   // Add/Edit modal: kept as a draft while open, so a refresh reopens it as it was.
   const formDraft = useDraft("customers:form", { showForm: false, editingId: null, form: EMPTY_FORM }, { when: (v) => v.showForm });
@@ -106,6 +110,8 @@ export default function CustomersPage() {
   // once, never re-fetchable afterward (password is hashed server-side).
   const [newAccount, setNewAccount] = useState(null);
   const [creatingAccountFor, setCreatingAccountFor] = useState(null);
+  // Why Create Login failed, shown under that customer's button: { id, message }
+  const [accountError, setAccountError] = useState(null);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -157,7 +163,6 @@ export default function CustomersPage() {
       contact_number: localDigits(customer.contact_number),
       email: customer.email || "",
       customer_type: customer.customer_type || "",
-      chain: customer.chain || "",
       notes: customer.notes || "",
       latitude: customer.latitude ?? "",
       longitude: customer.longitude ?? "",
@@ -282,7 +287,7 @@ export default function CustomersPage() {
 
   async function createAccount(customer) {
     setCreatingAccountFor(customer.id);
-    setError("");
+    setAccountError(null);
     try {
       const res = await fetch(`${API_BASE}/customers/${customer.id}/create-account`, {
         method: "POST", headers: authHeaders(),
@@ -293,7 +298,7 @@ export default function CustomersPage() {
       toast.success(`Login account created for ${customer.name}.`);
       fetchCustomers();
     } catch (err) {
-      setError(err.message);
+      setAccountError({ id: customer.id, message: err.message });
     } finally {
       setCreatingAccountFor(null);
     }
@@ -303,23 +308,60 @@ export default function CustomersPage() {
     navigator.clipboard?.writeText(text).catch(() => {});
   }
 
-  // Chains already saved, for the filter and the Chain / Group suggestions.
-  const savedChains = [...new Set(customers.map((c) => c.chain).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const chainOptions = [...new Set([...savedChains, ...CHAIN_SUGGESTIONS])].sort((a, b) => a.localeCompare(b));
-
   const filtered = customers.filter((c) => {
-    if (typeFilter && (typeFilter === NOT_SET ? !!c.customer_type : c.customer_type !== typeFilter)) return false;
-    if (chainFilter && (chainFilter === NOT_SET ? !!c.chain : c.chain !== chainFilter)) return false;
+    if (typeFilter && (c.customer_type || "dealer") !== typeFilter) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""} ${c.chain ?? ""}`.toLowerCase();
+    const haystack = `${c.name} ${c.invoice_code ?? ""} ${c.customer_code} ${c.branch_code ?? ""} ${c.city ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });
-  const filtering = !!(search || typeFilter || chainFilter);
+  const filtering = !!(search || typeFilter);
   const filterCls = "bg-slate-50 border border-black/[0.09] rounded-lg px-2.5 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500";
+
+  const pager = usePagination(filtered);
+
+  // Summary for the KPI cards and insight panels
+  const typeCount = (t) => customers.filter((c) => (c.customer_type || "dealer") === t).length;
+  const withLogin = customers.filter((c) => c.user).length;
+  const noPin = customers.filter((c) => c.latitude == null || c.longitude == null);
+  const noContact = customers.filter((c) => !c.contact_person || !c.contact_number);
+  const share = (n) => (customers.length ? n / customers.length : 0);
+  const attention = customers
+    .filter((c) => !c.user || c.latitude == null || c.longitude == null || !c.contact_person)
+    .map((c) => ({
+      id: c.id,
+      title: c.name,
+      meta: [!c.user && "no portal login", (c.latitude == null || c.longitude == null) && "no map pin", !c.contact_person && "no contact person"].filter(Boolean).join(" · "),
+      tone: "amber",
+      icon: "alert",
+    }));
+  const newest = [...customers]
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .map((c) => ({ id: c.id, title: c.name, meta: `${CUSTOMER_TYPES[c.customer_type || "dealer"]?.label} · ${[c.city, c.province].filter(Boolean).join(", ") || "no address"}`, when: c.created_at ? formatDateShort(c.created_at) : "", tone: "cyan", icon: "store" }));
 
   return (
     <AdminLayout pageTitle="Customers" breadcrumb="CRM / Customers">
+      <KpiGrid cols={5}>
+        <KpiCard label="Customers" icon="store" tone="cyan" value={customers.length} sub={`${withLogin} with a portal login`} bar={share(withLogin)} />
+        {Object.entries(CUSTOMER_TYPES).map(([val, t], i) => (
+          <KpiCard key={val} label={t.label} icon={i === 0 ? "users" : i === 1 ? "store" : "box"} tone={["emerald", "violet", "amber"][i] || "slate"} value={typeCount(val)} sub={`${Math.round(share(typeCount(val)) * 100)}% of customers`} bar={share(typeCount(val))} onClick={() => setTypeFilter(typeFilter === val ? "" : val)} active={typeFilter === val} />
+        ))}
+        <KpiCard label="Needs setup" icon="alert" tone={attention.length ? "rose" : "emerald"} value={attention.length} sub={`${noPin.length} without a map pin · ${noContact.length} without a contact`} bar={share(attention.length)} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        <StatusBreakdown
+          title="Customers by type"
+          items={Object.entries(CUSTOMER_TYPES).map(([val, t], i) => ({ key: val, label: t.label, count: typeCount(val), tone: ["emerald", "violet", "amber"][i] || "slate" }))}
+          onPick={(i) => setTypeFilter(typeFilter === i.key ? "" : i.key)}
+          active={typeFilter}
+          empty="No customers yet."
+          footer={<ProgressRing value={share(withLogin)} label="Portal logins" caption={`${withLogin} of ${customers.length} customers can sign in to the portal`} />}
+        />
+        <ActivityFeed title="Needs setup" subtitle="Missing a login, map pin or contact" items={attention} empty="Every customer has a login, a map pin and a contact." max={5} />
+        <ActivityFeed title="Newest customers" items={newest} empty="Customers you add show up here." max={5} />
+      </div>
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
           <div>
@@ -330,14 +372,8 @@ export default function CustomersPage() {
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterCls} aria-label="Filter by customer type">
-              <option value="">All types</option>
-              {Object.entries(CUSTOMER_TYPES).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-              <option value={NOT_SET}>Type not set</option>
-            </select>
-            <select value={chainFilter} onChange={(e) => setChainFilter(e.target.value)} className={filterCls} aria-label="Filter by chain or group">
-              <option value="">All chains</option>
-              {savedChains.map((ch) => <option key={ch} value={ch}>{ch}</option>)}
-              <option value={NOT_SET}>Chain not set</option>
+              <option value="">All types ({customers.length})</option>
+              {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label} ({typeCount(val)})</option>)}
             </select>
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
@@ -346,7 +382,7 @@ export default function CustomersPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search customer..."
-                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-44"
+                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
               />
             </div>
             <button
@@ -371,7 +407,7 @@ export default function CustomersPage() {
                 <th className="px-[18px] py-2.5 font-medium">Customer</th>
                 <th className="px-[18px] py-2.5 font-medium">Location</th>
                 <th className="px-[18px] py-2.5 font-medium">Contact</th>
-                <th className="px-[18px] py-2.5 font-medium">Type / Chain</th>
+                <th className="px-[18px] py-2.5 font-medium">Type</th>
                 <th className="px-[18px] py-2.5 font-medium">Portal Login</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
@@ -385,7 +421,7 @@ export default function CustomersPage() {
                   {filtering ? "No customers match your search or filters." : "No customers found."}
                 </td></tr>
               )}
-              {!loading && filtered.map((c) => (
+              {!loading && pager.pageItems.map((c) => (
                 <tr key={c.id} className="border-t border-black/[0.06]">
                   <td className="px-[18px] py-2.5">
                     <div className="font-medium text-slate-800">{c.name}</div>
@@ -406,12 +442,7 @@ export default function CustomersPage() {
                     ) : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-[18px] py-2.5 text-slate-600">
-                    {c.customer_type || c.chain ? (
-                      <>
-                        <div>{CUSTOMER_TYPES[c.customer_type] || <span className="text-slate-300">—</span>}</div>
-                        {c.chain && <div className="text-[11px] text-slate-400">{c.chain}</div>}
-                      </>
-                    ) : <span className="text-slate-300">—</span>}
+                    {CUSTOMER_TYPES[c.customer_type || "dealer"]?.label}
                   </td>
                   <td className="px-[18px] py-2.5">
                     {c.user ? (
@@ -419,7 +450,7 @@ export default function CustomersPage() {
                     ) : (() => {
                       const missing = missingForLogin(c);
                       return (
-                        <div>
+                        <div className="create-login mx-auto flex w-full max-w-[190px] flex-col items-center gap-1">
                           <button
                             onClick={() => createAccount(c)}
                             disabled={missing.length > 0 || creatingAccountFor === c.id}
@@ -430,6 +461,9 @@ export default function CustomersPage() {
                             {creatingAccountFor === c.id ? "Creating…" : "Create Login"}
                           </button>
                           {missing.length > 0 && <MissingBadge missing={missing} />}
+                          {accountError?.id === c.id && (
+                            <div role="alert" className="w-full text-center text-[11px] leading-snug text-red-600">{accountError.message}</div>
+                          )}
                         </div>
                       );
                     })()}
@@ -443,7 +477,7 @@ export default function CustomersPage() {
                       >
                         <EditIcon />
                       </button>
-                      <button
+                      <button data-no-confirm
                         onClick={() => setDeactivateTarget(c)}
                         className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50"
                         title="Deactivate"
@@ -457,6 +491,7 @@ export default function CustomersPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
       </div>
 
       {/* Add / Edit Customer modal */}
@@ -482,33 +517,33 @@ export default function CustomersPage() {
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <Field label="Branch / Business Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="e.g. Alfamart Muzon" required />
+                  <Field
+                    label="Branch / Business Name"
+                    value={form.name}
+                    onChange={(v) => setForm((f) => {
+                      // The type follows the name while it is blank or still
+                      // what was filled in from it (_autoType); one picked by
+                      // hand is kept.
+                      const typeIsAuto = !f.customer_type || f.customer_type === f._autoType;
+                      const type = typeIsAuto ? typeForChain("", v) : f.customer_type;
+                      return { ...f, name: v, customer_type: type, _autoType: typeIsAuto ? type : f._autoType };
+                    })}
+                    placeholder="e.g. Alfamart Muzon"
+                    required
+                  />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className="text-[11px] text-slate-500 mb-1 block">Customer Type</label>
                   <select
-                    value={form.customer_type}
+                    value={form.customer_type || "dealer"}
                     onChange={(e) => setForm((f) => ({ ...f, customer_type: e.target.value }))}
                     className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   >
-                    <option value="">Not set</option>
-                    {Object.entries(CUSTOMER_TYPES).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                    {Object.entries(CUSTOMER_TYPES).map(([val, t]) => <option key={val} value={val}>{t.label}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="text-[11px] text-slate-500 mb-1 block">Chain / Group</label>
-                  <input
-                    type="text"
-                    list="customer-chains"
-                    value={form.chain}
-                    onChange={(e) => setForm((f) => ({ ...f, chain: e.target.value }))}
-                    placeholder="e.g. SM, Alfamart, Independent"
-                    maxLength={100}
-                    className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
-                  />
-                  <datalist id="customer-chains">
-                    {chainOptions.map((ch) => <option key={ch} value={ch} />)}
-                  </datalist>
+                  <p className="mt-1 text-[11px] text-slate-400 leading-snug">
+                    Filled in from the name. Prices come from this type's reference prices (CRM › Customer Prices) unless the customer has its own.
+                  </p>
                 </div>
                 <div className="col-span-2">
                   <Field
@@ -772,7 +807,7 @@ function MapLinkField({ value, onChange, onPlace, onName }) {
         type="text"
         value={value}
         onChange={(e) => typed(e.target.value)}
-        placeholder="Paste the Google Maps link or coordinates, e.g. 14.7772, 121.0750"
+        placeholder="Google Maps link or coordinates"
         autoComplete="off"
         className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
       />
@@ -878,20 +913,12 @@ function Req() {
   return <span className="text-red-500"> *</span>;
 }
 
-// "Needs email +2 more" under Create Login; hovering (or focusing) it lists
-// every field still missing.
+// What Create Login still needs, listed under the button.
 function MissingBadge({ missing }) {
+  // Shown right under Create Login (no floating tooltip, so nothing is covered).
   return (
-    <div className="relative mt-1 inline-block group">
-      <span tabIndex={0} className="text-[11px] text-amber-600 underline decoration-dotted underline-offset-2 cursor-help outline-none">
-        Needs {missing.includes("email") ? "email" : missing[0]}{missing.length > 1 ? ` +${missing.length - 1} more` : ""}
-      </span>
-      <div role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-max max-w-[220px] rounded-md border border-black/[0.09] bg-white px-2.5 py-2 text-[11px] text-slate-600 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity">
-        <div className="font-medium text-slate-700 mb-1">Fill in on Edit before Create Login:</div>
-        <ul className="list-disc pl-4 space-y-0.5">
-          {missing.map((m) => <li key={m} className="capitalize">{m}</li>)}
-        </ul>
-      </div>
+    <div role="status" className="w-full text-center text-[11px] leading-snug text-amber-700">
+      Fill in on Edit first: <span className="font-medium">{missing.join(", ")}</span>
     </div>
   );
 }

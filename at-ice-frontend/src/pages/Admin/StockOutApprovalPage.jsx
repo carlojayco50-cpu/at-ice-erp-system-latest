@@ -6,6 +6,9 @@ import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import { formatDateTime } from "../../lib/time";
 import { useDraft } from "../../lib/useDraft";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, StatusBreakdown, TipsWidget } from "../../components/Insight";
 
 const STATUS_STYLES = {
   pending: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
@@ -156,11 +159,44 @@ export default function StockOutApprovalPage() {
     ? requests
     : requests.filter((r) => r.status === activeTab);
 
+  // Summary for the KPI cards and side panels
+  const countOf = (s) => requests.filter((r) => r.status === s).length;
+  const short = requests.filter((r) => (r.status === 'pending' || r.status === 'approved') && r.product && r.product.current_stock < r.quantity);
+  const thisMonth = new Date().toLocaleDateString("en-CA").slice(0, 7); // local YYYY-MM
+  const releasedThisMonth = requests.filter((r) => r.status === 'released' && r.released_at && new Date(r.released_at).toLocaleDateString("en-CA").slice(0, 7) === thisMonth).length;
+  const open = countOf('pending') + countOf('approved');
+  const share = (n) => (requests.length ? n / requests.length : 0);
+  const recent = [...requests]
+    .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+    .map((r) => ({
+      id: r.id,
+      title: `${r.product?.name || r.item_name} × ${r.quantity}`,
+      meta: `${r.status.charAt(0).toUpperCase() + r.status.slice(1)} · ${r.requested_by?.name || 'Maintenance'}`,
+      when: formatDateTime(r.updated_at || r.created_at, { year: false }),
+      tone: { pending: 'amber', approved: 'cyan', released: 'emerald', rejected: 'rose' }[r.status] || 'slate',
+      icon: { pending: 'clock', approved: 'check', released: 'box', rejected: 'x' }[r.status] || 'box',
+    }));
+  const tips = [
+    ...(short.length ? [{ title: `${short.length} request${short.length === 1 ? '' : 's'} short on stock`, text: 'Restock the item (Checker > Stock In) before releasing it.', tone: 'rose', icon: 'alert' }] : []),
+    ...(countOf('approved') ? [{ title: `${countOf('approved')} approved, not released`, text: 'Release them once the items are handed to Maintenance; that takes them out of stock.', tone: 'cyan', icon: 'box' }] : []),
+    { title: 'Limits keep stock healthy', text: "Set each item's minimum and maximum on Stock Limits; low stock raises an alert.", tone: 'emerald', icon: 'chart' },
+  ];
+
   return (
     <AdminLayout
       pageTitle="Stock-Out Approvals"
       breadcrumb="Inventory / Stock-Out Approvals"
     >
+      <KpiGrid cols={5}>
+        <KpiCard label="Waiting approval" icon="clock" tone="amber" value={countOf('pending')} sub={`${requests.length} requests in all`} bar={share(countOf('pending'))} onClick={() => setActiveTab('pending')} active={activeTab === 'pending'} />
+        <KpiCard label="To release" icon="check" tone="cyan" value={countOf('approved')} sub="Approved, items not out yet" bar={open ? countOf('approved') / open : 0} onClick={() => setActiveTab('approved')} active={activeTab === 'approved'} />
+        <KpiCard label="Released" icon="box" tone="emerald" value={countOf('released')} sub={`${releasedThisMonth} this month`} bar={share(countOf('released'))} onClick={() => setActiveTab('released')} active={activeTab === 'released'} />
+        <KpiCard label="Rejected" icon="x" tone="rose" value={countOf('rejected')} sub="With a reason for Maintenance" bar={share(countOf('rejected'))} onClick={() => setActiveTab('rejected')} active={activeTab === 'rejected'} />
+        <KpiCard label="Short on stock" icon="alert" tone={short.length ? 'rose' : 'emerald'} value={short.length} sub={short.length ? 'Open requests above what is on hand' : 'Every open request can be filled'} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+      <div className="xl:col-span-8 flex flex-col gap-4 min-w-0">
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-4 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
           <div className="min-w-0 mr-auto">
@@ -175,20 +211,9 @@ export default function StockOutApprovalPage() {
             Stock limits
           </button>
         </div>
-        <div className="px-[18px] py-3 flex flex-wrap gap-2">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)} aria-pressed={activeTab === tab}
-              className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
-                activeTab === tab
-                  ? 'bg-cyan-500 text-white'
-                  : 'bg-slate-50 text-slate-600'
-              }`}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+        <div className="px-[18px] py-3">
+          <FilterSelect label="Status" value={activeTab} onChange={setActiveTab}
+            options={TABS.map((tab) => ({ value: tab, label: tab.charAt(0).toUpperCase() + tab.slice(1), count: tab === 'all' ? requests.length : requests.filter((r) => r.status === tab).length }))} />
         </div>
       </div>
 
@@ -209,7 +234,11 @@ export default function StockOutApprovalPage() {
         {loading ? (
           <SkeletonList card />
         ) : filtered.length === 0 ? (
-          <EmptyState icon="box">No requests in this category.</EmptyState>
+          <div className="bg-white border border-black/[0.09] rounded-xl">
+            <EmptyState icon="box" title={activeTab === 'pending' ? 'Nothing waiting for approval' : 'No requests here'}>
+              {activeTab === 'pending' ? 'New stock-out requests from Maintenance show up here for you to approve or reject.' : 'Pick another status above to see the other requests.'}
+            </EmptyState>
+          </div>
         ) : (
           <div className="space-y-3">
             {filtered.map((req) => {
@@ -306,7 +335,7 @@ export default function StockOutApprovalPage() {
                           >
                             Approve
                           </button>
-                          <button
+                          <button data-no-confirm
                             onClick={() => setRejectingId(req.id)}
                             className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
                           >
@@ -343,7 +372,7 @@ export default function StockOutApprovalPage() {
                           </div>
                         </div>
                       ) : (
-                        <button
+                        <button data-no-confirm
                           onClick={() => {
                             setError('');
                             setSuccess('');
@@ -367,6 +396,25 @@ export default function StockOutApprovalPage() {
             })}
           </div>
         )}
+      </div>
+      <ActivityFeed title="Latest requests" items={recent} empty="Requests from Maintenance will be listed here." />
+      </div>
+
+      <aside className="xl:col-span-4 flex flex-col gap-4 min-w-0">
+        <StatusBreakdown
+          title="Requests by status"
+          items={[
+            { key: 'pending', label: 'Waiting approval', count: countOf('pending'), tone: 'amber' },
+            { key: 'approved', label: 'To release', count: countOf('approved'), tone: 'cyan' },
+            { key: 'released', label: 'Released', count: countOf('released'), tone: 'emerald' },
+            { key: 'rejected', label: 'Rejected', count: countOf('rejected'), tone: 'rose' },
+          ]}
+          onPick={(i) => setActiveTab(i.key)}
+          active={activeTab}
+          empty="No stock-out requests yet."
+        />
+        <TipsWidget tips={tips} />
+      </aside>
       </div>
     </AdminLayout>
   );

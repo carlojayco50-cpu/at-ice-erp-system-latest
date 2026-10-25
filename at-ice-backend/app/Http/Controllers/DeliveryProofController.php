@@ -80,6 +80,22 @@ class DeliveryProofController extends Controller
             ], 422);
         }
 
+        // Only a stop on the route of the Driver this Salesman rides with, and
+        // only once both of them pressed Arrived at the store (GPS checked;
+        // owner, 2026-10-20).
+        $crew = \App\Support\DeliveryRoute::crewFor($request->user());
+        if (! $crew || (int) $crew->driver_id !== (int) $delivery->driver_id) {
+            return response()->json([
+                'message' => 'This delivery is on another Driver\'s route. Change your Driver first.',
+            ], 422);
+        }
+        $arrived = $delivery->arrivals()->pluck('user_id')->all();
+        if (! in_array((int) $delivery->driver_id, array_map('intval', $arrived), true) || ! in_array((int) $request->user()->id, array_map('intval', $arrived), true)) {
+            return response()->json([
+                'message' => 'Both the Driver and you must press Arrived at the store before the delivery can be confirmed.',
+            ], 422);
+        }
+
         // Look up prices BEFORE starting the transaction / storing the photo,
         // fail fast if any product has no price set for this customer.
         $lineItems = [];
@@ -215,6 +231,9 @@ class DeliveryProofController extends Controller
             ]);
         }
 
+        // The Driver is free again: a queued delivery may go to them now.
+        \App\Support\DeliveryDispatch::assignQueued();
+
         return response()->json([
             'message' => 'Delivery confirmed successfully!',
             'proof' => $proof,
@@ -226,12 +245,12 @@ class DeliveryProofController extends Controller
     // (Driver may or may not have started them yet)
     public function myDeliveries()
     {
-        // Open deliveries still waiting for a confirmation...
-        $open = Delivery::with(['customer', 'items.product', 'driver:id,name'])
-            ->whereIn('status', ['pending', 'in_transit'])
-            ->whereDoesntHave('proofs')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        // Open stops on the route of the Driver this Salesman rides with today
+        // (App\Support\DeliveryRoute), nearest the plant first...
+        $crew = \App\Support\DeliveryRoute::crewFor(request()->user());
+        $open = $crew
+            ? \App\Support\DeliveryRoute::todayFor($crew->driver_id)->whereIn('status', ['pending', 'in_transit'])->filter(fn ($d) => $d->proofs->isEmpty())->values()
+            : collect();
 
         // ...plus the ones this Salesman confirmed, with the proof and receipt,
         // so they show under the Salesman's Delivered tab.

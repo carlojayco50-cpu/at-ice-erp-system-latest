@@ -106,7 +106,12 @@ class ArchiveExpiry
                 'license_number' => null,
                 'license_expiry' => null,
                 'anonymized_at' => now(),
-            ])->save();
+            ] + array_fill_keys(array_merge(\App\Support\Biodata::FIELDS, \App\Support\Biodata::GOV_FIELDS), null))->save();
+            // attached biodata files go too (private disk)
+            foreach ($employee->documents()->get() as $doc) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->path);
+                $doc->delete();
+            }
         });
         Audit::log('retention.anonymized', $employee, ['employee' => $label], ['auto' => $auto]);
     }
@@ -116,7 +121,10 @@ class ArchiveExpiry
         $label = "{$employee->employee_id} {$employee->full_name}";
         DB::transaction(function () use ($employee) {
             FaceData::where('employee_id', $employee->id)->delete();
-            // Attendance, leave and payroll rows go with it (foreign keys cascade).
+            foreach ($employee->documents()->get() as $doc) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($doc->path);
+            }
+            // Attendance, leave, payroll and document rows go with it (foreign keys cascade).
             $employee->delete();
         });
         Audit::log('retention.deleted', null, ['employee' => $label], ['auto' => $auto]);

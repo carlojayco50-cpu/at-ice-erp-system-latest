@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Applicant;
 use App\Models\Employee;
+use App\Models\EmployeeDocument;
 use App\Models\User;
 use App\Services\AddressFormatter;
 use App\Services\DriverLicense;
 use App\Services\PhoneFormatter;
 use App\Support\Audit;
+use App\Support\Biodata;
 use App\Support\Lateness;
 use App\Support\Rates;
 use App\Support\Settings;
@@ -15,6 +18,8 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class EmployeeController extends Controller
@@ -199,6 +204,7 @@ class EmployeeController extends Controller
         $this->cleanNameParts($request);
         $this->cleanLicense($request);
         $this->cleanPay($request);
+        Biodata::clean($request, true);
 
         $noAccount = in_array($request->position, self::NO_ACCOUNT_POSITIONS, true);
 
@@ -244,7 +250,9 @@ class EmployeeController extends Controller
                 Rule::unique('employees', 'license_number'),
             ],
             'license_expiry' => DriverLicense::expiryRules((self::POSITION_ROLES[$request->position] ?? null) === 'driver'),
-        ], DriverLicense::EXPIRY_MESSAGES + [
+            // Hired from Interviews: the applicant's documents carry over
+            'applicant_id' => 'nullable|integer|exists:applicants,id',
+        ] + Biodata::rules(null, true), Biodata::messages() + DriverLicense::EXPIRY_MESSAGES + [
             'phone.regex' => self::PHONE_MESSAGE,
             'license_number.required' => "Enter the driver's license number.",
             'license_number.regex' => DriverLicense::MESSAGE,
@@ -269,6 +277,10 @@ class EmployeeController extends Controller
                     throw $e;
                 }
             }
+        }
+
+        if ($request->filled('applicant_id')) {
+            self::copyApplicantDocuments(Applicant::with('documents')->find($request->applicant_id), $employee, $request->user()?->id);
         }
 
         return response()->json([
@@ -343,7 +355,10 @@ class EmployeeController extends Controller
             'vehicle_plate' => $isDriver ? $request->vehicle_plate : null,
             'license_number' => $isDriver ? $request->license_number : null,
             'license_expiry' => $isDriver ? $request->license_expiry : null,
-        ]);
+        ] + $request->only(array_merge(Biodata::FIELDS, Biodata::GOV_FIELDS)) + ['license_restrictions' => null]);
+        if (! $isDriver && $employee->license_restrictions) {
+            $employee->update(['license_restrictions' => null]);
+        }
 
         return [$user, $employee];
     }
@@ -365,6 +380,7 @@ class EmployeeController extends Controller
         $this->cleanNameParts($request);
         $this->cleanLicense($request);
         $this->cleanPay($request);
+        Biodata::clean($request, true);
         $isDriver = $employee->user?->role === 'driver';
 
         // Old employees have only the single free-text address and can be edited
@@ -421,7 +437,7 @@ class EmployeeController extends Controller
                     }
                 },
             ],
-        ], DriverLicense::EXPIRY_MESSAGES + [
+        ] + Biodata::rules($employee->id, true), Biodata::messages() + DriverLicense::EXPIRY_MESSAGES + [
             'phone.regex' => self::PHONE_MESSAGE,
             'license_number.required' => "Enter the driver's license number.",
             'license_number.regex' => DriverLicense::MESSAGE,
@@ -429,6 +445,8 @@ class EmployeeController extends Controller
         ] + self::NAME_MESSAGES);
 
         $data = $request->only([
+            ...Biodata::FIELDS,
+            ...Biodata::GOV_FIELDS,
             'first_name',
             'middle_initial',
             'last_name',
@@ -459,7 +477,7 @@ class EmployeeController extends Controller
             'license_expiry',
         ]);
         if (! $isDriver) {
-            unset($data['license_number'], $data['license_expiry']);
+            unset($data['license_number'], $data['license_expiry'], $data['license_restrictions']);
         }
 
         // Rebuild the one-line address only when the separate fields were sent.
@@ -538,5 +556,27 @@ class EmployeeController extends Controller
             'message' => "{$employee->full_name} ({$employee->employee_id}) is active again.",
             'employee' => $employee->fresh(),
         ]);
+    }
+
+    // A hired applicant's resume and documents become the employee's (copied
+    // on the private disk, so deleting the applicant later keeps them).
+    public static function copyApplicantDocuments(?Applicant $applicant, Employee $employee, ?int $by): void
+    {
+        if (! $applicant) {
+            return;
+        }
+        $disk = Storage::disk('local');
+        $files = $applicant->documents->map(fn ($d) => [$d->type, $d->path, $d->original_name, $d->mime, $d->size])->all();
+        if ($applicant->resume_path && $disk->exists($applicant->resume_path)) {
+            $files[] = ['resume', $applicant->resume_path, $applicant->resume_name ?: 'resume', $disk->mimeType($applicant->resume_path) ?: 'application/octet-stream', $disk->size($applicant->resume_path)];
+        }
+        foreach ($files as [$type, $path, $name, $mime, $size]) {
+            if (! $disk->exists($path)) {
+                continue;
+            }
+            $copy = 'employee-documents/'.Str::uuid().'.'.pathinfo($path, PATHINFO_EXTENSION);
+            $disk->copy($path, $copy);
+            EmployeeDocument::create(['employee_id' => $employee->id, 'type' => $type, 'path' => $copy, 'original_name' => $name, 'mime' => $mime, 'size' => $size, 'uploaded_by' => $by]);
+        }
     }
 }

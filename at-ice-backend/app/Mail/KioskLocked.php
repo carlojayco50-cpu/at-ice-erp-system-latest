@@ -3,13 +3,15 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 // Sent to every Admin and HR account when a kiosk locks after too many wrong PINs.
-class KioskLocked extends Mailable
+// Sent by the queue worker.
+class KioskLocked extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

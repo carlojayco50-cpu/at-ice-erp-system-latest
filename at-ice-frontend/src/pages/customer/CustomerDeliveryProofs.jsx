@@ -8,6 +8,9 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
 import { useLiveTick } from "../../lib/live";
 import { formatDateTime } from "../../lib/time";
+import EmptyState from "../../components/EmptyState";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { formatDateShort } from "../../lib/time";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -78,10 +81,26 @@ export default function CustomerDeliveryProofs() {
       ) : error ? (
         <div className="bg-red-500/[0.06] border border-red-500/20 rounded-md p-6 text-sm text-red-600">{error}</div>
       ) : proofs.length === 0 ? (
-        <div className="bg-white border border-black/[0.09] rounded-xl px-5 py-10 text-center text-xs text-slate-400">
-          No delivery proofs yet. A photo appears here after a delivery is confirmed.
+        <div className="bg-white border border-black/[0.09] rounded-xl">
+          <EmptyState icon="truck" title="No delivery proofs yet">A photo appears here after each delivery is confirmed by our Salesman.</EmptyState>
         </div>
       ) : (
+        <>
+        {(() => {
+          const month = new Date().toLocaleDateString("en-CA").slice(0, 7); // local YYYY-MM
+          const whenOf = (p) => p.confirmed_at || p.created_at;
+          const thisMonth = proofs.filter((p) => whenOf(p) && new Date(whenOf(p)).toLocaleDateString("en-CA").slice(0, 7) === month).length;
+          const qty = proofs.reduce((s, p) => s + Number(p.quantity || 0), 0);
+          const latest = [...proofs].sort((a, b) => new Date(whenOf(b)) - new Date(whenOf(a)))[0];
+          return (
+            <KpiGrid cols={4}>
+              <KpiCard label="Delivery proofs" icon="file" tone="cyan" value={proofs.length} sub="Photos from our Salesman" />
+              <KpiCard label="This month" icon="calendar" tone="emerald" value={thisMonth} sub="Deliveries confirmed" bar={proofs.length ? thisMonth / proofs.length : 0} />
+              <KpiCard label="Units received" icon="box" tone="violet" value={qty} sub="Bags and sacks in all" />
+              <KpiCard label="Latest delivery" icon="truck" tone="slate" value={latest ? formatDateShort(whenOf(latest)) : "—"} sub={latest?.delivery?.delivery_no || ""} />
+            </KpiGrid>
+          );
+        })()}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {proofs.map((p) => (
             <button
@@ -100,6 +119,7 @@ export default function CustomerDeliveryProofs() {
             </button>
           ))}
         </div>
+        </>
       )}
 
       {selected && (

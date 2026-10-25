@@ -66,4 +66,27 @@ class QuantityLimitTest extends TestCase
         $this->getJson('/api/limits')->assertJsonPath('max_product_quantity', 100);
         $this->postJson('/api/deliveries', $this->booking(101))->assertUnprocessable();
     }
+
+    // Every other way to write a quantity is held to the same limit.
+    public function test_editing_topping_up_adjusting_and_contracts_use_the_same_limit(): void
+    {
+        $this->admin();
+        $payload = $this->booking(10);
+        $id = $this->postJson('/api/deliveries', $payload)->assertCreated()->json('id');
+
+        $this->putJson("/api/deliveries/{$id}", ['items' => [['product_type' => 'bags', 'quantity_ordered' => 501]]])
+            ->assertUnprocessable()->assertJsonValidationErrors('items.0.quantity_ordered');
+        $this->putJson("/api/deliveries/{$id}", ['items' => [['product_type' => 'bags', 'quantity_ordered' => 500]]])->assertOk();
+
+        $this->postJson("/api/deliveries/{$id}/top-up", ['items' => ['bags' => 501], 'deliver_by' => '23:00'])
+            ->assertUnprocessable()->assertJsonValidationErrors('items.bags');
+        $this->postJson("/api/deliveries/{$id}/adjust", ['mode' => 'add', 'by' => 'count', 'value' => 1, 'reason' => 'one more'])
+            ->assertUnprocessable()->assertJsonValidationErrors('value');
+
+        $this->postJson('/api/delivery-contracts', [
+            'name' => 'Starmall', 'store_ids' => [$payload['customer_id']], 'start_date' => DriverAvailability::today(),
+            'end_date' => DriverAvailability::today(), 'delivery_days' => ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+            'delivery_time' => '08:00', 'items' => [['product_type' => 'bags', 'quantity' => 501]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('items.0.quantity');
+    }
 }

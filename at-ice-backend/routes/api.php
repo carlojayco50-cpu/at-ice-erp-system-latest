@@ -8,10 +8,16 @@ use App\Http\Controllers\BiController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerPortalController;
 use App\Http\Controllers\CustomerPriceController;
+use App\Http\Controllers\DeliveryAdjustmentRequestController;
+use App\Http\Controllers\DeliveryContractController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\DeliveryProofController;
+use App\Http\Controllers\DeliveryRouteController;
 use App\Http\Controllers\DocumentScanController;
+use App\Http\Controllers\DriverAssignmentController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeDocumentController;
+use App\Http\Controllers\EmployeeMemoController;
 use App\Http\Controllers\FaceDataController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\IceLoadingController;
@@ -24,6 +30,7 @@ use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentProofController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\PickupLogController;
 use App\Http\Controllers\PlaceSearchController;
 use App\Http\Controllers\ProductController;
@@ -85,7 +92,8 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
-    // Whether the signed-in employee has timed in at the kiosk (Checker pages).
+    // Whether the signed-in employee or Driver has timed in at the kiosk
+    // (Checker, Salesman, Maintenance and Driver pages).
     Route::get('my-time-in', fn (\Illuminate\Http\Request $request) => response()->json([
         'timed_in' => \App\Support\OnShift::isTimedIn($request->user()),
     ]));
@@ -104,6 +112,11 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     Route::post('my-leave-requests', [LeaveRequestController::class, 'myStore']);
     Route::delete('my-leave-requests/{id}', [LeaveRequestController::class, 'myDestroy']);
 
+    // Disciplinary memos HR sent to this employee (read, acknowledge, open files).
+    Route::get('my-memos', [EmployeeMemoController::class, 'myIndex']);
+    Route::post('my-memos/{memo}/acknowledge', [EmployeeMemoController::class, 'acknowledge']);
+    Route::get('my-memos/{memo}/files/{file}', [EmployeeMemoController::class, 'myFile']);
+
     // Login fixes by a role higher up (Admin: HR/employee/driver/customer; HR:
     // employee/driver): change a wrong login email. The controller checks the roles.
     Route::put('accounts/{user}/email', [AccountController::class, 'updateEmail'])
@@ -111,6 +124,9 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
 
     // ADMIN ROUTES
     Route::middleware('role:admin')->group(function () {
+        // Performance appraisals: draft ratings from the records, Admin overrides and publishes
+        Route::get('performance', [PerformanceController::class, 'index']);
+        Route::put('performance/{employee}', [PerformanceController::class, 'update']);
 
         // Rates and rules (AppSupportSettings) and the audit log
         Route::get('settings', [SettingsController::class, 'index']);
@@ -152,9 +168,30 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // Delivery Management (Admin assigns deliveries)
         Route::get('deliveries', [DeliveryController::class, 'index']);
         Route::get('deliveries/driver-availability', [DeliveryController::class, 'driverAvailability']);
+        // Driver View / Store View for one day (?date=)
+        Route::get('deliveries/board', [DeliveryController::class, 'board']);
         Route::post('deliveries', [DeliveryController::class, 'store']);
+        // Same-day changes (App\Support\DeliveryAdjust): top-up, add/reduce sacks on one delivery
+        // Stores' requests to change the sacks on one delivery: Admin applies or declines
+        Route::get('delivery-adjustment-requests', [DeliveryAdjustmentRequestController::class, 'index']);
+        Route::post('delivery-adjustment-requests/{id}/apply', [DeliveryAdjustmentRequestController::class, 'apply']);
+        Route::post('delivery-adjustment-requests/{id}/decline', [DeliveryAdjustmentRequestController::class, 'decline']);
         Route::get('deliveries/{id}', [DeliveryController::class, 'show']);
+        Route::put('deliveries/{id}', [DeliveryController::class, 'update']);
         Route::put('deliveries/{id}/cancel', [DeliveryController::class, 'cancel']);
+        Route::post('deliveries/{id}/top-up', [DeliveryController::class, 'topUp']);
+        Route::post('deliveries/{id}/adjust', [DeliveryController::class, 'adjust']);
+
+        // Delivery contracts: Admin approves, the daily deliveries are generated
+        Route::get('delivery-contracts', [DeliveryContractController::class, 'index']);
+        Route::post('delivery-contracts', [DeliveryContractController::class, 'store']);
+        Route::post('delivery-contracts/{id}/approve', [DeliveryContractController::class, 'approve']);
+        Route::post('delivery-contracts/{id}/cancel', [DeliveryContractController::class, 'cancel']);
+
+        // Which Driver handles which stores, and Drivers who are off (reassigned at random)
+        Route::get('driver-store-assignments', [DriverAssignmentController::class, 'index']);
+        Route::post('driver-store-assignments', [DriverAssignmentController::class, 'store']);
+        Route::delete('driver-store-assignments/{id}', [DriverAssignmentController::class, 'destroy']);
 
         Route::get('products-summary', [ProductController::class, 'index']);
 
@@ -194,15 +231,24 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('payments', [PaymentController::class, 'index']);
         Route::post('payments', [PaymentController::class, 'store']);
 
-        // Support Inbox: customer Contact Support messages (dispatch room)
+        // Support Tickets: customer Contact Support messages (dispatch room)
         Route::get('support-messages', [SupportMessageController::class, 'index']);
+        Route::get('support-messages/{supportMessage}', [SupportMessageController::class, 'show']);
+        Route::patch('support-messages/{supportMessage}', [SupportMessageController::class, 'update']);
+        Route::post('support-messages/{supportMessage}/replies', [SupportMessageController::class, 'reply']);
         Route::patch('support-messages/{supportMessage}/resolve', [SupportMessageController::class, 'resolve']);
+        Route::patch('support-messages/{supportMessage}/close', [SupportMessageController::class, 'close']);
         Route::patch('support-messages/{supportMessage}/reopen', [SupportMessageController::class, 'reopen']);
 
         // Customer Pricing (Admin sets per-customer unit prices for Bags/Small Sack/Big Sack)
         Route::get('customer-prices', [CustomerPriceController::class, 'index']);
         Route::get('customer-prices/{customer}', [CustomerPriceController::class, 'show']);
         Route::put('customer-prices/{customer}', [CustomerPriceController::class, 'update']);
+        Route::delete('customer-prices/{customer}', [CustomerPriceController::class, 'reset']);
+        // Reference prices per customer type (what a customer pays with no price of its own)
+        Route::get('reference-prices', [CustomerPriceController::class, 'referenceIndex']);
+        Route::put('reference-prices/{type}', [CustomerPriceController::class, 'referenceUpdate']);
+        Route::post('reference-prices/{type}/apply', [CustomerPriceController::class, 'referenceApply']);
 
         // Pickup Logs (Admin full access: Alexandra/J-Maxine plant pickups, no price/receipt)
         Route::apiResource('pickup-logs', PickupLogController::class)->only(['update', 'destroy']);
@@ -217,7 +263,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // Projects board (monday.com style): maintenance and plant jobs and
         // the supplies their stock-out requests used.
         Route::get('projects', [ProjectController::class, 'index']);
-        Route::post('projects', [ProjectController::class, 'store']);
         Route::put('projects/{project}', [ProjectController::class, 'update']);
         Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
 
@@ -243,6 +288,18 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     // HR ROUTES
     Route::middleware('role:hr')->group(function () {
 
+        // Disciplinary memos (HR > Memos, EmployeeMemoController): drafts from
+        // missed Time Outs, memos issued by hand, files, signed copies.
+        Route::get('memos', [EmployeeMemoController::class, 'index']);
+        Route::get('memos/draft-text', [EmployeeMemoController::class, 'draftText']);
+        Route::post('memos', [EmployeeMemoController::class, 'store']);
+        Route::patch('memos/{memo}', [EmployeeMemoController::class, 'update']);
+        Route::post('memos/{memo}/send', [EmployeeMemoController::class, 'send']);
+        Route::post('memos/{memo}/cancel', [EmployeeMemoController::class, 'cancel']);
+        Route::post('memos/{memo}/files', [EmployeeMemoController::class, 'upload']);
+        Route::get('memos/{memo}/files/{file}', [EmployeeMemoController::class, 'file']);
+        Route::post('memos/{memo}/close-investigation', [EmployeeMemoController::class, 'closeInvestigation']);
+
         // Attendance Station kiosk PIN: HR sets or changes it (only Admin can unlock a locked kiosk).
         // Both changes need the HR user's own account password.
         Route::get('hr/kiosk-pin', [KioskController::class, 'show']);
@@ -253,6 +310,11 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::apiResource('employees', EmployeeController::class);
         // A deactivated employee back for a rehire (same employee ID, history kept)
         Route::post('employees/{id}/reactivate', [EmployeeController::class, 'reactivate']);
+        // Biodata documents (private disk)
+        Route::get('employees/{employee}/documents', [EmployeeDocumentController::class, 'index']);
+        Route::post('employees/{employee}/documents', [EmployeeDocumentController::class, 'store']);
+        Route::get('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'show']);
+        Route::delete('employees/{employee}/documents/{document}', [EmployeeDocumentController::class, 'destroy']);
 
         // Payroll: full CRUD, computation happens on the frontend
         // (Sweldong Pinoy-style: SSS/PhilHealth/Pag-IBIG/withholding tax),
@@ -294,6 +356,7 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::post('applicants', [ApplicantController::class, 'store']);
         Route::get('applicants/{id}', [ApplicantController::class, 'show']);
         Route::get('applicants/{id}/resume', [ApplicantController::class, 'resume']);
+        Route::get('applicants/{id}/documents/{document}', [ApplicantController::class, 'document']);
         Route::put('applicants/{id}', [ApplicantController::class, 'update']);
         Route::patch('applicants/{id}/status', [ApplicantController::class, 'updateStatus']);
         Route::delete('applicants/{id}', [ApplicantController::class, 'destroy']);
@@ -301,15 +364,17 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // Face Enrollment (HR manages)
         Route::post('face-enroll', [FaceDataController::class, 'enroll']);
         Route::get('face-data', [FaceDataController::class, 'index']);
-        Route::put('face-data/{id}', [FaceDataController::class, 'update']);
-        Route::delete('face-data/{id}', [FaceDataController::class, 'destroy']);
         // The enrolled face picture: private, HR and Admin only (Admin passes every role check)
         Route::get('face-data/{id}/photo', [FaceDataController::class, 'photo']);
+        Route::put('face-data/{id}', [FaceDataController::class, 'update']);
+        Route::delete('face-data/{id}', [FaceDataController::class, 'destroy']);
     });
 
+    // timed.in (Checker, Salesman, Maintenance, Driver): nothing is saved
+    // until they have timed in at the kiosk today (reads still work; filing
+    // leave, the account and logout are outside these groups). Admin passes.
+
     // EMPLOYEE: CHECKER ROUTES
-    // timed.in: a Checker saves nothing until they have timed in at the kiosk
-    // today (reads still work). Admin passes.
     Route::middleware(['role:employee,checker', 'timed.in'])->group(function () {
 
         Route::apiResource('products', ProductController::class);
@@ -342,19 +407,26 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     });
 
     // EMPLOYEE: SALESMAN ROUTES
-    Route::middleware('role:employee,salesman')->group(function () {
+    Route::middleware(['role:employee,salesman', 'timed.in'])->group(function () {
 
         Route::get('my-deliveries', [DeliveryProofController::class, 'myDeliveries']);
+        // The Driver the Salesman rides with today and that Driver's route
+        Route::get('my-route', [DeliveryRouteController::class, 'salesmanRoute']);
+        Route::put('my-route/driver', [DeliveryRouteController::class, 'chooseDriver']);
+        Route::post('my-route/deliveries/{id}/arrive', [DeliveryRouteController::class, 'arrive']);
         Route::post('delivery-confirmation', [DeliveryProofController::class, 'confirm']);
         Route::get('customer-prices/{customer}/lookup', [CustomerPriceController::class, 'lookup']);
     });
 
     // EMPLOYEE: MAINTENANCE ROUTES
-    Route::middleware('role:employee,maintenance')->group(function () {
+    Route::middleware(['role:employee,maintenance', 'timed.in'])->group(function () {
 
         Route::post('stock-out-requests', [StockOutRequestController::class, 'store']);
         Route::get('stock-out-items', [StockOutRequestController::class, 'items']);
         Route::get('project-options', [ProjectController::class, 'options']);
+        // Maintenance adds projects (name, description, location); Admin sets the rest
+        Route::get('my-projects', [ProjectController::class, 'mine']);
+        Route::post('my-projects', [ProjectController::class, 'store'])->middleware('throttle:20,1');
 
         // Maintenance views its own requests (the controller filters by
         // requester). The Admin reaches these same two endpoints through the
@@ -364,9 +436,10 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
     });
 
     // DRIVER ROUTES
-    Route::middleware('role:driver')->group(function () {
+    Route::middleware(['role:driver', 'timed.in'])->group(function () {
 
-        Route::get('driver/deliveries', [DeliveryController::class, 'driverDeliveries']);
+        Route::get('driver/deliveries', [DeliveryRouteController::class, 'driverDeliveries']);
+        Route::post('driver/deliveries/{id}/arrive', [DeliveryRouteController::class, 'arrive']);
         Route::patch('driver/deliveries/{id}/status', [DeliveryController::class, 'updateStatus']);
         Route::get('/driver/dashboard', function () {
             return response()->json(['message' => 'Welcome Driver!']);
@@ -387,6 +460,12 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // customer via customers.user_id (see CustomerPortalController).
         Route::get('my-profile', [CustomerPortalController::class, 'myProfile']);
         Route::get('my-delivery-history', [CustomerPortalController::class, 'myDeliveries']);
+        // Ran out after today's delivery: ask for an urgent top-up (5 a minute)
+        Route::post('my-deliveries/{id}/top-up', [CustomerPortalController::class, 'requestTopUp'])->middleware('throttle:5,1,top-up');
+        // Ask to change the sacks on a delivery not yet delivered (Admin answers)
+        Route::post('my-deliveries/{id}/adjustment-requests', [CustomerPortalController::class, 'requestAdjustment'])->middleware('throttle:5,1,adjust-request');
+        Route::post('my-adjustment-requests/{id}/withdraw', [CustomerPortalController::class, 'withdrawAdjustment']);
+        Route::get('my-delivery-notices', [CustomerPortalController::class, 'myDeliveryNotices']);
         Route::get('my-receipts', [CustomerPortalController::class, 'myReceipts']);
         // Proof of payment for an unpaid invoice (Admin reviews it; it does not mark it paid)
         Route::post('my-receipts/{id}/payment-proofs', [PaymentProofController::class, 'myStore'])->middleware('throttle:10,1');
@@ -394,9 +473,11 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('my-delivery-proofs', [CustomerPortalController::class, 'myDeliveryProofs']);
         Route::get('my-prices', [CustomerPortalController::class, 'myPrices']);
 
-        // Contact Support: messages go to the Admin dispatch inbox only.
+        // Contact Support: tickets go to the Admin dispatch room only.
+        // New tickets: 3 per 10 minutes; replies to an open ticket: 10 a minute.
         Route::get('my-support-messages', [SupportMessageController::class, 'myIndex']);
-        Route::post('my-support-messages', [SupportMessageController::class, 'myStore'])->middleware('throttle:10,1');
+        Route::post('my-support-messages', [SupportMessageController::class, 'myStore'])->middleware('throttle:3,10,support-ticket');
+        Route::post('my-support-messages/{supportMessage}/replies', [SupportMessageController::class, 'myReply'])->middleware('throttle:10,1,support-reply');
 
         Route::get('/customer/dashboard', function () {
             return response()->json(['message' => 'Welcome Customer!']);

@@ -20,6 +20,8 @@ import { openProtectedFile } from "../lib/openFile";
 import { useDraft } from "../lib/useDraft";
 import DraftHint from "../components/DraftHint";
 import FileField from "../components/FileField";
+import { confirmAction } from "../lib/confirm";
+import { PILL } from "../lib/statusTones";
 
 const TYPE_LABEL = {
   sick: "Sick Leave (SL)",
@@ -31,9 +33,9 @@ const TYPE_LABEL = {
 };
 
 const STATUS_STYLE = {
-  pending: "bg-amber-50 text-amber-700 border-amber-200",
-  approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  rejected: "bg-red-50 text-red-700 border-red-200",
+  pending: PILL.warning,
+  approved: PILL.success,
+  rejected: PILL.danger,
 };
 
 const todayStr = () => new Date().toLocaleDateString("en-CA");
@@ -163,7 +165,7 @@ export default function LeaveRequestPage() {
   };
 
   const cancel = async (id) => {
-    if (!window.confirm("Cancel this leave request?")) return;
+    if (!(await confirmAction({ title: "Cancel this leave request?", message: "HR will no longer see it. You can file a new one.", confirmLabel: "Cancel request", danger: true }))) return;
     try {
       const res = await fetch(`/api/my-leave-requests/${id}`, { method: "DELETE", headers: authHeaders() });
       const data = await res.json().catch(() => ({}));
@@ -266,7 +268,7 @@ export default function LeaveRequestPage() {
 
             <div>
               <label htmlFor="lv-reason" className="block text-[12px] font-semibold text-slate-600 mb-1">Reason</label>
-              <textarea id="lv-reason" rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Write the reason for your leave." className={inputCls} />
+              <textarea id="lv-reason" rows={4} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Write the reason for your leave." className={`${inputCls} leave-textarea`} />
             </div>
 
             <div>
@@ -328,7 +330,7 @@ export default function LeaveRequestPage() {
                 </button>
               ) : <span />}
               {l.status === "pending" && (
-                <button onClick={() => cancel(l.id)} className="text-[12px] font-semibold text-red-600 hover:underline">Cancel request</button>
+                <button data-no-confirm onClick={() => cancel(l.id)} className="text-[12px] font-semibold text-red-600 hover:underline">Cancel request</button>
               )}
             </div>
           </div>

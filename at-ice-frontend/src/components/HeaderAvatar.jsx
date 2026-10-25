@@ -78,7 +78,7 @@ function AvatarMenu({ initials, name, subtitle, onSignOut, settingsPath }) {
         aria-expanded={open}
         aria-label={`Account menu for ${name}`}
         title={name}
-        className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500/10 to-blue-600/10 border border-cyan-500/20 flex items-center justify-center text-[11px] font-semibold text-cyan-500 cursor-pointer"
+        className="topbar-avatar w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500/10 to-blue-600/10 border border-cyan-500/20 flex items-center justify-center text-[11px] font-semibold text-cyan-500 cursor-pointer"
       >
         {initials}
       </button>

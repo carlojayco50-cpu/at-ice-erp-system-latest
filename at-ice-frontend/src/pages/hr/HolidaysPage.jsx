@@ -14,6 +14,12 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import { confirmAction } from "../../lib/confirm";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
+import { todayManila } from "../../lib/time";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -126,7 +132,7 @@ export default function HolidaysPage({ admin = false }) {
   };
 
   const remove = async (h) => {
-    if (!window.confirm(`Remove ${h.name} (${h.date})?`)) return;
+    if (!(await confirmAction({ title: `Remove ${h.name}?`, message: `${h.date} will be an ordinary day again (late, absent and leave apply).`, confirmLabel: "Remove", danger: true }))) return;
     try {
       await api(`/api/holidays/${h.id}`, { method: "DELETE" });
       toast.success(`${h.name} was removed.`);
@@ -147,8 +153,30 @@ export default function HolidaysPage({ admin = false }) {
       && (!filter.type || h.type === filter.type));
   }, [data, filter]);
 
+  const pager = usePagination(shown);
+
+  // Year summary for the KPI cards and side panels
+  const all = data?.holidays || [];
+  const todayStr = new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
+  const upcoming = all.filter((h) => h.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
+  const next = upcoming[0];
+  const daysTo = next ? Math.round((new Date(`${next.date}T00:00:00`) - new Date(`${todayStr}T00:00:00`)) / 86400000) : null;
+  const countType = (t) => all.filter((h) => h.type === t).length;
+  const TYPE_TONE = { REGULAR: "rose", SPECIAL_NON_WORKING: "amber", SPECIAL_WORKING: "slate" };
+  const byMonth = MONTHS.map((m, i) => ({ label: m.slice(0, 3), value: all.filter((h) => Number(h.date.slice(5, 7)) === i + 1).length }));
+
   return (
     <Layout pageTitle="Holidays" breadcrumb="HRIS / Holidays">
+      <KpiGrid cols={5}>
+        <KpiCard label={`Holidays in ${year}`} icon="calendar" tone="cyan" value={all.length} sub={`${upcoming.length} still to come`} bar={all.length ? upcoming.length / all.length : 0} />
+        <KpiCard label="Regular" icon="star" tone="rose" value={countType("REGULAR")} sub="Double pay when worked" onClick={() => setFilter((f) => ({ ...f, type: f.type === "REGULAR" ? "" : "REGULAR" }))} active={filter.type === "REGULAR"} />
+        <KpiCard label="Special (non-working)" icon="calendar" tone="amber" value={countType("SPECIAL_NON_WORKING")} sub="Premium pay when worked" onClick={() => setFilter((f) => ({ ...f, type: f.type === "SPECIAL_NON_WORKING" ? "" : "SPECIAL_NON_WORKING" }))} active={filter.type === "SPECIAL_NON_WORKING"} />
+        <KpiCard label="Special working" icon="clock" tone="slate" value={countType("SPECIAL_WORKING")} sub="Ordinary work day" onClick={() => setFilter((f) => ({ ...f, type: f.type === "SPECIAL_WORKING" ? "" : "SPECIAL_WORKING" }))} active={filter.type === "SPECIAL_WORKING"} />
+        <KpiCard label="Next holiday" icon="calendar" tone="emerald" value={next ? (daysTo === 0 ? "Today" : `${daysTo} day${daysTo === 1 ? "" : "s"}`) : "—"} sub={next ? `${next.name} · ${fmt(next.date)}` : `No more holidays in ${year}`} />
+      </KpiGrid>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+      <div className="xl:col-span-8 min-w-0">
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center gap-3">
           <div className="min-w-0">
@@ -177,11 +205,11 @@ export default function HolidaysPage({ admin = false }) {
               {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             </select></label>
           <label className="flex flex-col gap-1"><span className={labelCls}>Date</span>
-            <input type="date" value={filter.date} min={`${year}-01-01`} max={`${year}-12-31`} onChange={(e) => setFilter({ ...filter, date: e.target.value })} className={inputCls} /></label>
+            <input type="date" value={filter.date} min={`${year}-01-01`} max={`${year}-12-31` < todayManila() ? `${year}-12-31` : todayManila()} onChange={(e) => setFilter({ ...filter, date: e.target.value })} className={inputCls} /></label>
           <label className="flex flex-col gap-1"><span className={labelCls}>Type</span>
             <select value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })} className={inputCls}>
-              <option value="">All types</option>
-              {TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              <option value="">All types ({all.length})</option>
+              {TYPES.map(([k, l]) => <option key={k} value={k}>{l} ({countType(k)})</option>)}
             </select></label>
           {filtering && <button type="button" onClick={() => setFilter(NO_FILTER)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">Clear filters</button>}
         </div>
@@ -198,7 +226,7 @@ export default function HolidaysPage({ admin = false }) {
               <th className="px-[18px] py-2.5 font-medium">Date</th><th className="px-3 py-2.5 font-medium">Name</th>
               <th className="px-3 py-2.5 font-medium">Type</th><th className="px-3 py-2.5 font-medium text-right">Actions</th></tr></thead>
             <tbody>
-              {shown.map((h) => (
+              {pager.pageItems.map((h) => (
                 <tr key={h.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                   <td className="px-[18px] py-2.5 whitespace-nowrap text-slate-700">{fmt(h.date)}</td>
                   <td className="px-3 py-2.5 text-slate-800 font-medium">{h.name}{h.is_double && <span className="ml-1.5 text-[9px] font-bold text-red-600">DOUBLE</span>}</td>
@@ -206,7 +234,7 @@ export default function HolidaysPage({ admin = false }) {
                   <td className="px-3 py-2.5">
                     <div className="flex justify-end gap-1.5">
                       <button onClick={() => setModal(h)} className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 cursor-pointer">Edit</button>
-                      <button onClick={() => remove(h)} className="px-2.5 py-1 border border-red-200 rounded-md text-[11px] text-red-600 cursor-pointer">Remove</button>
+                      <button data-no-confirm onClick={() => remove(h)} className="px-2.5 py-1 border border-red-200 rounded-md text-[11px] text-red-600 cursor-pointer">Remove</button>
                     </div>
                   </td>
                 </tr>
@@ -214,11 +242,27 @@ export default function HolidaysPage({ admin = false }) {
             </tbody>
           </table>
         )}
-        {data && filtering && shown.length > 0 && (
-          <div className="px-[18px] py-2 border-t border-black/[0.06] text-[11px] text-slate-400">Showing {shown.length} of {data.holidays.length} holidays in {year}.</div>
-        )}
+        {data && shown.length > 0 && <Pagination pager={pager} label={filtering ? `holidays (filtered from ${data.holidays.length})` : "holidays"} />}
       </div>
-      {modal && <HolidayModal holiday={modal === "add" ? null : modal} onClose={closeModal} onSaved={saved} />}
+      </div>
+      <aside className="xl:col-span-4 flex flex-col gap-4 min-w-0">
+        <ActivityFeed
+          title="Coming up"
+          items={upcoming.map((h) => ({ id: h.id, title: h.name, meta: typeOf(h.type)[1], when: fmt(h.date).replace(/, \d{4}$/, ""), tone: TYPE_TONE[h.type] || "slate", icon: "calendar" }))}
+          empty={`No more holidays in ${year}.`}
+          max={5}
+        />
+        <MiniBars title={`Holidays per month, ${year}`} data={byMonth} />
+        <StatusBreakdown
+          title="By type"
+          items={TYPES.map(([k, l]) => ({ key: k, label: l, count: countType(k), tone: TYPE_TONE[k] }))}
+          onPick={(i) => setFilter((f) => ({ ...f, type: f.type === i.key ? "" : i.key }))}
+          active={filter.type}
+          empty={`No holidays for ${year} yet.`}
+        />
+      </aside>
+      </div>
+      {modal &&<HolidayModal holiday={modal === "add" ? null : modal} onClose={closeModal} onSaved={saved} />}
     </Layout>
   );
 }

@@ -9,6 +9,11 @@ import { Link, useLocation } from "react-router-dom";
 // underneath without a click (closing again shortly after the mouse leaves);
 // clicking a section opens its first page. Menus per role are in lib/nav.jsx.
 // On the collapsed desktop rail only the icons show.
+//
+// The sections the user opened stay open (owner, 2026-10-20): clicking a
+// section or one of its pages keeps it open, and its chevron opens or closes
+// it without changing page. The open sections are saved in localStorage, so
+// they are the same after a page change and after a refresh.
 
 const ChevDown = () => <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>;
 
@@ -24,6 +29,20 @@ const pagesOf = (item) => item.children || [{ label: item.label, to: item.to }];
 // closes after CLOSE_MS (so slipping off for a moment does not close it).
 const OPEN_MS = 120;
 const CLOSE_MS = 250;
+
+// Saved open sections, per menu (Admin, HR, Customer have different menus).
+const storeKey = (items) => `sidenav:open:${items.map((i) => i.label).join("|")}`;
+function loadOpen(key) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "[]");
+    return new Set(Array.isArray(v) ? v : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveOpen(key, set) {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* private mode: kept for this visit only */ }
+}
 
 // The page sections a top-level item jumps to (children with "#id") while
 // that page is open, in page order.
@@ -53,7 +72,7 @@ function currentSection(ids) {
 
 export default function SideNav({ items, onNavigate }) {
   const location = useLocation();
-  const { pathname, hash, key } = location;
+  const { pathname, hash, key: navKey } = location;
   const activeItem = items.find((item) => pagesOf(item).some((p) => onPath(pathname, splitTo(p.to).path)));
   const sectionIds = sectionIdsOf(activeItem, pathname);
   const idsKey = sectionIds.join(",");
@@ -61,6 +80,18 @@ export default function SideNav({ items, onNavigate }) {
   const holdUntil = useRef(0);
   const [hovered, setHovered] = useState("");
   const hoverTimer = useRef(0);
+  const key = storeKey(items);
+  const [pinned, setPinned] = useState(() => loadOpen(key));
+  const [closedActive, setClosedActive] = useState(() => new Set());
+  const closeActive = (label) => setClosedActive((c) => new Set(c).add(label));
+  const unclose = (label) => setClosedActive((c) => { if (!c.has(label)) return c; const n = new Set(c); n.delete(label); return n; });
+  const pin = (label, on = true) => setPinned((cur) => {
+    if (cur.has(label) === on) return cur;
+    const next = new Set(cur);
+    if (on) next.add(label); else next.delete(label);
+    saveOpen(key, next);
+    return next;
+  });
 
   const hoverIn = (label) => {
     clearTimeout(hoverTimer.current);
@@ -90,7 +121,7 @@ export default function SideNav({ items, onNavigate }) {
     };
     timer = setTimeout(tryScroll, 0);
     return () => clearTimeout(timer);
-  }, [hash, key]);
+  }, [hash, navKey]);
 
   // Highlight the section in view while the page scrolls
   useEffect(() => {
@@ -127,22 +158,39 @@ export default function SideNav({ items, onNavigate }) {
       {items.map((item) => {
         const isActive = item === activeItem;
         const first = pagesOf(item)[0].to;
-        const open = Boolean(item.children) && (isActive || hovered === item.label);
+        // closed only when the user closed it with the chevron (or never opened it)
+        const open = Boolean(item.children) && (pinned.has(item.label) || (isActive && !closedActive.has(item.label)) || hovered === item.label);
         return (
           <div key={item.label} onMouseEnter={() => hoverIn(item.label)} onMouseLeave={hoverOut}>
+            <div className="relative">
             <Link
               to={first}
-              onClick={go}
+              onClick={() => { if (item.children) { pin(item.label); unclose(item.label); } go(); }}
               title={item.label}
               aria-current={isActive && !item.children ? "page" : undefined}
-              className={`flex items-center gap-2.5 px-[18px] py-[7px] text-[13px] cursor-pointer transition-all duration-100 border-l-2 ${isActive ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}
+              className={`flex items-center gap-2.5 px-[18px] ${item.children ? "pr-9" : ""} py-[7px] text-[13px] cursor-pointer transition-all duration-100 border-l-2 ${isActive ? "text-cyan-500 bg-cyan-500/[0.08] border-cyan-500" : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-50"}`}
             >
               <span className="opacity-80 flex-shrink-0">{item.icon}</span>
               <span className="rail-label truncate flex-1">{item.label}</span>
-              {item.children && (
-                <span className={`rail-label sidenav-chev flex-shrink-0 ${open ? "" : "-rotate-90"}`}><ChevDown /></span>
-              )}
             </Link>
+              {item.children && (
+                <button
+                  type="button"
+                  data-no-confirm
+                  aria-label={open ? `Close ${item.label}` : `Open ${item.label}`}
+                  aria-expanded={open}
+                  title={open ? `Close ${item.label}` : `Open ${item.label}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (open) { pin(item.label, false); closeActive(item.label); setHovered(""); } else { pin(item.label); unclose(item.label); }
+                  }}
+                  className="rail-label sidenav-chev-btn absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-6 h-6 rounded-md hover:bg-slate-100 cursor-pointer"
+                >
+                  <span className={`sidenav-chev ${open ? "" : "-rotate-90"}`}><ChevDown /></span>
+                </button>
+              )}
+            </div>
             {item.children && (
               <div className={`sidenav-sub${open ? " is-open" : ""}`} inert={!open}>
                 <div>
@@ -153,7 +201,7 @@ export default function SideNav({ items, onNavigate }) {
                         <li key={child.to}>
                           <Link
                             to={child.to}
-                            onClick={go}
+                            onClick={() => { pin(item.label); unclose(item.label); go(); }}
                             aria-current={current ? (splitTo(child.to).hash ? "location" : "page") : undefined}
                             className={`sidenav-link rail-label${current ? " is-current" : ""}`}
                           >

@@ -170,3 +170,24 @@ export function filledFrom({ person, address = null }, keys) {
   if (address) Object.assign(patch, address, { region: "", barangay_code: "" });
   return patch;
 }
+
+// The biodata the document showed (birthday, sex, civil status, emergency
+// contact, highest attainment, school, course, work history, license
+// restriction codes), merged into the form `f` (lib/biodata.js values). Found
+// values replace what is there; the work history fills in only when the form
+// has none typed yet, and restriction codes are added to the ticked ones.
+export function biodataFilledFrom({ biodata } = {}, f = {}) {
+  const patch = {};
+  if (!biodata) return patch;
+  for (const [key, value] of Object.entries(biodata)) {
+    if (key === "work_history") {
+      const typed = (f.work_history || []).some((w) => String(w.company || "").trim());
+      if (!typed && value.length) patch.work_history = value.map((w) => ({ company: w.company || "", position: w.position || "", from: w.from || "", to: w.to || "" }));
+    } else if (key === "license_restrictions") {
+      patch.license_restrictions = [...new Set([...(f.license_restrictions || []), ...value])];
+    } else if (value !== "" && value != null) {
+      patch[key] = String(value);
+    }
+  }
+  return patch;
+}

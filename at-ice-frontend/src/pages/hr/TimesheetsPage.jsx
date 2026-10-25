@@ -13,6 +13,10 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
 import { payPeriodLabel } from "../../lib/payPeriod";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { todayManila } from "../../lib/time";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -91,8 +95,26 @@ export default function TimesheetsPage() {
     }
   };
 
+  const pager = usePagination(rows);
+
+  // Period summary (counts only, never pay amounts)
+  const all = data?.rows || [];
+  const statusOf = (s) => all.filter((r) => r.status === s).length;
+  const absences = all.reduce((s, r) => s + Number(r.absent_days || 0), 0);
+  const lateMin = all.reduce((s, r) => s + Number(r.late_minutes || 0), 0);
+  const otToApprove = all.filter((r) => r.ot_pending_minutes > 0).length;
+  const done = statusOf("unpaid") + statusOf("paid");
+
   return (
     <HrLayout pageTitle="Timesheets" breadcrumb="HRIS / Timesheets">
+      <KpiGrid cols={5}>
+        <KpiCard label="Employees" icon="users" tone="cyan" value={all.length} sub={period ? payPeriodLabel(period) : "This pay period"} />
+        <KpiCard label="Approved" icon="check" tone="emerald" value={done} sub={`${statusOf("paid")} already paid by Admin`} bar={all.length ? done / all.length : 0} />
+        <KpiCard label="Not approved" icon="clock" tone="amber" value={statusOf("not_approved")} sub={ended ? "Ready for your approval" : "Period has not ended yet"} bar={all.length ? statusOf("not_approved") / all.length : 0} live={ended && statusOf("not_approved") > 0} />
+        <KpiCard label="Absences" icon="x" tone="rose" value={absences} sub={`${lateMin} late minutes in all`} />
+        <KpiCard label="Overtime to approve" icon="alert" tone="violet" value={otToApprove} sub="Tick it with the timesheet to pay it" />
+      </KpiGrid>
+
       <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
           <button type="button" aria-label="Previous pay period" title="Previous pay period" disabled={!period} onClick={() => setDate(addDays(period.start, -1))} className={navBtn}><Chevron left /> Previous</button>
@@ -100,7 +122,7 @@ export default function TimesheetsPage() {
             {period ? payPeriodLabel(period) : "…"}
           </span>
           <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>
-          <input type="date" aria-label="Go to the pay period of a date" onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
+          <input type="date" aria-label="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-slate-500 w-full sm:w-60">
           <SearchIcon />
@@ -144,7 +166,7 @@ export default function TimesheetsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {pager.pageItems.map((r) => (
                   <tr key={r.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                     <td className="px-[18px] py-2.5"><input type="checkbox" data-native aria-label={`Select ${r.employee_id}`} disabled={!ended || r.status === "paid"} checked={selected.has(r.id)} onChange={() => toggle(r.id)} /></td>
                     <td className="px-3 py-2.5 font-mono text-slate-600">{r.employee_id}</td>
@@ -173,6 +195,7 @@ export default function TimesheetsPage() {
                 ))}
               </tbody>
             </table>
+            <Pagination pager={pager} />
           </div>
         )}
       </div>

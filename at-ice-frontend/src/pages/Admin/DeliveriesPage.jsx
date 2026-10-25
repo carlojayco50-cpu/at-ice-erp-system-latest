@@ -9,6 +9,18 @@ import { useMaxQuantity } from "../../lib/limits";
 import { formatDateTime as dateTime12 } from "../../lib/time";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
+import { DriverView, StoreView, EditDeliveryModal } from "./deliveries/BoardViews";
+import SameDayChanges from "./deliveries/SameDayChanges";
+import AdjustmentRequests from "./deliveries/AdjustmentRequests";
+import ContractsTab from "./deliveries/ContractsTab";
+import DriverStoresTab from "./deliveries/DriverStoresTab";
+import { ReassignedTag } from "./deliveries/shared";
+import { STATUS_STYLE } from "./deliveries/utils";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { PILL } from "../../lib/statusTones";
 
 const API_BASE = "/api";
 // Proof photos are on Laravel's public disk, served by the backend at /storage/.
@@ -17,13 +29,14 @@ const photoUrl = (path) => (path ? `${BACKEND_URL}/storage/${path}` : null);
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatDateTime = (v) => (v ? dateTime12(v) : "—");
 const PAYMENT_BADGE = {
-  paid: "bg-emerald-50 text-emerald-700",
-  unpaid: "bg-amber-50 text-amber-700",
-  overdue: "bg-red-50 text-red-700",
+  paid: PILL.success,
+  unpaid: PILL.warning,
+  overdue: PILL.danger,
 };
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
   { value: "pending", label: "Pending" },
+  { value: "queued", label: "Queued" },
   { value: "in_transit", label: "In Transit" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
@@ -37,13 +50,7 @@ const TrashIcon = () => <svg width="13" height="13" fill="none" stroke="currentC
 const EyeIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
 const BanIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>;
 
-// Board colors (lib/boardTones.js, monday.com style): a solid status cell.
-const STATUS_STYLE = {
-  pending:    { bg: "bg-[#579bfc]", text: "text-white" },
-  in_transit: { bg: "bg-[#fdab3d]", text: "text-white" },
-  delivered:  { bg: "bg-[#00c875]", text: "text-white" },
-  cancelled:  { bg: "bg-[#c4c4c4]", text: "text-white" },
-};
+// Status pill colors: deliveries/utils.js (one meaning per color everywhere)
 
 // Ice products delivered to customers. These are NOT inventory items
 // (ice is perishable and goes straight to the truck), so they are a fixed
@@ -76,7 +83,7 @@ const emptyBlock = () => ({
 // in_transit or unavailable. Worked out from attendance and deliveries.
 const DRIVER_STATUS = {
   available:   { dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  in_transit:  { dot: "bg-amber-500",   pill: "bg-amber-50 text-amber-700 border-amber-200" },
+  in_transit:  { dot: "bg-cyan-600",    pill: "bg-cyan-50 text-cyan-800 border-cyan-200" },
   unavailable: { dot: "bg-slate-400",   pill: "bg-slate-100 text-slate-600 border-slate-200" },
 };
 const DRIVER_ORDER = { available: 0, in_transit: 1, unavailable: 2 };
@@ -85,6 +92,16 @@ function statusLabel(d) {
   if (d.status === "in_transit") return "In-Transit";
   return `Unavailable (${(d.reason || "not timed in yet").toLowerCase()})`;
 }
+
+// Page tabs (?tab=). Driver View and Store View show one day; the list has
+// every delivery with status filters.
+const TABS = [
+  { value: "drivers", label: "Driver View" },
+  { value: "stores", label: "Store View" },
+  { value: "contracts", label: "Contracts" },
+  { value: "assign", label: "Driver Stores" },
+  { value: "list", label: "All Deliveries" },
+];
 
 function token() { return localStorage.getItem("token") || ""; }
 function authHeaders() {
@@ -100,7 +117,6 @@ export default function DeliveriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
   const [search, setSearch]   = useState("");
-  const [customerFilter, setCustomerFilter] = useState(""); // customer id, "" = all
 
   const maxQty = useMaxQuantity(); // same limit as Ice Loading and the Salesman confirmation
   // New Delivery modal: kept as a draft while open, so a refresh reopens it as it was.
@@ -116,8 +132,22 @@ export default function DeliveriesPage() {
   const [proofs, setProofs]         = useState({});
   const [searchParams, setSearchParams] = useSearchParams();
   const statusFilter = STATUS_FILTERS.some((f) => f.value === searchParams.get("status")) ? searchParams.get("status") : "all";
-  const setStatusFilter = (value) => setSearchParams(value === "all" ? {} : { status: value }, { replace: true });
+  // an old link with ?status= opens the list
+  const tab = TABS.some((t) => t.value === searchParams.get("tab")) ? searchParams.get("tab") : (searchParams.get("status") ? "list" : "drivers");
+  const setParams = (patch) => {
+    const next = { tab, status: statusFilter, ...patch };
+    setSearchParams(Object.fromEntries(Object.entries(next).filter(([k, v]) => v && !(k === "status" && v === "all") && !(k === "tab" && v === "drivers"))), { replace: true });
+  };
+  const setStatusFilter = (value) => setParams({ status: value });
+  const setTab = (value) => setParams({ tab: value, status: value === "list" ? statusFilter : "all" });
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+
+  // Driver View / Store View: one day of deliveries per driver (deliveries/board)
+  const [boardDate, setBoardDate] = useState(todayStr());
+  const [board, setBoard] = useState(null);
+  const [boardLoading, setBoardLoading] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -151,6 +181,23 @@ export default function DeliveriesPage() {
   const live = useLiveTick(["deliveries"]);
   useEffect(() => { fetchAll(); }, [fetchAll, live]);
 
+  const fetchBoard = useCallback(async () => {
+    setBoardLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/deliveries/board?date=${boardDate}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Board request failed (${res.status})`);
+      setBoard(await res.json());
+    } catch (err) {
+      console.error("board error:", err);
+      setError("Couldn't load the driver board. Check that the backend is running.");
+    } finally {
+      setBoardLoading(false);
+    }
+  }, [boardDate]);
+  useEffect(() => { fetchBoard(); }, [fetchBoard, live]);
+  const refreshAll = () => { fetchAll(); fetchBoard(); };
+  const activeStores = customers.filter((c) => c.is_active !== false && c.is_active !== 0);
+
   // Driver statuses for the picker; reloaded whenever the picker opens, so a
   // Driver who just timed in at the kiosk shows up as Available.
   const fetchAvailability = useCallback(async () => {
@@ -166,7 +213,8 @@ export default function DeliveriesPage() {
       setAvailLoading(false);
     }
   }, []);
-  useEffect(() => { if (showForm) fetchAvailability(); }, [showForm, fetchAvailability, live]);
+  // Loaded on open too, for the "Drivers available" KPI card
+  useEffect(() => { fetchAvailability(); }, [showForm, fetchAvailability, live]);
 
   function openAddForm() {
     setBlocks([emptyBlock()]);
@@ -290,25 +338,22 @@ export default function DeliveriesPage() {
     if (!cancelTarget) return;
     try {
       const res = await fetch(`${API_BASE}/deliveries/${cancelTarget.id}/cancel`, {
-        method: "PUT", headers: authHeaders(),
+        method: "PUT", headers: authHeaders(), body: JSON.stringify({ reason: cancelReason.trim() || null }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.message || "Failed to cancel delivery.");
       toast.success(`Delivery ${cancelTarget.delivery_no || ""} was cancelled.`.replace("  ", " "));
       setCancelTarget(null);
-      fetchAll();
+      setCancelReason("");
+      refreshAll();
     } catch (err) {
       toast.error(err.message);
-      setCancelTarget(null);
     }
   }
 
-  // Customer filter: the customers that have deliveries (a removed customer's
-  // old deliveries still show under their name). The status counts follow it.
-  const customerOptions = [...new Map(
-    deliveries.filter((d) => d.customer_id).map((d) => [String(d.customer_id), d.customer?.name || `Customer #${d.customer_id}`])
-  )].sort((a, b) => a[1].localeCompare(b[1]));
-  const forCustomer = customerFilter ? deliveries.filter((d) => String(d.customer_id) === customerFilter) : deliveries;
+  // No separate customer filter: customers are listed under each driver
+  // (Driver View) and by store (Store View).
+  const forCustomer = deliveries;
 
   const counts = STATUS_FILTERS.reduce((acc, f) => {
     acc[f.value] = f.value === "all" ? forCustomer.length : forCustomer.filter((d) => d.status === f.value).length;
@@ -323,61 +368,85 @@ export default function DeliveriesPage() {
     return haystack.includes(q);
   });
 
+  const pager = usePagination(filtered);
+
+  // Today at a glance for the KPI cards
+  const today = todayStr();
+  const todays = deliveries.filter((d) => String(d.scheduled_date || d.ordered_at || "").slice(0, 10) === today && d.status !== "cancelled");
+  const todayOf = (s) => todays.filter((d) => d.status === s).length;
+  const driversOn = availability.drivers.filter((d) => d.status !== "unavailable").length;
+  const driversFree = availability.drivers.filter((d) => d.status === "available").length;
+
   return (
     <AdminLayout pageTitle="Deliveries" breadcrumb="Delivery / Deliveries">
+      <KpiGrid cols={5}>
+        <KpiCard label="Stops today" icon="store" tone="cyan" value={todays.length} sub={`${counts.all || 0} deliveries on record`} />
+        <KpiCard label="Delivered today" icon="check" tone="emerald" value={todayOf("delivered")} sub={todays.length ? `${Math.round((todayOf("delivered") / todays.length) * 100)}% of today's stops` : "No stops today"} bar={todays.length ? todayOf("delivered") / todays.length : 0} />
+        <KpiCard label="In transit" icon="truck" tone="cyan" value={todayOf("in_transit")} sub="On the road now" live={todayOf("in_transit") > 0} bar={todays.length ? todayOf("in_transit") / todays.length : 0} />
+        <KpiCard label="Waiting" icon="clock" tone="amber" value={todayOf("pending") + todayOf("queued")} sub={`${todayOf("queued")} queued without a driver`} bar={todays.length ? (todayOf("pending") + todayOf("queued")) / todays.length : 0} />
+        <KpiCard label="Drivers available" icon="users" tone="violet" value={driversFree} sub={`${driversOn} on shift of ${availability.drivers.length} drivers`} bar={availability.drivers.length ? driversOn / availability.drivers.length : 0} />
+      </KpiGrid>
+
+      <AdjustmentRequests onChanged={refreshAll} />
+
       <div className="bg-white border border-black/[0.09] rounded-xl">
-        <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
+        <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-800">Deliveries</h2>
-            <p className="text-[12px] text-slate-500 mt-0.5">
-              Assign a driver, customer and items. The Driver starts the trip; the Salesman confirms it with a photo proof, which creates the receipt.
+            <p className="text-[12px] text-slate-500 mt-0.5 max-w-2xl">
+              Approved contracts make the daily deliveries. Each store goes to its assigned driver; a driver who is off has their stops reassigned. The Driver starts the trip and the Salesman confirms it with a photo proof, which creates the invoice.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              value={customerFilter}
-              onChange={(e) => setCustomerFilter(e.target.value)}
-              aria-label="Filter by customer"
-              className="bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500 max-w-[220px]"
-            >
-              <option value="">All customers</option>
-              {customerOptions.map(([id, name]) => (
-                <option key={id} value={id}>{name}</option>
-              ))}
-            </select>
+            {(tab === "drivers" || tab === "stores") && (
+              <>
+                <input
+                  type="date"
+                  value={boardDate}
+                  onChange={(e) => e.target.value && setBoardDate(e.target.value)}
+                  aria-label="Day to show"
+                  className="bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5 text-[13px] text-slate-700 outline-none focus:border-cyan-500"
+                />
+                {boardDate !== todayStr() && (
+                  <button type="button" onClick={() => setBoardDate(todayStr())} className="px-2.5 py-1.5 rounded-lg border border-black/[0.09] text-[12px] text-slate-600 hover:bg-slate-50">Today</button>
+                )}
+              </>
+            )}
+            {tab === "list" && (
             <div className="flex items-center gap-2 bg-slate-50 border border-black/[0.09] rounded-lg px-3 py-1.5">
               <SearchIcon />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search delivery, customer, salesman, invoice..."
-                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-56"
+                placeholder="Search delivery, customer, invoice…"
+                className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-64"
               />
             </div>
+            )}
+            {tab === "list" && (
             <button
               onClick={openAddForm}
+              title="A one-off delivery outside a contract"
               className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium rounded-lg transition-colors"
             >
-              <PlusIcon /> New Delivery
+              <PlusIcon /> One-off Delivery
             </button>
+            )}
           </div>
         </div>
 
-        <div className="px-[18px] pt-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by status">
-          {STATUS_FILTERS.map((f) => (
+        <div className="px-[18px] border-b border-black/[0.09] flex flex-wrap gap-1" role="tablist" aria-label="Deliveries views">
+          {TABS.map((t) => (
             <button
-              key={f.value}
+              key={t.value}
               type="button"
               role="tab"
-              aria-selected={statusFilter === f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border transition-colors cursor-pointer ${statusFilter === f.value ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-600 hover:bg-slate-50"}`}
+              aria-selected={tab === t.value}
+              onClick={() => setTab(t.value)}
+              className={`px-3 py-2.5 text-[12.5px] font-medium border-b-2 -mb-px whitespace-nowrap ${tab === t.value ? "border-cyan-500 text-cyan-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
             >
-              {f.label}{" "}
-              <span className={`ml-1 inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full text-[11px] font-bold tabular-nums ${statusFilter === f.value ? "bg-white text-cyan-700" : counts[f.value] > 0 ? "bg-slate-800 text-white" : "bg-slate-200 text-slate-600"}`}>
-                {counts[f.value]}
-              </span>
+              {t.label}
             </button>
           ))}
         </div>
@@ -388,7 +457,24 @@ export default function DeliveriesPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        {tab === "drivers" && (
+          <DriverView board={board} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
+        )}
+        {tab === "stores" && (
+          <StoreView board={board} loading={boardLoading} onView={setViewing} onEdit={setEditing} onCancel={setCancelTarget} />
+        )}
+        {tab === "contracts" && <ContractsTab stores={activeStores} live={live} onChanged={refreshAll} />}
+        {tab === "assign" && (
+          <DriverStoresTab stores={activeStores} drivers={board?.drivers || []} live={live} onChanged={refreshAll} />
+        )}
+
+        {tab === "list" && (<>
+        <div className="px-[18px] pt-3">
+          <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter}
+            options={STATUS_FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? 0 }))} />
+        </div>
+
+        <div className="overflow-x-auto lg:overflow-visible">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="text-left text-slate-400 text-[11px] uppercase tracking-widest">
@@ -407,22 +493,25 @@ export default function DeliveriesPage() {
               )}
               {!loading && filtered.length === 0 && (
                 <tr><td colSpan={7} className="px-[18px] py-8 text-center text-slate-400 text-[13px]">
-                  {search || customerFilter || statusFilter !== "all" ? "No deliveries match this filter." : "No deliveries yet."}
+                  {search || statusFilter !== "all" ? "No deliveries match this filter." : "No deliveries yet."}
                 </td></tr>
               )}
-              {!loading && filtered.map((d) => {
+              {!loading && pager.pageItems.map((d) => {
                 const style = STATUS_STYLE[d.status] || STATUS_STYLE.pending;
                 const proof = proofs[d.id];
                 return (
                   <tr key={d.id} className="border-t border-black/[0.06]">
                     <td className="px-[18px] py-2.5 font-mono text-slate-700">{d.delivery_no}</td>
                     <td className="px-[18px] py-2.5 text-slate-700">{d.customer?.name || <span className="text-slate-300">—</span>}</td>
-                    <td className="px-[18px] py-2.5 text-slate-700">{d.driver?.name || <span className="text-slate-300">—</span>}</td>
+                    <td className="px-[18px] py-2.5 text-slate-700">
+                      <div>{d.driver?.name || <span className="text-slate-300">{d.status === "queued" ? "Queued" : "—"}</span>}</div>
+                      <ReassignedTag delivery={d} />
+                    </td>
                     <td className="px-[18px] py-2.5 text-slate-600">
                       {d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                     </td>
                     <td className="px-[18px] py-2.5">
-                      <span className={`inline-flex items-center justify-center min-w-[88px] px-2 py-1 rounded-sm text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
+                      <span className={`inline-flex items-center justify-center min-w-[84px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
                         {d.status?.replace("_", " ")}
                       </span>
                     </td>
@@ -446,7 +535,7 @@ export default function DeliveriesPage() {
                           <EyeIcon />
                         </button>
                         {d.status !== "delivered" && d.status !== "cancelled" && (
-                          <button onClick={() => setCancelTarget(d)} className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50" title="Cancel">
+                          <button data-no-confirm onClick={() => setCancelTarget(d)} className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50" title="Cancel">
                             <BanIcon />
                           </button>
                         )}
@@ -458,6 +547,8 @@ export default function DeliveriesPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
+        </>)}
       </div>
 
       {/* New Delivery modal: one or more delivery blocks, each with its own
@@ -556,7 +647,7 @@ export default function DeliveriesPage() {
                         <label className="text-[11px] text-slate-500 mb-2 block">Items *</label>
                         <div className="flex flex-col gap-2">
                           {block.items.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-[1fr_110px_auto] gap-2 items-center">
+                            <div key={idx} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_110px_auto] gap-2 items-center">
                               <select
                                 value={item.product_type}
                                 onChange={(e) => updateItem(bi, idx, "product_type", e.target.value)}
@@ -637,7 +728,9 @@ export default function DeliveriesPage() {
             </div>
             <div className="p-5 flex flex-col gap-3 text-[13px]">
               <Row label="Customer" value={viewing.customer?.name} />
-              <Row label="Driver" value={viewing.driver?.name} />
+              <Row label="Driver" value={<>{viewing.driver?.name || (viewing.status === "queued" ? "Queued, waiting for a driver" : "—")} {viewing.reassigned_from && <span className="ml-1"><ReassignedTag delivery={viewing} /></span>}</>} />
+              {viewing.contract && <Row label="Contract" value={`${viewing.contract.contract_no} · ${viewing.contract.name}`} />}
+              {viewing.cancel_reason && <Row label="Cancel reason" value={viewing.cancel_reason} />}
               <Row label="Scheduled" value={viewing.scheduled_date ? new Date(viewing.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"} />
               <Row label="Status" value={<span className="capitalize">{viewing.status?.replace("_", " ")}</span>} />
               <Row label="Notes" value={viewing.notes || "—"} />
@@ -657,10 +750,22 @@ export default function DeliveriesPage() {
                   ))}
                 </div>
               </div>
+              <SameDayChanges delivery={viewing} onChanged={refreshAll} />
               {proofs[viewing.id] && <ProofSection proof={proofs[viewing.id]} />}
             </div>
           </div>
         </div>
+      )}
+
+
+      {editing && (
+        <EditDeliveryModal
+          delivery={editing}
+          drivers={board?.drivers || []}
+          isToday={String(editing.scheduled_date || "").slice(0, 10) === (board?.today || todayStr())}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); refreshAll(); }}
+        />
       )}
 
       {/* Cancel confirmation */}
@@ -668,15 +773,42 @@ export default function DeliveriesPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5">
             <h3 className="text-[14px] font-semibold text-slate-800 mb-1.5">Cancel delivery?</h3>
-            <p className="text-[12px] text-slate-500 mb-4">
+            <p className="text-[12px] text-slate-500 mb-3">
               <span className="font-medium text-slate-700">{cancelTarget.delivery_no}</span> will be marked cancelled and removed from the driver's active list.
             </p>
+            {cancelTarget.status === "in_transit" ? (
+              <div className="mb-4">
+                <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 mb-2">
+                  This delivery is in transit. It can only be cancelled for a real emergency.
+                </p>
+                <label className="text-[11px] text-slate-500 mb-1 block">What happened? *</label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={2}
+                  className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                />
+              </div>
+            ) : (
+              <div className="mb-4">
+                <label className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</label>
+                <input
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
+                />
+              </div>
+            )}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setCancelTarget(null)} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
+              <button onClick={() => { setCancelTarget(null); setCancelReason(""); }} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
                 Keep it
               </button>
-              <button onClick={confirmCancel} className="px-3.5 py-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white text-[12px] font-medium">
-                Cancel Delivery
+              <button
+                onClick={confirmCancel}
+                disabled={cancelTarget.status === "in_transit" && cancelReason.trim().length < 5}
+                className="px-3.5 py-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white text-[12px] font-medium disabled:opacity-50"
+              >
+                {cancelTarget.status === "in_transit" ? "Emergency Cancel" : "Cancel Delivery"}
               </button>
             </div>
           </div>

@@ -3,6 +3,8 @@ import HrLayout from "../../components/HrLayout";
 import PasswordInput from "../../components/PasswordInput";
 import { toast } from "../../lib/toast";
 import { formatDateTime } from "../../lib/time";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { TipsWidget } from "../../components/Insight";
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -79,41 +81,17 @@ export default function KioskPinPage() {
 
   return (
     <HrLayout pageTitle="Kiosk PIN" breadcrumb="HRIS / Kiosk PIN">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl">
+      {/* Status */}
+      {loadError && <Notice tone="error">{loadError}</Notice>}
+      <KpiGrid cols={4}>
+        <KpiCard label="Kiosk PIN" icon="key" tone={status?.pin_set ? "emerald" : "rose"} value={!status ? "…" : status.pin_set ? "Set" : "Not set"}
+          sub={!status ? "Loading" : status.pin_set && status.pin_changed_at ? `Changed ${fmtDateTime(status.pin_changed_at)}${status.pin_changed_by ? ` by ${status.pin_changed_by}` : ""}` : "Every kiosk is locked until it is set"} />
+        <KpiCard label="Unlocked terminals" icon="check" tone="cyan" value={status ? Number(status.unlocked_kiosks || 0) : "…"} sub="Can record Time In and Time Out" live={Number(status?.unlocked_kiosks || 0) > 0} />
+        <KpiCard label="Locked kiosks" icon="alert" tone={status?.locked_kiosks?.length ? "rose" : "emerald"} value={status ? (status.locked_kiosks?.length || 0) : "…"} sub={status?.locked_kiosks?.length ? "Need the Admin override PIN" : "None locked"} />
+        <KpiCard label="Who can unlock" icon="shield" tone="violet" value={status?.can_unlock ? "HR & Admin" : "Admin"} sub="A locked kiosk, after 5 wrong PINs" />
+      </KpiGrid>
 
-        {/* Status */}
-        <div className="lg:col-span-2 bg-white border border-black/[0.09] rounded-xl p-[18px]">
-          <h2 className="text-[15px] font-semibold text-slate-800">Attendance Station security</h2>
-          <p className="text-[12px] text-slate-500 mt-0.5">
-            A terminal needs this 4-digit PIN before it can open the Attendance Station.
-          </p>
-          {loadError && <div className="mt-3"><Notice tone="error">{loadError}</Notice></div>}
-          {status && (
-            <dl className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12px]">
-              <div className="rounded-lg bg-slate-50 border border-black/[0.06] px-3 py-2">
-                <dt className="text-slate-400">PIN</dt>
-                <dd className="mt-0.5 font-medium text-slate-800">
-                  {status.pin_set ? "Set" : "Not set (every kiosk is locked)"}
-                </dd>
-                {status.pin_set && status.pin_changed_at && (
-                  <dd className="text-slate-400 mt-0.5">
-                    Changed {fmtDateTime(status.pin_changed_at)}{status.pin_changed_by ? ` by ${status.pin_changed_by}` : ""}
-                  </dd>
-                )}
-              </div>
-              <div className="rounded-lg bg-slate-50 border border-black/[0.06] px-3 py-2">
-                <dt className="text-slate-400">Unlocked terminals</dt>
-                <dd className="mt-0.5 font-medium text-slate-800">{status.unlocked_kiosks}</dd>
-              </div>
-              <div className="rounded-lg bg-slate-50 border border-black/[0.06] px-3 py-2">
-                <dt className="text-slate-400">Locked kiosks</dt>
-                <dd className={`mt-0.5 font-medium ${status.locked_kiosks?.length ? "text-red-600" : "text-slate-800"}`}>
-                  {status.locked_kiosks?.length || "None"}
-                </dd>
-              </div>
-            </dl>
-          )}
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
 
         {/* Set or change the PIN */}
         <form onSubmit={savePin} className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3">
@@ -200,6 +178,12 @@ export default function KioskPinPage() {
             </ul>
           )}
         </div>
+
+        <TipsWidget title="How the kiosk stays safe" tips={[
+          { title: "Change the PIN after a staff change", text: "Every unlocked terminal locks again and needs the new PIN.", tone: "cyan", icon: "key" },
+          { title: "Five wrong PINs lock a kiosk", text: "HR and Admin get a notice and an email with the kiosk, time and IP.", tone: "rose", icon: "alert" },
+          { title: "Kiosks are for computers", text: "Phones and tablets cannot open the Attendance Station; it also needs a working camera.", tone: "violet", icon: "shield" },
+        ]} />
       </div>
     </HrLayout>
   );
