@@ -1,382 +1,226 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import logo from "../../assets/logo.png";
+import RoleShell from "../../components/RoleShell";
+import { LoadingButton, BottomSheet, ActionBar, ErrorBanner, SuccessBanner, EmptyCard, CardSkeleton, Icon } from "../../components/MobileUi";
+import { CARD, FIELD, TEXTAREA, LABEL } from "../../lib/mobileUi";
 import PhoneInput from "../../components/PhoneInput";
 import { ANY_REGEX, ANY_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
-import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { useLiveTick } from "../../lib/live";
-import EmptyState from "../../components/EmptyState";
 import AddressFields from "../../components/AddressFields";
-import { ScopeStatusRow } from "../../components/NightMode";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
 
-const ChevronLeftIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-    <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-    <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-  </svg>
-);
-
-const inputCls = "text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400";
-
 const emptyForm = {
-  name: "",
-  contact_person: "",
-  contact_number: "",
-  email: "",
-  address: "",
-  barangay: "",
-  barangay_code: "",
-  city: "",
-  province: "",
-  region: "",
-  notes: "",
+  name: "", contact_person: "", contact_number: "", email: "", address: "",
+  barangay: "", barangay_code: "", city: "", province: "", region: "", notes: "",
 };
 
+// Checker > Suppliers: suppliers of supplies and materials (code assigned
+// automatically). Add and edit in a bottom sheet; removing asks first.
 export default function CheckerSupplierManagementPage() {
-  const navigate = useNavigate();
   const timedIn = useTimedIn();
   const token = localStorage.getItem("token");
-
   const [suppliers, setSuppliers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState("loading");
+  const [loadError, setLoadError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [query, setQuery] = useState("");
 
-  // Kept as a draft while the form is open, so a refresh reopens it as it was.
   const formDraft = useDraft("checker:supplier", { showForm: false, editingId: null, form: emptyForm }, { when: (v) => v.showForm });
-  const { showForm, editingId, form } = formDraft.values; // editingId null = creating new
+  const { showForm, editingId, form } = formDraft.values; // editingId null = new
   const { showForm: setShowForm, editingId: setEditingId, form: setForm } = formDraft.set;
   const [submitting, setSubmitting] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
-  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const [removing, setRemoving] = useState(false);
   const [notice, setNotice] = useState("");
   const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
 
   useEffect(() => {
-    if (!notice) return;
+    if (!notice) return undefined;
     const t = setTimeout(() => setNotice(""), 3500);
     return () => clearTimeout(t);
   }, [notice]);
 
-  const fetchSuppliers = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const load = useCallback(async () => {
+    setLoadError("");
     try {
-      const res = await fetch("/api/suppliers", {
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch("/api/suppliers", { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Failed to load suppliers.");
       const data = await res.json();
       setSuppliers(Array.isArray(data) ? data : data.data || []);
+      setStatus("ready");
     } catch (e) {
-      setError(e.message || "Request failed. Try again.");
-    } finally {
-      setLoading(false);
+      setLoadError(e.message || "Request failed. Try again.");
+      setStatus("error");
     }
   }, [token]);
-
-  // Load on open
-  // reload when a live notice for this page arrives (lib/live.js)
   const live = useLiveTick(["suppliers"]);
-  useEffect(() => {
-    fetchSuppliers();
-  }, [fetchSuppliers, live]);
+  useEffect(() => { load(); }, [load, live]);
 
   function startCreate() {
     setEditingId(null);
     setForm(emptyForm);
-    setError("");
+    setFormError("");
     setShowForm(true);
   }
-
   function startEdit(s) {
     setEditingId(s.id);
-    setError("");
+    setFormError("");
     setForm({
-      name: s.name || "",
-      contact_person: s.contact_person || "",
-      contact_number: localDigits(s.contact_number),
-      email: s.email || "",
-      address: s.address || "",
-      barangay: s.barangay || "",
-      barangay_code: s.barangay_code || "",
-      city: s.city || "",
-      province: s.province || "",
-      region: s.region || "",
-      notes: s.notes || "",
+      name: s.name || "", contact_person: s.contact_person || "", contact_number: localDigits(s.contact_number), email: s.email || "",
+      address: s.address || "", barangay: s.barangay || "", barangay_code: s.barangay_code || "", city: s.city || "",
+      province: s.province || "", region: s.region || "", notes: s.notes || "",
     });
     setShowForm(true);
   }
 
   async function submit(e) {
     e.preventDefault();
-    setError("");
-    if (!form.name.trim()) return setError("Enter the supplier name.");
-    if (form.contact_number && !ANY_REGEX.test(form.contact_number)) return setError(ANY_MESSAGE);
+    if (submitting) return;
+    setFormError("");
+    if (!form.name.trim()) return setFormError("Enter the supplier name.");
+    if (form.contact_number && !ANY_REGEX.test(form.contact_number)) return setFormError(ANY_MESSAGE);
     setSubmitting(true);
     try {
-      const url = editingId ? `/api/suppliers/${editingId}` : "/api/suppliers";
-      const method = editingId ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...form,
-          name: form.name.trim(),
-          contact_number: toStoredPhone(form.contact_number) || null,
-          email: form.email.trim() || null,
-        }),
+      const res = await fetch(editingId ? `/api/suppliers/${editingId}` : "/api/suppliers", {
+        method: editingId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...form, name: form.name.trim(), contact_number: toStoredPhone(form.contact_number) || null, email: form.email.trim() || null }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        // Surface Laravel validation messages (e.g. "The supplier code field is required.")
-        const firstError =
-          data.errors ? Object.values(data.errors)[0]?.[0] : null;
-        throw new Error(firstError || data.message || "Could not save this supplier.");
-      }
+      if (!res.ok) throw new Error((data.errors ? Object.values(data.errors)[0]?.[0] : null) || data.message || "Could not save this supplier.");
       setNotice(editingId ? `${form.name.trim()} updated.` : `${form.name.trim()} added as ${data.supplier_code || "a new supplier"}.`);
       toast.success(editingId ? `${form.name.trim()} was updated.` : `${form.name.trim()} was added.`);
-      setShowForm(false);
-      setEditingId(null);
-      setForm(emptyForm);
-      fetchSuppliers();
+      formDraft.clear();
+      load();
     } catch (e) {
-      setError(e.message || "Request failed. Try again.");
+      setFormError(e.message || "Request failed. Try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function remove(id) {
-    setDeletingId(id);
-    setError("");
+  async function remove() {
+    if (removing || !removeTarget) return;
+    setRemoving(true);
     try {
-      const res = await fetch(`/api/suppliers/${id}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`/api/suppliers/${removeTarget.id}`, { method: "DELETE", headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Could not remove this supplier.");
       }
-      setNotice("Supplier removed.");
+      setSuppliers((list) => list.filter((s) => s.id !== removeTarget.id));
       toast.success("Supplier was removed.");
-      fetchSuppliers();
+      setRemoveTarget(null);
+      load();
     } catch (e) {
-      setError(e.message || "Request failed. Try again.");
+      toast.error(e.message || "Request failed. Try again.");
     } finally {
-      setDeletingId(null);
-      setConfirmRemoveId(null);
+      setRemoving(false);
     }
   }
 
+  const q = query.trim().toLowerCase();
+  const visible = q ? suppliers.filter((s) => `${s.name} ${s.supplier_code} ${s.contact_person || ""} ${s.city || ""}`.toLowerCase().includes(q)) : suppliers;
+
   return (
-    <div className="min-h-screen bg-white">
-      <div className="sticky top-0 z-10 bg-white border-b border-black/[0.09]">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => navigate("/checker/dashboard")}
-            className="text-slate-500 hover:text-slate-800 transition-colors"
-            aria-label="Back to dashboard"
-          >
-            <ChevronLeftIcon />
-          </button>
-          <span className="brand-logo w-11 h-11 flex-shrink-0 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"><img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" /></span>
-          <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-semibold text-slate-800 leading-tight">
-              Supplier Management
-            </div>
-            <div className="text-[12px] text-slate-400 leading-tight">
-              {suppliers.length} supplier{suppliers.length === 1 ? "" : "s"} of supplies and materials
-            </div>
-          </div>
-        </div>
-        <ScopeStatusRow className="px-4 pb-3" />
-        <TimeInNotice timedIn={timedIn} className="mx-4 mb-3" />
+    <RoleShell
+      role="checker"
+      title="Suppliers"
+      actionBar={<ActionBar><LoadingButton onClick={startCreate} disabled={timedIn === false}><Icon name="plus" /> Add supplier</LoadingButton></ActionBar>}
+    >
+      <TimeInNotice timedIn={timedIn} />
+      <SuccessBanner>{notice}</SuccessBanner>
 
-        {!showForm && (
-          <div className="px-4 pb-3 flex">
-            <button
-              onClick={startCreate}
-              className="flex items-center gap-1 text-[12px] font-semibold bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg px-3 py-1.5 transition-colors"
-            >
-              <PlusIcon /> Add Supplier
-            </button>
-          </div>
-        )}
-
-        {showForm && (
-          <form onSubmit={submit} className="px-4 pb-4 flex flex-col gap-2.5 border-t border-black/[0.06] pt-3">
-            <div className="text-[13px] font-semibold text-slate-800">
-              {editingId ? "Edit Supplier" : "Add Supplier"}
-              {!editingId && <span className="ml-2 text-[11px] font-normal text-slate-400">Code is assigned automatically</span>}
-            </div>
-            <DraftHint draft={formDraft} />
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Supplier name"
-              required
-              className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
-            />
-            <input
-              value={form.contact_person}
-              onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
-              placeholder="Contact person"
-              className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
-            />
-            <div className="flex gap-2.5">
-              <div className="flex-1 min-w-0">
-                <PhoneInput
-                  value={form.contact_number}
-                  onChange={(v) => setForm({ ...form, contact_number: v })}
-                  placeholder="Contact no."
-                  className={inputCls}
-                  invalid={!!form.contact_number && !ANY_REGEX.test(form.contact_number)}
-                />
-              </div>
-              <input
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                type="email"
-                placeholder="Email"
-                className="flex-1 min-w-0 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
-              />
-            </div>
-            <input
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="House no., street, subdivision"
-              aria-label="Street address"
-              className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400"
-            />
-            <div className="grid grid-cols-2 gap-2.5">
-              <AddressFields
-                value={form}
-                onChange={handleAddress}
-                details={false}
-                inputClassName="w-full min-w-0 text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400 disabled:opacity-60"
-              />
-            </div>
-            <textarea
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Notes (optional)"
-              rows={2}
-              className="text-[13px] border border-black/[0.09] rounded-lg px-3 py-2 outline-none focus:border-cyan-400 resize-none"
-            />
-            {error && <div className="text-[12px] text-red-500">{error}</div>}
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={submitting || timedIn === false}
-                className="flex-1 text-[13px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg py-2 transition-colors disabled:opacity-50"
-              >
-                {submitting ? "Saving…" : editingId ? "Save changes" : "Add supplier"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingId(null);
-                  setError("");
-                }}
-                className="text-[13px] font-medium border border-black/[0.09] text-slate-500 hover:text-slate-800 rounded-lg px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
+      <div className="relative">
+        <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search supplier, code or city" aria-label="Search suppliers" className={`${FIELD} pl-10`} />
       </div>
 
-      <div className="w-full px-4 py-4 flex flex-col gap-2.5 max-w-2xl mx-auto">
-        {!showForm && error && (
-          <div className="text-[13px] text-red-500 text-center py-2">{error}</div>
-        )}
-        {notice && (
-          <div className="px-3 py-2 rounded-lg border border-green-200 bg-green-50 text-[12px] text-green-700 text-center">
-            {notice}
-          </div>
-        )}
-        {loading && <SkeletonList />}
-        {!loading && suppliers.length === 0 && (
-          <EmptyState icon="store">No suppliers added yet. Use Add Supplier to create one.</EmptyState>
-        )}
+      {status === "loading" && <CardSkeleton rows={3} />}
+      {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}
+      {status === "ready" && visible.length === 0 && (
+        <EmptyCard icon="users" title={q ? "No match" : "No suppliers yet"}>{q ? "No supplier matches your search." : "Tap Add supplier to create one."}</EmptyCard>
+      )}
 
-        {!loading &&
-          suppliers.map((s) => (
-            <div key={s.id} className="rounded-xl border border-black/[0.09] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[14px] font-medium text-slate-800 truncate">{s.name}</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 font-mono">{s.supplier_code}</div>
-                  {s.contact_person && (
-                    <div className="text-[12px] text-slate-400 mt-1">{s.contact_person}</div>
-                  )}
-                  <div className="text-[12px] text-slate-500 mt-1 flex flex-wrap gap-x-3">
-                    {s.contact_number && <span>{s.contact_number}</span>}
-                    {s.email && <span>{s.email}</span>}
-                  </div>
-                  {(s.address || s.barangay || s.city || s.province) && (
-                    <div className="text-[12px] text-slate-400 mt-1">
-                      {[s.address, s.barangay && `Brgy. ${s.barangay}`, s.city, s.province].filter(Boolean).join(", ")}
-                    </div>
-                  )}
-                  {s.notes && <div className="text-[12px] text-slate-400 mt-1 italic">{s.notes}</div>}
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  {confirmRemoveId === s.id ? (
-                    <>
-                      <span className="text-[12px] text-slate-500">Remove?</span>
-                      <button
-                        onClick={() => remove(s.id)}
-                        disabled={deletingId === s.id || timedIn === false}
-                        className="text-[12px] font-semibold text-red-500 hover:text-red-600 transition-colors disabled:opacity-50"
-                      >
-                        {deletingId === s.id ? "Removing…" : "Yes"}
-                      </button>
-                      <button
-                        onClick={() => setConfirmRemoveId(null)}
-                        className="text-[12px] font-medium text-slate-500 hover:text-slate-800 transition-colors"
-                      >
-                        No
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => startEdit(s)}
-                        className="text-[12px] font-medium text-cyan-600 hover:text-cyan-700 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setConfirmRemoveId(s.id)}
-                        className="text-[12px] font-medium text-red-500 hover:text-red-600 transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </>
-                  )}
-                </div>
+      {status === "ready" && (
+        <div className="grid grid-cols-1 gap-3">
+          {visible.map((s) => (
+            <article key={s.id} className={CARD}>
+              <h2 className="text-[15px] font-semibold text-slate-900">{s.name}</h2>
+              <div className="text-[13px] text-slate-400 font-mono">{s.supplier_code}</div>
+              {s.contact_person && <div className="text-[14px] text-slate-600 mt-1">{s.contact_person}</div>}
+              <div className="text-[14px] text-slate-600 flex flex-wrap gap-x-3">
+                {s.contact_number && <a href={`tel:${s.contact_number}`} className="min-h-[44px] inline-flex items-center text-cyan-700 font-semibold">{s.contact_number}</a>}
+                {s.email && <span className="inline-flex items-center min-h-[44px] break-all">{s.email}</span>}
               </div>
-            </div>
+              {(s.address || s.barangay || s.city || s.province) && (
+                <div className="text-[13px] text-slate-500">{[s.address, s.barangay && `Brgy. ${s.barangay}`, s.city, s.province].filter(Boolean).join(", ")}</div>
+              )}
+              {s.notes && <div className="text-[13px] text-slate-500 mt-1 italic">{s.notes}</div>}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <LoadingButton variant="secondary" onClick={() => startEdit(s)} disabled={timedIn === false}><Icon name="edit" size={16} /> Edit</LoadingButton>
+                <LoadingButton data-no-confirm variant="secondary" className="!text-rose-700" onClick={() => setRemoveTarget(s)} disabled={timedIn === false}>Remove</LoadingButton>
+              </div>
+            </article>
           ))}
-      </div>
-    </div>
+        </div>
+      )}
+
+      <BottomSheet
+        open={showForm}
+        onClose={() => !submitting && setShowForm(false)}
+        title={editingId ? "Edit supplier" : "Add supplier"}
+        footer={<LoadingButton type="submit" form="supplier-form" loading={submitting} disabled={timedIn === false}>{submitting ? "Saving…" : editingId ? "Save changes" : "Add supplier"}</LoadingButton>}
+      >
+        <form id="supplier-form" onSubmit={submit} className="space-y-4" noValidate>
+          <DraftHint draft={formDraft} />
+          <ErrorBanner>{formError}</ErrorBanner>
+          {!editingId && <p className="text-[13px] text-slate-500">The supplier code is assigned automatically.</p>}
+          <div>
+            <label htmlFor="sup-name" className={LABEL}>Supplier name *</label>
+            <input id="sup-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={FIELD} />
+          </div>
+          <div>
+            <label htmlFor="sup-person" className={LABEL}>Contact person</label>
+            <input id="sup-person" value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className={FIELD} />
+          </div>
+          <div>
+            <label className={LABEL}>Contact number</label>
+            <PhoneInput value={form.contact_number} onChange={(v) => setForm({ ...form, contact_number: v })} placeholder="917 123 4567" className={FIELD}
+              invalid={!!form.contact_number && !ANY_REGEX.test(form.contact_number)} />
+          </div>
+          <div>
+            <label htmlFor="sup-email" className={LABEL}>Email</label>
+            <input id="sup-email" type="email" inputMode="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={FIELD} />
+          </div>
+          <div>
+            <label htmlFor="sup-address" className={LABEL}>House no., street, subdivision</label>
+            <input id="sup-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={FIELD} />
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            <AddressFields value={form} onChange={handleAddress} details={false} inputClassName={`${FIELD} disabled:opacity-60`} />
+          </div>
+          <div>
+            <label htmlFor="sup-notes" className={LABEL}>Notes</label>
+            <textarea id="sup-notes" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className={TEXTAREA} />
+          </div>
+        </form>
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!removeTarget}
+        onClose={() => !removing && setRemoveTarget(null)}
+        title="Remove this supplier?"
+        footer={<>
+          <LoadingButton variant="danger" loading={removing} onClick={remove}>Remove supplier</LoadingButton>
+          <LoadingButton variant="secondary" disabled={removing} onClick={() => setRemoveTarget(null)}>Keep it</LoadingButton>
+        </>}
+      >
+        {removeTarget && <p className="text-[15px] text-slate-600"><b>{removeTarget.name}</b> ({removeTarget.supplier_code}) will be removed from the supplier list.</p>}
+      </BottomSheet>
+    </RoleShell>
   );
 }

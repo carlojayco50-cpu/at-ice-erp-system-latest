@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\CustomerPrice;
 use App\Models\Delivery;
+use App\Models\DeliveryArrival;
+use App\Models\DeliveryCrew;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -19,7 +21,7 @@ class DeliveryConfirmationTest extends TestCase
     private function delivery(string $status): Delivery
     {
         $admin = User::create(['name' => 'Admin', 'email' => 'admin@atice.cloud', 'password' => 'secret-password', 'role' => 'admin']);
-        $driver = User::create(['name' => 'Driver', 'email' => 'driver@atice.cloud', 'password' => 'secret-password', 'role' => 'driver']);
+        $driver = $this->timedIn(User::create(['name' => 'Driver', 'email' => 'driver@atice.cloud', 'password' => 'secret-password', 'role' => 'driver']));
         $customer = Customer::create(['name' => 'Alfamart Muzon', 'customer_code' => 'CUST-ALF-001', 'branch_code' => 'ALF-SJDM-001', 'invoice_code' => 'PG', 'is_active' => true]);
         CustomerPrice::create(['customer_id' => $customer->id, 'product_type' => 'bags', 'unit_price' => 50]);
 
@@ -29,10 +31,18 @@ class DeliveryConfirmationTest extends TestCase
         ]);
     }
 
-    private function confirm(Delivery $delivery, int $quantity = 2)
+    // The Salesman rides with the delivery's Driver and, unless $arrived is
+    // false, both pressed Arrived at the store.
+    private function confirm(Delivery $delivery, int $quantity = 2, bool $arrived = true)
     {
         Storage::fake('public');
-        $salesman = User::create(['name' => 'Salesman', 'email' => 'sales@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']);
+        $salesman = $this->timedIn(User::create(['name' => 'Salesman', 'email' => 'sales@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'salesman']));
+        DeliveryCrew::create(['date' => now()->toDateString(), 'salesman_id' => $salesman->id, 'driver_id' => $delivery->driver_id]);
+        if ($arrived) {
+            foreach ([[$delivery->driver_id, 'driver'], [$salesman->id, 'salesman']] as [$userId, $role]) {
+                DeliveryArrival::create(['delivery_id' => $delivery->id, 'user_id' => $userId, 'role' => $role, 'latitude' => 14.8, 'longitude' => 121.05, 'distance_m' => 10, 'arrived_at' => now()]);
+            }
+        }
         Sanctum::actingAs($salesman);
         // A 1x1 JPEG (no GD needed)
         $jpeg = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=');
@@ -59,6 +69,14 @@ class DeliveryConfirmationTest extends TestCase
 
         $this->confirm($delivery, 501)->assertUnprocessable()->assertJsonValidationErrors('products.0.quantity');
         $this->assertDatabaseCount('delivery_proofs', 0);
+    }
+
+    public function test_salesman_cannot_confirm_until_both_arrived(): void
+    {
+        $delivery = $this->delivery('in_transit');
+
+        $this->confirm($delivery, 2, false)->assertUnprocessable()->assertJsonFragment(['message' => 'Both the Driver and you must press Arrived at the store before the delivery can be confirmed.']);
+        $this->assertSame('in_transit', $delivery->fresh()->status);
     }
 
     public function test_salesman_confirms_once_the_delivery_is_in_transit(): void

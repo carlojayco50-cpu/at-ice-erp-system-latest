@@ -8,10 +8,11 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * A Checker saves nothing (POST/PUT/PATCH/DELETE) until they have timed in at
- * the Attendance Station kiosk (owner, 2026-10-16). Reading is still allowed.
- * Only employees are checked; Admin passes. 403, never 401, so the session
- * expiry handler on the frontend is not triggered.
+ * A Checker, Salesman, Maintenance employee or Driver saves nothing
+ * (POST/PUT/PATCH/DELETE) until they have timed in at the Attendance Station
+ * kiosk (owner, 2026-10-16 for the Checker, 2026-10-20 for everyone). Reading
+ * is still allowed. Only employees and Drivers are checked; Admin passes. 403,
+ * never 401, so the session expiry handler on the frontend is not triggered.
  */
 class EnsureTimedIn
 {
@@ -19,7 +20,7 @@ class EnsureTimedIn
     {
         $user = $request->user();
 
-        if ($request->isMethodSafe() || ! $user || $user->role !== 'employee') {
+        if ($request->isMethodSafe() || ! $user || ! in_array($user->role, ['employee', 'driver'], true)) {
             return $next($request);
         }
 

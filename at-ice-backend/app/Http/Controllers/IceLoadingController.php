@@ -27,7 +27,9 @@ class IceLoadingController extends Controller
             ->unique('delivery_id')
             ->keyBy('delivery_id');
 
-        $rows = Delivery::with(['customer:id,name', 'driver:id,name'])
+        // Today's and older open deliveries (contracts schedule weeks ahead),
+        // with the quantities Admin booked, which the count starts from.
+        $rows = Delivery::with(['customer:id,name', 'items:id,delivery_id,product_type,quantity_ordered', 'driver:id,name'])
             ->whereIn('status', ['pending', 'in_transit'])
             ->whereDate('scheduled_date', '<=', $today)
             ->orderBy('scheduled_date')
@@ -41,6 +43,7 @@ class IceLoadingController extends Controller
                 'driver' => $d->driver?->name,
                 'status' => $d->status,
                 'scheduled_date' => $d->scheduled_date?->toDateString(),
+                'booked' => $d->items->pluck('quantity_ordered', 'product_type'),
                 'loaded' => $loaded->has($d->id),
                 'loaded_by' => $loaded->get($d->id)?->checker?->name,
             ]);

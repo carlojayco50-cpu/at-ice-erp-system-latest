@@ -8,12 +8,15 @@ import { installPressFeedback } from './lib/pressFeedback'
 import { startLiveFeed } from './lib/live'
 import { installAutoCapitalize } from './lib/autoCapitalize'
 import { installAutoGrow } from './lib/autoGrow'
+import { installEffects } from './lib/fx'
 
 installSessionExpiryHandler()
 installAutoCapitalize()
 installAutoGrow()
 installPressFeedback()
 startLiveFeed()
+// Optional motion layer (src/ui-effects/, switch in effectsConfig.js)
+installEffects()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

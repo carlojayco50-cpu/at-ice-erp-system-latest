@@ -1,5 +1,7 @@
 # CI on every push to main and every PR:
 #   build       - both production images build (Dockerfiles, frontend bundle)
+#   backend-tests - every feature test passes (php artisan test, in-memory SQLite)
+#   frontend    - lint and production build of the SPA
 #   migrations  - every migration runs cleanly on a fresh MySQL 8.4, the same
 #                 engine as production (SQLite in local dev hides FK/order bugs)
 # Deployment is separate: the hosting platform auto-deploys main on push.
@@ -36,6 +38,44 @@ jobs:
           push: false
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: at-ice-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, bcmath, gd
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run the feature tests (in-memory SQLite)
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: at-ice-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: at-ice-frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build
 
   migrations:
     runs-on: ubuntu-latest

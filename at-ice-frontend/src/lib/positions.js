@@ -1,6 +1,9 @@
-// Positions people apply for at Bella Erin. Same list as the backend
-// (App\Models\Applicant::POSITIONS); the public form (/apply) accepts only these.
+// Positions at Bella Erin. Same lists as the backend (App\Models\Applicant).
+// APPLICANT_POSITIONS: every position HR can record in Interviews.
+// PUBLIC_POSITIONS: the only ones the public form (/apply) shows; office roles
+// such as Admin Staff are never offered to the public (the server refuses them).
 export const APPLICANT_POSITIONS = ["Checker", "Salesman", "Maintenance", "Driver", "Guard", "Bagger", "Admin Staff"];
+export const PUBLIC_POSITIONS = ["Checker", "Salesman", "Maintenance", "Driver", "Guard", "Bagger"];
 
 const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]", "::1"];
 

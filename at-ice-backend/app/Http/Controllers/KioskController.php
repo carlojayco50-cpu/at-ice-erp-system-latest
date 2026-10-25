@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 // Attendance Station kiosk. Each kiosk computer sends its own random kiosk ID
@@ -36,6 +37,20 @@ class KioskController extends Controller
         $ip = (string) $request->ip();
         $device = KioskDevice::for($request->device_id, $ip);
 
+        // The device id comes from the browser, so a new one would reset the
+        // per-kiosk count. Wrong PINs are also counted per network address
+        // across every kiosk (kiosk.max_wrong_pins_per_ip an hour).
+        $ipKey = 'kiosk-pin:'.sha1($ip);
+        $ipMax = max(1, (int) Settings::get('kiosk.max_wrong_pins_per_ip'));
+        if (RateLimiter::tooManyAttempts($ipKey, $ipMax)) {
+            $device->log('blocked', $ip);
+
+            return response()->json([
+                'message' => 'Too many wrong PINs from this network. Try again in '.(int) ceil(RateLimiter::availableIn($ipKey) / 60).' minutes or ask an Admin.',
+                'code' => 'kiosk_ip_blocked',
+            ], 403);
+        }
+
         if ($device->isLocked()) {
             $device->log('blocked', $ip);
 
@@ -51,6 +66,10 @@ class KioskController extends Controller
         }
 
         if (! $setting->checkPin((string) $request->pin)) {
+            RateLimiter::hit($ipKey, 3600);
+            if (RateLimiter::attempts($ipKey) === $ipMax) {
+                Audit::log('kiosk.ip_blocked', $device, null, ['ip' => $ip, 'wrong_pins' => $ipMax]);
+            }
             if ($device->wrongPin($ip)) {
                 $notified = $this->notifyLocked($device, $ip);
                 Audit::log('kiosk.locked', $device, null, ['ip' => $ip, 'notified' => $notified]);

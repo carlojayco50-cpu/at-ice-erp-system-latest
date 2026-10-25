@@ -9,7 +9,13 @@ import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import { PROOF_STATUS, openProofFile } from "../../lib/paymentProof";
+import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 import { formatDateTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
 
 window.Pusher = Pusher;
 const echo = new Echo({
@@ -25,13 +31,6 @@ const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor
 const EyeIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
 const CheckIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
 const BellIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
-
-// Board colors (lib/boardTones.js, monday.com style): a solid status cell.
-const STATUS_STYLE = {
-  unpaid:   { bg: "bg-[#fdab3d]", text: "text-white" },
-  overdue:  { bg: "bg-[#e2445c]", text: "text-white" },
-  paid:     { bg: "bg-[#00c875]", text: "text-white" },
-};
 
 const FILTERS = [
   { key: "all",     label: "All" },
@@ -105,12 +104,12 @@ export default function ReceiptsPage() {
   // Live overdue notifications — public "payments" channel, "payment.overdue"
   // event, one broadcast per receipt from ReceiptController@overdue().
   useEffect(() => {
-    const channel = echo.channel("payments");
+    const channel = echo.private("payments");
     channel.listen(".payment.overdue", (e) => {
       setLiveNotice(e.message || `Invoice ${e.receipt_no} is overdue.`);
       fetchAll();
     });
-    return () => { echo.leaveChannel("payments"); };
+    return () => { echo.leave("payments"); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -173,6 +172,8 @@ export default function ReceiptsPage() {
     return haystack.includes(q);
   });
 
+  const pager = usePagination(filtered);
+
   return (
     <AdminLayout pageTitle="Invoices" breadcrumb="CRM / Invoices">
       {liveNotice && (
@@ -184,14 +185,19 @@ export default function ReceiptsPage() {
         </div>
       )}
 
-      {summary && (
-        <div className="grid grid-cols-4 gap-3">
-          <SummaryCard label="Total Sales (Paid)" value={peso(summary.total_sales)} color="text-slate-800" />
-          <SummaryCard label="Unpaid" value={peso(summary.total_unpaid)} color="text-amber-600" />
-          <SummaryCard label="Overdue" value={peso(summary.total_overdue)} color="text-red-600" />
-          <SummaryCard label="Total Invoices" value={summary.receipt_count} color="text-slate-800" />
-        </div>
-      )}
+      {summary && (() => {
+        const billed = Number(summary.total_sales || 0) + Number(summary.total_unpaid || 0) + Number(summary.total_overdue || 0);
+        const n = (s) => receipts.filter((r) => r.payment_status === s).length;
+        return (
+          <KpiGrid cols={5}>
+            <KpiCard label="Collected" icon="wallet" tone="emerald" money value={Number(summary.total_sales || 0)} sub={`${n("paid")} paid invoices`} bar={billed ? Number(summary.total_sales || 0) / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
+            <KpiCard label="Unpaid" icon="clock" tone="amber" money value={Number(summary.total_unpaid || 0)} sub={`${n("unpaid")} within the due days`} bar={billed ? Number(summary.total_unpaid || 0) / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
+            <KpiCard label="Overdue" icon="alert" tone="rose" money value={Number(summary.total_overdue || 0)} sub={`${n("overdue")} past the due days`} bar={billed ? Number(summary.total_overdue || 0) / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
+            <KpiCard label="Invoices" icon="receipt" tone="cyan" value={Number(summary.receipt_count || 0)} sub={`${new Set(receipts.map((r) => r.customer_id)).size} customers billed`} />
+            <KpiCard label="Proofs to review" icon="file" tone="violet" value={proofs.length} sub={proofs.length ? "Waiting for your approval" : "Nothing waiting"} live={proofs.length > 0} />
+          </KpiGrid>
+        );
+      })()}
 
       {proofs.length > 0 && (
         <div className="bg-white border border-sky-200 rounded-xl">
@@ -225,7 +231,7 @@ export default function ReceiptsPage() {
                   >
                     <CheckIcon /> Approve
                   </button>
-                  <button
+                  <button data-no-confirm
                     onClick={() => { setRejectTarget(p); setRejectReason(""); }}
                     disabled={proofBusy === p.id}
                     className="px-2.5 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50 text-[12px] disabled:opacity-50"
@@ -238,6 +244,41 @@ export default function ReceiptsPage() {
           </div>
         </div>
       )}
+
+      {/* Middle tier: status shares, who owes the most, and the last 7 days of collections */}
+      {(() => {
+        const n = (s) => receipts.filter((r) => r.payment_status === s).length;
+        const owed = new Map();
+        receipts.filter((r) => r.payment_status !== "paid").forEach((r) => {
+          const key = r.customer?.name || "Customer";
+          owed.set(key, (owed.get(key) || 0) + Number(r.total_amount || 0));
+        });
+        const topOwed = [...owed.entries()].sort((a, b) => b[1] - a[1]).map(([name, amt]) => ({ id: name, title: name, meta: `${peso(amt)} not yet paid`, tone: "amber", icon: "wallet" }));
+        const days = [...Array(7)].map((_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() - (6 - i));
+          const key = d.toDateString();
+          const sum = receipts.filter((r) => r.paid_at && new Date(r.paid_at).toDateString() === key).reduce((s, r) => s + Number(r.total_amount || 0), 0);
+          return { label: d.toLocaleDateString("en-PH", { weekday: "short" }), value: Math.round(sum) };
+        });
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+            <StatusBreakdown
+              title="Invoices by status"
+              items={[
+                { key: "paid", label: "Paid", count: n("paid"), tone: "emerald" },
+                { key: "unpaid", label: "Unpaid", count: n("unpaid"), tone: "amber" },
+                { key: "overdue", label: "Overdue", count: n("overdue"), tone: "rose" },
+              ]}
+              onPick={(i) => setFilter(i.key)}
+              active={filter}
+              empty="No invoices yet. They are made when a Salesman confirms a delivery."
+            />
+            <ActivityFeed title="Largest balances" subtitle="Unpaid and overdue, by customer" items={topOwed} empty="Every invoice is paid." max={5} />
+            <MiniBars title="Collected, last 7 days" subtitle="Invoices marked paid, in pesos" data={days} />
+          </div>
+        );
+      })()}
 
       <div className="bg-white border border-black/[0.09] rounded-xl">
         <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center justify-between">
@@ -254,23 +295,14 @@ export default function ReceiptsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search invoice or customer code..."
-              className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-44"
+              className="bg-transparent outline-none text-[13px] text-slate-700 placeholder:text-slate-400 w-full min-w-0 sm:w-60"
             />
           </div>
         </div>
 
-        <div className="px-[18px] pt-3 flex gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
-              className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
-                filter === f.key ? "bg-cyan-500 text-white" : "bg-slate-50 text-slate-500 hover:bg-slate-100"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="px-[18px] pt-3">
+          <FilterSelect label="Status" value={filter} onChange={setFilter}
+            options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: f.key === "all" ? receipts.length : receipts.filter((r) => r.payment_status === f.key).length }))} />
         </div>
 
         {error && (
@@ -300,8 +332,9 @@ export default function ReceiptsPage() {
                   {search || filter !== "all" ? "No invoices match your filters." : "No invoices yet."}
                 </td></tr>
               )}
-              {!loading && filtered.map((r) => {
-                const style = STATUS_STYLE[r.payment_status] || STATUS_STYLE.unpaid;
+              {!loading && pager.pageItems.map((r) => {
+                const state = paymentState(r, !!proofByReceipt[r.id]);
+                const badge = PAYMENT_BADGE[state];
                 return (
                   <tr key={r.id} className="border-t border-black/[0.06]">
                     <td className="px-[18px] py-2.5 font-mono text-slate-700">{r.receipt_no}</td>
@@ -309,22 +342,14 @@ export default function ReceiptsPage() {
                     <td className="px-[18px] py-2.5 text-slate-600">{r.salesman?.name || <span className="text-slate-300">—</span>}</td>
                     <td className="px-[18px] py-2.5 font-mono text-slate-700">{peso(r.total_amount)}</td>
                     <td className="px-[18px] py-2.5">
+                      {/* one badge per row (lib/paymentStatus.js): Paid only when paid */}
                       <div className="inline-flex flex-col items-center gap-1">
-                        <span className={`inline-flex items-center justify-center min-w-[88px] px-2 py-1 rounded-sm text-[11px] font-semibold capitalize ${style.bg} ${style.text}`}>
-                          {r.payment_status}
-                        </span>
-                        {proofByReceipt[r.id] ? (
-                          <span className="text-[10px] font-medium text-sky-700">Proof sent, to review</span>
-                        ) : r.payment_proofs?.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setViewing(r)}
-                            title="See the payment proofs"
-                            className={`px-2 py-0.5 rounded-full border text-[10px] font-medium hover:underline ${PROOF_STATUS[r.payment_proofs[0].status]?.cls || ""}`}
-                          >
-                            Proof {PROOF_STATUS[r.payment_proofs[0].status]?.label.toLowerCase()}
-                            {r.payment_proofs.length > 1 ? ` · ${r.payment_proofs.length} sent` : ""}
-                          </button>
+                        <button type="button" onClick={() => setViewing(r)} title="See the invoice and its payment proofs"
+                          className={`inline-flex items-center justify-center min-w-[96px] px-2.5 py-0.5 rounded-full border text-[11px] font-semibold cursor-pointer ${badge.cls}`}>
+                          {badge.label}
+                        </button>
+                        {state === "rejected" && (
+                          <span className="text-[10px] text-red-800">Proof rejected. Waiting for the customer to re-upload.</span>
                         )}
                       </div>
                     </td>
@@ -337,7 +362,7 @@ export default function ReceiptsPage() {
                           <PrintIcon />
                         </button>
                         {r.payment_status !== "paid" && (
-                          <button
+                          <button data-no-confirm
                             onClick={() => { setPayTarget(r); setPayMethod("cash"); }}
                             disabled={!!proofByReceipt[r.id]}
                             title={proofByReceipt[r.id] ? "The customer sent a payment proof. Approve or reject it under Payment proofs to review." : undefined}
@@ -354,6 +379,7 @@ export default function ReceiptsPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pager} />
       </div>
 
       {/* View receipt modal */}
@@ -375,7 +401,7 @@ export default function ReceiptsPage() {
               <Row label="Customer" value={viewing.customer?.name || "—"} />
               <Row label="Salesman" value={viewing.salesman?.name || "—"} />
               <Row label="Delivery" value={viewing.delivery?.delivery_no || "—"} />
-              <Row label="Status" value={<span className="capitalize">{viewing.payment_status}</span>} />
+              <Row label="Status" value={(() => { const b = PAYMENT_BADGE[paymentState(viewing, !!proofByReceipt[viewing.id])]; return <span className={`inline-flex px-2.5 py-0.5 rounded-full border text-[11px] font-semibold ${b.cls}`}>{b.label}</span>; })()} />
               {viewing.payment_status === "paid" && (
                 <>
                   <Row label="Paid Via" value={MOP_LABELS[viewing.payment_method] || viewing.payment_method || "—"} />
@@ -515,15 +541,6 @@ export default function ReceiptsPage() {
         </div>
       )}
     </AdminLayout>
-  );
-}
-
-function SummaryCard({ label, value, color }) {
-  return (
-    <div className="bg-white border border-black/[0.09] rounded-xl px-4 py-3.5">
-      <div className={`text-[18px] font-semibold font-mono ${color}`}>{value}</div>
-      <div className="text-[11px] text-slate-400 mt-0.5">{label}</div>
-    </div>
   );
 }
 

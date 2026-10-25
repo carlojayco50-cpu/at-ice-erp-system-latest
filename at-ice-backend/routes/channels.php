@@ -1,19 +1,14 @@
 <?php
 
+use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
-Broadcast::channel('attendance', function () {
-    return true;
-});
+// Realtime channels are private (owner, 2026-10-22): the browser asks
+// POST /api/broadcasting/auth with its Bearer token, and only these roles may
+// listen. Admin may listen to every channel.
+$roles = fn (string ...$allowed) => fn (User $user) => $user->role === 'admin' || in_array($user->role, $allowed, true);
 
-Broadcast::channel('inventory', function () {
-    return true;
-});
-
-Broadcast::channel('payments', function () {
-    return true;
-});
-
-Broadcast::channel('deliveries', function () {
-    return true;
-});
+Broadcast::channel('attendance', $roles('hr'));
+Broadcast::channel('inventory', $roles());
+Broadcast::channel('payments', $roles());
+Broadcast::channel('deliveries', $roles('driver'));

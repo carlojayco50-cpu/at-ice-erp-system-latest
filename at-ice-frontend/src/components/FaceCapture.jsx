@@ -23,11 +23,11 @@ function loadModels() {
   return modelsPromise;
 }
 
-// Webcam Capture card: live camera, a guided face scan (like GCash: look
-// straight, then blink and turn the head left and right in a random order, see
-// lib/liveness.js, so a photo cannot be enrolled), Retake, and a box on the
-// detected face. The descriptor and picture saved are from the straight look,
-// and the face at the end must be the same person. The parent keeps the 128-point descriptor: onChange gets
+// Webcam Capture card: live camera, a face scan that waits for the worker to
+// look straight at the camera and captures that face (no blink or head turns
+// at enrollment, owner 2026-10-22; the blink check is at the Attendance
+// Station), Retake, and a box on the detected face. The parent keeps the
+// 128-point descriptor: onChange gets
 // (descriptor, photo), photo being a JPEG data URL of the face, or (null, null)
 // on Retake. onError gets a message to show when something fails.
 // Used by the Face action in HRIS > Employees.
@@ -164,7 +164,7 @@ export default function FaceCapture({ descriptor, onChange, onError, title = "We
     if (!videoRef.current || scanRef.current) return;
     onChange(null, null);
     setDetecting(true);
-    const c = newChallenge(["front"]);
+    const c = newChallenge(["front"]); // a straight look only, no liveness steps
     scanRef.current = { c, busy: false, front: null, timer: setInterval(scanTick, 120) };
     setScan({ step: currentStep(c), index: 0, total: c.steps.length });
   };
@@ -222,7 +222,7 @@ export default function FaceCapture({ descriptor, onChange, onError, title = "We
             className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] font-semibold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
           >
             {detecting ? (
-              <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Follow the steps on the camera…</>
+              <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Look at the camera…</>
             ) : (descriptor ? "Scan Again" : "Start Face Scan")}
           </button>
           {detecting && (
@@ -246,8 +246,8 @@ export default function FaceCapture({ descriptor, onChange, onError, title = "We
         </div>
         <div className="flex items-center gap-1.5 mt-2.5 text-[11px] text-slate-400">
           {descriptor ? (
-            <><span className="text-cyan-500"><CheckIcon /></span>Live face captured (blink and head turns passed). The box should be on the worker's face.</>
-          ) : ("Start the scan, then the worker looks straight at the camera, blinks and turns the head left and right as asked. A photo will not pass.")}
+            <><span className="text-cyan-500"><CheckIcon /></span>Face captured. The box should be on the worker's face.</>
+          ) : ("Start the scan with the worker looking straight at the camera; the face is captured in a moment.")}
         </div>
       </div>
     </div>

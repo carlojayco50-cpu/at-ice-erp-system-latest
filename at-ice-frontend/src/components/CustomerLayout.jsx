@@ -71,7 +71,7 @@ export default function CustomerLayout({ pageTitle, breadcrumb, headerActions, c
   };
 
   return (
-    <div className={`${dark ? "cp-dark " : ""}neu flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 min-h-screen`}>
+    <div className={`${dark ? "cp-dark " : ""}neu flex font-sans text-[13px] leading-relaxed bg-[#0a0d12] text-slate-800 h-[100dvh] overflow-hidden`}>
       <NightStyle />
       {logoutDialog}
 

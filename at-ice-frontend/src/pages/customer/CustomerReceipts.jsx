@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 import CustomerLayout from "../../components/CustomerLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toList } from "../../lib/list";
@@ -9,6 +10,10 @@ import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
 import FileField from "../../components/FileField";
 import { PROOF_ACCEPT, PROOF_MAX_BYTES, PROOF_METHODS, PROOF_STATUS, openProofFile } from "../../lib/paymentProof";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -33,12 +38,6 @@ const PRODUCT_LABEL = {
   big_sack: "Big Sack (50kg)",
 };
 
-const PAY_LABEL = { paid: "Paid", unpaid: "Unpaid", overdue: "Overdue" };
-const PAY_BADGE = {
-  paid: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  unpaid: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  overdue: "bg-red-500/10 text-red-600 border-red-500/20",
-};
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -47,23 +46,16 @@ const FILTERS = [
   { key: "paid", label: "Paid" },
 ];
 
-function Badge({ status }) {
+// The invoice's one payment badge (lib/paymentStatus.js): Paid only when paid.
+function Badge({ receipt }) {
+  const b = PAYMENT_BADGE[paymentState(receipt)];
   return (
-    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${PAY_BADGE[status] || ""}`}>
-      {PAY_LABEL[status] || status}
+    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap ${b.cls}`}>
+      {b.label}
     </span>
   );
 }
 
-function StatCard({ label, value, sub }) {
-  return (
-    <div className="bg-white border border-black/[0.09] rounded-xl p-4">
-      <div className="text-[11px] text-slate-400 uppercase tracking-wide">{label}</div>
-      <div className="text-xl font-semibold text-slate-800 mt-1">{value}</div>
-      {sub && <div className="text-[11px] text-slate-400 mt-0.5">{sub}</div>}
-    </div>
-  );
-}
 
 export default function CustomerReceipts() {
   const [receipts, setReceipts] = useState([]);
@@ -118,6 +110,8 @@ export default function CustomerReceipts() {
 
   const visible = receipts.filter((r) => filter === "all" || r.payment_status === filter);
 
+  const pager = usePagination(visible);
+
   return (
     <CustomerLayout pageTitle="Invoices & Balance" breadcrumb="Billing">
       {loading ? (
@@ -126,23 +120,18 @@ export default function CustomerReceipts() {
         <div className="bg-red-500/[0.06] border border-red-500/20 rounded-md p-6 text-sm text-red-600">{error}</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <StatCard
-              label="Balance Due"
-              value={peso(summary.balance)}
-              sub={summary.balance > 0 ? "Unpaid and overdue invoices" : "No balance"}
-            />
-            <StatCard
-              label="Overdue"
-              value={peso(summary.overdueAmount)}
-              sub={`${summary.overdueCount} receipt${summary.overdueCount === 1 ? "" : "s"}`}
-            />
-            <StatCard
-              label="Paid"
-              value={peso(summary.paidAmount)}
-              sub={`${summary.paidCount} receipt${summary.paidCount === 1 ? "" : "s"}`}
-            />
-          </div>
+          {(() => {
+            const billed = summary.balance + summary.paidAmount;
+            const proofsWaiting = receipts.filter((r) => r.payment_proofs?.[0]?.status === "pending").length;
+            return (
+              <KpiGrid cols={4}>
+                <KpiCard label="Balance due" icon="wallet" tone="amber" money value={summary.balance} sub={summary.balance > 0 ? "Unpaid and overdue invoices" : "No balance"} bar={billed ? summary.balance / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
+                <KpiCard label="Overdue" icon="alert" tone="rose" money value={summary.overdueAmount} sub={`${summary.overdueCount} invoice${summary.overdueCount === 1 ? "" : "s"}`} bar={billed ? summary.overdueAmount / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
+                <KpiCard label="Paid" icon="check" tone="emerald" money value={summary.paidAmount} sub={`${summary.paidCount} invoice${summary.paidCount === 1 ? "" : "s"}`} bar={billed ? summary.paidAmount / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
+                <KpiCard label="Proofs under review" icon="file" tone="violet" value={proofsWaiting} sub={proofsWaiting ? "We are checking your payment" : "Nothing waiting"} live={proofsWaiting > 0} />
+              </KpiGrid>
+            );
+          })()}
 
           <div className="bg-white border border-black/[0.09] rounded-xl px-5 py-4">
             <div className="text-[13px] font-semibold text-slate-800">How to pay</div>
@@ -156,20 +145,9 @@ export default function CustomerReceipts() {
             </p>
           </div>
 
-          <div className="bg-white border border-black/[0.09] rounded-xl p-3 flex flex-wrap gap-1.5">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)} aria-pressed={filter === f.key}
-                className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                  filter === f.key
-                    ? "bg-cyan-500/10 text-cyan-600 border-cyan-500/30 font-medium"
-                    : "bg-white text-slate-500 border-black/[0.09] hover:bg-slate-50"
-                }`}
-              >
-                {f.label} ({counts[f.key] || 0})
-              </button>
-            ))}
+          <div className="bg-white border border-black/[0.09] rounded-xl p-3">
+            <FilterSelect label="Status" value={filter} onChange={setFilter}
+              options={FILTERS.map((f) => ({ value: f.key, label: f.label, count: counts[f.key] || 0 }))} />
           </div>
 
           <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
@@ -190,22 +168,18 @@ export default function CustomerReceipts() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/[0.06]">
-                    {visible.map((r) => (
+                    {pager.pageItems.map((r) => (
                       <tr key={r.id} className="hover:bg-slate-50">
                         <td className="px-5 py-3 font-medium text-slate-800">{r.receipt_no}</td>
                         <td className="px-3 py-3 text-slate-600 hidden sm:table-cell">{fmtDate(r.created_at)}</td>
                         <td className="px-3 py-3 text-slate-800 text-right">{peso(r.total_amount)}</td>
                         <td className="px-3 py-3">
                           <div className="inline-flex flex-col items-center gap-1">
-                            <Badge status={r.payment_status} />
-                            {r.payment_proofs?.[0] && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedId(r.id)}
-                                title="See your payment proof"
-                                className={`px-2 py-0.5 rounded-full border text-[10px] font-medium hover:underline ${PROOF_STATUS[r.payment_proofs[0].status]?.cls || ""}`}
-                              >
-                                Proof {PROOF_STATUS[r.payment_proofs[0].status]?.label.toLowerCase()}
+                            <Badge receipt={r} />
+                            {paymentState(r) === "rejected" && (
+                              <button type="button" onClick={() => setSelectedId(r.id)}
+                                className="px-2.5 py-0.5 rounded-full border border-red-200 bg-white text-[11px] font-semibold text-red-800 hover:bg-red-50 cursor-pointer">
+                                Upload a new proof
                               </button>
                             )}
                           </div>
@@ -219,6 +193,7 @@ export default function CustomerReceipts() {
                     ))}
                   </tbody>
                 </table>
+                <Pagination pager={pager} />
               </div>
             )}
           </div>
@@ -232,7 +207,7 @@ export default function CustomerReceipts() {
             <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-slate-800">{selected.receipt_no}</div>
-                <div className="mt-1"><Badge status={selected.payment_status} /></div>
+                <div className="mt-1"><Badge receipt={selected} /></div>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => printReceipt(selected)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]">

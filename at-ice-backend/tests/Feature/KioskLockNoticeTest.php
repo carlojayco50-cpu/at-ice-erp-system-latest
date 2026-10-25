@@ -41,9 +41,9 @@ class KioskLockNoticeTest extends TestCase
         $device = $this->lock();
         $this->assertNotNull($device->locked_at);
 
-        Mail::assertSent(KioskLocked::class, 2);
-        Mail::assertSent(KioskLocked::class, fn ($m) => $m->hasTo($admin->email) && $m->kiosk === 'KIOSK-01');
-        Mail::assertSent(KioskLocked::class, fn ($m) => $m->hasTo($hr->email));
+        Mail::assertQueued(KioskLocked::class, 2);
+        Mail::assertQueued(KioskLocked::class, fn ($m) => $m->hasTo($admin->email) && $m->kiosk === 'KIOSK-01');
+        Mail::assertQueued(KioskLocked::class, fn ($m) => $m->hasTo($hr->email));
 
         $event = LiveEvent::where('module', 'kiosk')->where('action', 'locked')->first();
         $this->assertNotNull($event);
@@ -71,5 +71,18 @@ class KioskLockNoticeTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
         $this->postJson("/api/kiosk-devices/{$device->id}/unlock")->assertOk();
         $this->assertDatabaseHas('audit_logs', ['action' => 'kiosk.override']);
+    }
+
+    public function test_a_new_device_id_does_not_reset_the_wrong_pin_count(): void
+    {
+        KioskSetting::current()->setPin('1234', null);
+        // 10 wrong PINs, each from a "new kiosk" (4 per device id stays under the per-kiosk lock)
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson('/api/kiosk/unlock', ['device_id' => 'kiosk-rotating-'.intdiv($i, 4).'-abcdef', 'pin' => '0000'])->assertStatus(422);
+        }
+        // the address is blocked now, even with the right PIN and a fresh device id
+        $this->postJson('/api/kiosk/unlock', ['device_id' => 'kiosk-fresh-0123456789', 'pin' => '1234'])
+            ->assertStatus(403)->assertJsonPath('code', 'kiosk_ip_blocked');
+        $this->assertDatabaseHas('audit_logs', ['action' => 'kiosk.ip_blocked']);
     }
 }

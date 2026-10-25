@@ -1,18 +1,16 @@
-// Liveness check for face recognition (Attendance Station and face
-// enrollment): a printed photo or a picture on a phone cannot blink or turn
-// its head, so before a face is accepted the person does a short challenge in
-// a random order, like GCash or Shopee face verification:
-//   blink   close the eyes for a moment, then open them
-//   left    turn the head to their left
-//   right   turn the head to their right
+// Face steps for the camera screens. Owner, 2026-10-22: no liveness check is
+// asked anywhere any more (the Attendance Station records a recognized face
+// right away; no blink, no head turns). Only HR face enrollment uses this, with
+// the "front" step: a straight look, to capture a good picture. The blink and
+// left/right steps are kept in advance() but nothing asks for them.
 // Each video frame gives the face's 68 landmarks (face-api.js); from them the
 // eye openness (eye aspect ratio) and the head turn (where the nose sits
 // between the two sides of the jaw) are measured.
 import * as faceapi from "face-api.js";
 
 export const STEP_TEXT = {
-  front: { title: "Look straight at the camera", sub: "Keep your face inside the oval" },
-  blink: { title: "Blink your eyes", sub: "Close your eyes for a moment, then open them" },
+  front: { title: "Look straight at the camera", sub: "Hold still for a moment" },
+  blink: { title: "Blink your eyes", sub: "Just blink; you do not need to stand in any frame" },
   left: { title: "Turn your head to your left", sub: "Slowly, then face the camera again" },
   right: { title: "Turn your head to your right", sub: "Slowly, then face the camera again" },
 };
@@ -61,11 +59,11 @@ export async function readFrame(video) {
   return { ...measure(d.landmarks), box: d.detection.box };
 }
 
-// A new challenge: a blink and both head turns in a random order.
-export function newChallenge(first = []) {
-  const rest = ["blink", "left", "right"].sort(() => Math.random() - 0.5);
+// A new challenge: a blink by default (Attendance Station); enrollment passes
+// ["front"] for a straight look only.
+export function newChallenge(steps = ["blink"]) {
   return {
-    steps: [...first, ...rest], index: 0, startedAt: Date.now(), lastSeen: Date.now(),
+    steps: [...steps], index: 0, startedAt: Date.now(), lastSeen: Date.now(),
     center: null, openEyes: 0, closed: false, turned: null, hint: "",
   };
 }

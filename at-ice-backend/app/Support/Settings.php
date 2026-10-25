@@ -40,11 +40,34 @@ class Settings
         // Kiosk
         'kiosk.hr_can_override' => [false, 'bool', 'HR may unlock a locked kiosk from the Kiosk PIN page (otherwise Admin only)'],
         'kiosk.max_wrong_pins' => [5, 'int', 'Wrong PINs in a row that lock a kiosk until Admin unlocks it'],
+        'kiosk.max_wrong_pins_per_ip' => [10, 'int', 'Wrong PINs from one network address in an hour (any kiosk) before that address is blocked for the hour'],
         // Leave
         'leave.credits_per_cutoff' => [0.5, 'number', 'Leave credits (days) earned each pay period once regular'],
         'leave.credits_cap' => [15, 'number', 'Most leave credits an employee can hold'],
         'leave.sl_filing_window_days' => [1, 'int', 'Days after returning that sick leave can still be filed'],
         'leave.vl_notice_days' => [14, 'int', 'Days ahead that vacation leave must be filed'],
+        // Deliveries (App\Support\DeliveryDispatch)
+        'delivery.delay_notice_hours' => [2, 'int', 'Hours before a reassigned or queued delivery that the store is told it may be late'],
+        'delivery.arrival_radius_m' => [150, 'int', 'How close (meters) the Driver and the Salesman must be to the store pin to press Arrived; a delivery is confirmed only after both have arrived'],
+        'plant.latitude' => [14.8031, 'number', 'Plant location (latitude): each route lists the stores nearest to the plant first'],
+        'plant.longitude' => [121.0515, 'number', 'Plant location (longitude)'],
+        'delivery.not_timed_in_minutes' => [60, 'int', 'Minutes after their shift starts that a Driver with no Time In counts as absent and their pending deliveries today are reassigned'],
+        'delivery.max_top_ups_per_day' => [3, 'int', 'Most urgent top-ups one store can get after one delivery in a day'],
+        // Support tickets (SupportMessageController)
+        'support.overdue_hours' => [24, 'int', 'Hours an open support ticket may wait before it is marked Overdue'],
+        'support.max_open_tickets' => [5, 'int', 'Most open or in-progress tickets a customer may have at once (Emergency Ice Shortage is never blocked)'],
+        // Disciplinary memos (App\Support\MemoEngine, EmployeeMemoController)
+        'memo.no_timeout_grace_hours' => [2, 'int', 'Hours after the shift ends before a missing Time Out becomes a draft memo for HR to review'],
+        'memo.strike_window_months' => [12, 'int', 'Months an offense counts toward the next warning level (1st verbal, 2nd first written, 3rd final written, 4th Notice to Explain)'],
+        'memo.lookback_days' => [7, 'int', 'How many days back the system looks for missing Time Outs (older ones are left alone)'],
+        // Performance (App\Support\PerformanceScore): weights of the Draft Base Rating and each role's goal per pay period
+        'performance.weight_attendance' => [50, 'int', 'Weight of attendance (days with a Time In / work days) in the draft performance rating'],
+        'performance.weight_punctuality' => [30, 'int', 'Weight of punctuality (days on time / days with a Time In) in the draft performance rating'],
+        'performance.weight_goal' => [20, 'int', 'Weight of the goal (work done / goal) in the draft performance rating'],
+        'performance.goal_driver' => [50, 'int', 'Driver goal per pay period: deliveries delivered'],
+        'performance.goal_salesman' => [50, 'int', 'Salesman goal per pay period: deliveries confirmed with proof'],
+        'performance.goal_checker' => [60, 'int', 'Checker goal per pay period: ice loading counts and stock movements'],
+        'performance.goal_maintenance' => [8, 'int', 'Maintenance goal per pay period: parts requests and projects filed'],
         // 13th month
         'thirteenth.credit_date' => ['12-01', 'month-day', 'Date the 13th month pay is credited (MM-DD; legal deadline 12-24)'],
         // Retention (nothing is deleted on its own; Admin reviews)

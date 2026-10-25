@@ -22,7 +22,7 @@ class StockOutReleaseTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->maintenance = User::create(['name' => 'Maint', 'email' => 'maintenance@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'maintenance']);
+        $this->maintenance = $this->timedIn(User::create(['name' => 'Maint', 'email' => 'maintenance@atice.cloud', 'password' => 'secret-password', 'role' => 'employee', 'sub_role' => 'maintenance']));
         $this->admin = User::create(['name' => 'Admin', 'email' => 'admin@atice.cloud', 'password' => 'secret-password', 'role' => 'admin']);
         $this->product = Product::create(['product_code' => 'SUP-0001', 'name' => 'Brake Pad', 'unit' => 'pc', 'current_stock' => 10, 'minimum_stock' => 3]);
     }

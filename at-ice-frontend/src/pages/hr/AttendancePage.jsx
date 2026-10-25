@@ -21,7 +21,10 @@ import { fullName } from "../../lib/names";
 import { payPeriodLabel } from "../../lib/payPeriod";
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import { toast } from "../../lib/toast";
-import { formatDateTime, formatTime } from "../../lib/time";
+import { TZ, formatDateTime, formatTime } from "../../lib/time";
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
 const SearchIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 
@@ -33,8 +36,8 @@ const addDays = (ymd, n) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDa
 // "08:05:00" -> "8:05:00 AM" (seconds kept: late is counted from them)
 const fmtTime = (t) => formatTime(t, { seconds: true });
 const fmtHours = (h) => { const n = Number(h); return !h || Number.isNaN(n) || n === 0 ? "—" : n.toFixed(2); };
-// A record's date as YYYY-MM-DD in Philippine time
-const recordDay = (d) => (d ? new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" }) : "");
+// A record's date as YYYY-MM-DD in the business time zone
+const recordDay = (d) => (d ? new Date(d).toLocaleDateString("en-CA", { timeZone: TZ }) : "");
 const fmtDay = (ymd) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "");
 const fmtLongDate = (ymd) => new Date(`${ymd}T00:00:00`).toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 const capitalize = (s) => (s ? String(s).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "");
@@ -121,8 +124,8 @@ export default function AttendancePage() {
   const live = useLiveTick(["attendance", "leave"]);
   useEffect(() => { fetchRecords(); }, [fetchRecords, live]);
   useEffect(() => {
-    echo.channel("attendance").listen(".attendance.recorded", () => fetchRecords());
-    return () => echo.leaveChannel("attendance");
+    echo.private("attendance").listen(".attendance.recorded", () => fetchRecords());
+    return () => echo.leave("attendance");
   }, [fetchRecords]);
 
   const changeView = (v) => { setView(v); setCardFilter(v === "history" ? "all" : "in"); };
@@ -192,11 +195,13 @@ export default function AttendancePage() {
     </div></body></html>`);
   };
 
+  const pager = usePagination(shown);
+
   return (
     <HrLayout pageTitle="Attendance" breadcrumb="HRIS / Attendance">
       {/* FILTERS */}
       <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
-        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl" role="group" aria-label="View">
+        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl" role="group" aria-label="View" data-fx-tabs>
           {[["daily", "Daily"], ["history", "History log"]].map(([key, label]) => (
             <button key={key} type="button" aria-pressed={view === key} onClick={() => changeView(key)}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer ${view === key ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
@@ -227,13 +232,13 @@ export default function AttendancePage() {
                   {period ? payPeriodLabel(period) : "…"}
                 </span>
                 <button type="button" aria-label="Next cutoff" disabled={!period} onClick={() => loadPeriod(addDays(period.end, 1))} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500 hover:border-cyan-400 cursor-pointer">›</button>
-                <input type="date" aria-label="Go to the cutoff of a date" onChange={(e) => e.target.value && loadPeriod(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
+                <input type="date" aria-label="Go to the cutoff of a date" max={todayLocal()} onChange={(e) => e.target.value && loadPeriod(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500" />
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <input type="date" aria-label="From" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
+                <input type="date" aria-label="From" value={from} max={to && to < todayLocal() ? to : todayLocal()} onChange={(e) => e.target.value && setFrom(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
                 <span className="text-[11px] text-slate-400">to</span>
-                <input type="date" aria-label="To" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
+                <input type="date" aria-label="To" value={to} min={from} max={todayLocal()} onChange={(e) => e.target.value && setTo(e.target.value)} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-700" />
               </div>
             )}
           </div>
@@ -261,16 +266,18 @@ export default function AttendancePage() {
       </div>
 
       {/* STATUS CARDS = FILTERS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" role="group" aria-label="Filter by status">
-        {cards.map((c) => (
-          <button key={c.key} type="button" aria-pressed={cardFilter === c.key} onClick={() => setCardFilter(c.key)}
-            className={`text-left bg-white border rounded-xl p-4 flex flex-col gap-1.5 cursor-pointer transition-colors ${cardFilter === c.key ? "border-cyan-500 ring-2 ring-cyan-500/20" : "border-black/[0.09] hover:border-cyan-300"}`}>
-            <span className="text-[11px] font-medium tracking-[0.02em] text-slate-400">{c.label}</span>
-            <span className={`text-[26px] font-semibold font-mono tracking-tight leading-none ${c.tone || "text-slate-800"}`}>{loading ? "…" : error ? "—" : c.value}</span>
-            <span className="text-[11px] text-slate-400">{c.context}</span>
-          </button>
-        ))}
-      </div>
+      <KpiGrid cols={4}>
+        {cards.map((c) => {
+          const look = { all: ["users", "cyan"], in: ["check", "emerald"], present: ["check", "emerald"], late: ["clock", "amber"], other: ["calendar", "violet"], not_in: ["x", "rose"], on_leave: ["calendar", "violet"] }[c.key] || ["chart", "cyan"];
+          const total = cards[0]?.value;
+          return (
+            <KpiCard key={c.key} label={c.label} icon={look[0]} tone={look[1]} value={loading ? "…" : error ? "—" : c.value} sub={c.context}
+              bar={c.key !== cards[0].key && typeof c.value === "number" && typeof total === "number" && total > 0 ? Math.min(1, c.value / total) : undefined}
+              live={c.key === "in" && isToday && typeof c.value === "number" && c.value > 0}
+              onClick={() => setCardFilter(c.key)} active={cardFilter === c.key} />
+          );
+        })}
+      </KpiGrid>
 
       {/* EMPLOYEE TABLE (follows the selected card) */}
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
@@ -315,7 +322,7 @@ export default function AttendancePage() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((a) => (
+                {pager.pageItems.map((a) => (
                   <tr key={a.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
                     <td className="px-[18px] py-2.5 font-mono text-slate-600 whitespace-nowrap">{workerCode(a) || "—"}</td>
                     <td className="px-[18px] py-2.5 text-slate-800 font-medium whitespace-nowrap">{workerName(a)}</td>
@@ -337,6 +344,7 @@ export default function AttendancePage() {
                 ))}
               </tbody>
             </table>
+            <Pagination pager={pager} />
           </div>
         )}
       </div>

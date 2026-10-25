@@ -210,7 +210,7 @@ export default function AccountSettings() {
         description="Use this if you forgot to sign out somewhere else. You stay signed in on this device."
       >
         {!confirming ? (
-          <button
+          <button data-no-confirm
             onClick={() => {
               setConfirming(true);
               setOtherResult("");

@@ -136,6 +136,9 @@ function timeAgo(iso) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [chartMode, setChartMode] = useState("bar");
+  // A stat card that opens a panel in place (Inventory Alerts): it is shown
+  // selected and the other cards step back.
+  const [activeCard, setActiveCard] = useState(null);
   // Sales Overview: Day / Month / Year, and a past date picked on the calendar
   // that is compared with the present (GET /api/bi/sales-chart). Empty value =
   // the period just before the present. Nothing after today can be picked.
@@ -261,15 +264,15 @@ export default function Dashboard() {
   // at once instead of waiting for the next poll.
   useEffect(() => {
     const refresh = () => { fetchActivity(); fetchBI(); };
-    echo.channel('attendance').listen('.attendance.recorded', refresh);
-    echo.channel('inventory').listen('.low.stock.alert', refresh);
-    echo.channel('payments').listen('.payment.overdue', refresh);
-    echo.channel('deliveries').listen('.delivery.status.updated', refresh);
+    echo.private('attendance').listen('.attendance.recorded', refresh);
+    echo.private('inventory').listen('.low.stock.alert', refresh);
+    echo.private('payments').listen('.payment.overdue', refresh);
+    echo.private('deliveries').listen('.delivery.status.updated', refresh);
     return () => {
-      echo.leaveChannel('attendance');
-      echo.leaveChannel('inventory');
-      echo.leaveChannel('payments');
-      echo.leaveChannel('deliveries');
+      echo.leave('attendance');
+      echo.leave('inventory');
+      echo.leave('payments');
+      echo.leave('deliveries');
     };
   }, [fetchBI, fetchActivity]);
 
@@ -344,14 +347,6 @@ export default function Dashboard() {
     <AdminLayout
       pageTitle="Dashboard"
       breadcrumb="Dashboard"
-      headerActions={
-        <button
-          onClick={fetchBI}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 cursor-pointer hover:border-cyan-400 hover:text-cyan-500 transition-colors"
-        >
-          <RefreshIcon /> Refresh
-        </button>
-      }
     >
       {biError && (
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[12px] text-amber-700">
@@ -367,7 +362,7 @@ export default function Dashboard() {
         <div
           onClick={() => navigate("/admin/receipts")}
           title="Open Invoices"
-          className="col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150"
+          className={`col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${activeCard ? "opacity-60" : ""}`}
         >
           <span className="text-[11px] font-medium tracking-[0.02em] text-slate-400">Total Sales (This Month)</span>
           <div className="text-[26px] font-semibold tracking-tight leading-tight text-slate-800 tabular-nums">
@@ -399,6 +394,7 @@ export default function Dashboard() {
             up: false,
             delta: `${inventory.out_of_stock || 0} out of stock`,
             context: `${inventory.low_stock || 0} low stock items`,
+            panel: "inventory",
           },
           {
             label: "Attendance Today",
@@ -416,12 +412,21 @@ export default function Dashboard() {
             isAlert: true,
             to: "/admin/receipts",
           },
-        ].map((card) => (
+        ].map((card) => {
+          const clickable = card.to || card.panel;
+          const selected = card.panel && activeCard === card.panel;
+          const open = () => (card.panel ? setActiveCard((a) => (a === card.panel ? null : card.panel)) : navigate(card.to));
+          return (
           <div
             key={card.label}
-            onClick={card.to ? () => navigate(card.to) : undefined}
-            title={card.to ? "Open details" : undefined}
-            className={`bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 transition-all duration-150 ${card.to ? "cursor-pointer hover:shadow-md hover:-translate-y-px" : ""}`}
+            onClick={clickable ? open : undefined}
+            onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } } : undefined}
+            role={clickable ? "button" : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            aria-expanded={card.panel ? selected : undefined}
+            data-selected={selected || undefined}
+            title={card.panel ? (selected ? "Hide the stock alerts" : "Show the stock alerts") : card.to ? "Open details" : undefined}
+            className={`stat-card bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 transition-all duration-150 ${clickable ? "cursor-pointer hover:shadow-md hover:-translate-y-px" : ""} ${activeCard && !selected ? "opacity-60" : ""}`}
           >
             <span className={`text-[11px] font-medium tracking-[0.02em] ${card.isAlert ? "text-red-400" : "text-slate-400"}`}>
               {card.label}
@@ -438,8 +443,41 @@ export default function Dashboard() {
             )}
             {card.up !== null && <div className="text-[11px] text-slate-400">{card.context}</div>}
           </div>
-        ))}
+          );
+        })}
       </div>
+
+      {activeCard === "inventory" && (
+        <div className="bg-white border border-black/[0.09] rounded-xl p-[18px]" role="region" aria-label="Stock alerts">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-[13px] font-semibold text-slate-800">Stock alerts</div>
+              <div className="text-[11px] text-slate-400">{inventory.out_of_stock || 0} out of stock · {inventory.low_stock || 0} low stock</div>
+            </div>
+            <button type="button" onClick={() => navigate("/admin/stock-limits")} className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-[12px] text-slate-600 hover:bg-slate-50 cursor-pointer">Open Stock Limits</button>
+          </div>
+          {(inventory.critical_items || []).length === 0 ? (
+            <div className="text-[12px] text-slate-400">Every supply is above its minimum stock.</div>
+          ) : (
+            <ul className="divide-y divide-black/[0.06]">
+              {inventory.critical_items.map((it) => (
+                <li key={it.id} className="flex items-center justify-between gap-3 py-2 text-[12px]">
+                  <span className="min-w-0">
+                    <span className="text-slate-800 font-medium">{it.name}</span>
+                    <span className="text-slate-400"> · {it.product_code}</span>
+                  </span>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    <span className="tabular-nums text-slate-600">{it.current_stock} / min {it.minimum_stock} {it.unit || ""}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${it.status === "out_of_stock" ? "bg-[#fde8ec] text-[#9f1239] border-[#fbcfd8]" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                      {it.status === "out_of_stock" ? "Out of stock" : "Low stock"}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* LEFT: sales, inventory, delivery, attendance. RIGHT: AI summary,
           notifications, overdue receivables. Each column stacks on its own,
@@ -530,7 +568,7 @@ export default function Dashboard() {
                     : "From the average month so far (less than 3 months of sales)"}
                 </div>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#579bfc]/10 text-[#3a7fe0] font-semibold">Estimate</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2f6fd6]/10 text-[#1f56b5] font-semibold">Estimate</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1.6fr] divide-x divide-black/[0.06]">
               <div className="px-[18px] py-3.5">
@@ -567,7 +605,7 @@ export default function Dashboard() {
                   {[...forecastHistory, { label: `${nextMonth.label || "Next"} (est.)`, revenue: nextMonth.revenue, estimate: true }].map((h) => (
                     <div key={h.label} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${h.label}: ${fmt(h.revenue)}`}>
                       <div
-                        className={`w-full rounded-t ${h.estimate ? "bg-[#579bfc]/40 border border-dashed border-[#579bfc]" : "bg-[#579bfc]"}`}
+                        className={`w-full rounded-t ${h.estimate ? "bg-[#2f6fd6]/35 border border-dashed border-[#2f6fd6]" : "bg-[#2f6fd6]"}`}
                         style={{ height: `${Math.max(3, (Number(h.revenue) / historyMax) * 48)}px` }}
                       />
                       <span className="text-[9px] text-slate-400 truncate w-full text-center">{h.label.split(" ")[0]}</span>
@@ -627,7 +665,7 @@ export default function Dashboard() {
                         onClick={() => navigate("/admin/projects")}
                         className="w-full grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-1.5 text-xs text-left border-b border-black/[0.06] last:border-b-0 cursor-pointer hover:bg-slate-50"
                       >
-                        <span className="truncate text-slate-800">{p.name}{p.overdue && <span className="ml-1 text-[10px] text-[#d83a52] font-semibold">overdue</span>}</span>
+                        <span className="truncate text-slate-800">{p.name}{p.overdue && <span className="ml-1 text-[10px] text-[#b4233c] font-semibold">overdue</span>}</span>
                         <span className="text-[10px] font-mono text-slate-500">{fmt(p.materials_cost)}</span>
                         <StatusCell tone={{ working: "working", stuck: "stuck", planned: "info" }[p.status] || "idle"} className="min-h-[20px] rounded px-1.5 text-[10px]">
                           {{ working: "Working", stuck: "Stuck", planned: "Planned" }[p.status] || p.status}
@@ -770,7 +808,7 @@ export default function Dashboard() {
                         <span key="r" className="font-mono font-semibold text-slate-800">{fmt(s.revenue)}</span>,
                         s.unpaid > 0 ? <StatusCell tone="stuck">{fmt(s.unpaid)}</StatusCell> : <StatusCell tone="done">Paid</StatusCell>,
                         <div key="sh" className="flex items-center gap-1.5 min-w-[90px]">
-                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-[#a25ddc]" style={{ width: `${share}%` }} /></div>
+                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-[#7e3fbf]" style={{ width: `${share}%` }} /></div>
                           <span className="text-[10px] text-slate-500 w-7 text-right">{share}%</span>
                         </div>,
                       ]}

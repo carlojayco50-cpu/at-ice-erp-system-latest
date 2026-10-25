@@ -1,102 +1,127 @@
-import { useNavigate } from "react-router-dom";
-import logo from "../../assets/logo.png";
-import { clearSession } from "../../lib/auth";
-import { useLogoutConfirm } from "../../lib/useLogoutConfirm";
-import LeaveRequestButton from "../../components/LeaveRequestButton";
-import HeaderAvatar from "../../components/HeaderAvatar";
-import { ScopeStatusRow } from "../../components/NightMode";
-import { initialsOf } from "../../lib/initials";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import RoleShell from "../../components/RoleShell";
+import { Icon, StatusBadge, ErrorBanner, CardSkeleton, EmptyCard } from "../../components/MobileUi";
+import { CARD, CARD_BUTTON } from "../../lib/mobileUi";
+import { useLiveTick } from "../../lib/live";
+import { formatDateTime } from "../../lib/time";
+import { useTimedIn } from "../../lib/timeIn";
+import TimeInNotice from "../../components/TimeInNotice";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
 
-const WrenchIcon = () => (
-  <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M14.7 6.3a4 4 0 10-5.66 5.66L2 19l3 3 7.03-7.04a4 4 0 005.67-5.66l-2.83 2.83-2.12-2.12 2.83-2.83z" />
-  </svg>
-);
-const ChevronRightIcon = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
+const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
 
-const MODULES = [
-  {
-    title: "Request Stock Out",
-    description: "Submit a request for truck parts or machine components.",
-    icon: WrenchIcon,
-    dot: "bg-cyan-500",
-    route: "/maintenance/stock-out-request",
-  },
-];
-
+// Maintenance home: urgent items first (stuck or overdue projects, rejected
+// requests), then the request counts and the way into Parts and Projects.
 export default function MaintenanceDashboard() {
+  const timedIn = useTimedIn();
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [requests, setRequests] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [status, setStatus] = useState("loading"); // loading | ready | error
+  const [error, setError] = useState("");
 
-  const handleLogout = () => {
-    clearSession();
-    navigate("/login");
-  };
-  const [askLogout, logoutDialog] = useLogoutConfirm(handleLogout);
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const [r, p] = await Promise.all([
+        fetch("/api/stock-out-requests", { headers: headers() }),
+        fetch("/api/my-projects", { headers: headers() }),
+      ]);
+      if (!r.ok || !p.ok) throw new Error("Could not load your requests and projects.");
+      const [rd, pd] = await Promise.all([r.json(), p.json()]);
+      setRequests(Array.isArray(rd) ? rd : rd.data || []);
+      setProjects(Array.isArray(pd) ? pd : []);
+      setStatus("ready");
+    } catch (err) {
+      setError(err.message);
+      setStatus("error");
+    }
+  }, []);
+  const live = useLiveTick(["stock-out", "projects"]);
+  useEffect(() => { load(); }, [load, live]);
+
+  const weekAgo = Date.now() - 7 * 864e5;
+  const urgent = [
+    ...projects.filter((p) => p.status === "stuck").map((p) => ({ key: `p${p.id}`, title: p.name, text: "Project is stuck. Talk to Admin about what is blocking it.", to: "/maintenance/projects", badge: "Stuck" })),
+    ...projects.filter((p) => p.overdue && p.status !== "stuck").map((p) => ({ key: `o${p.id}`, title: p.name, text: "Project is past its due date.", to: "/maintenance/projects", badge: "Overdue" })),
+    ...requests.filter((r) => r.status === "rejected" && new Date(r.updated_at || r.created_at).getTime() >= weekAgo)
+      .map((r) => ({ key: `r${r.id}`, title: r.product?.name || r.item_name, text: r.rejection_reason ? `Rejected: ${r.rejection_reason}` : "Request was rejected.", to: "/maintenance/stock-out-request?status=rejected", badge: "Rejected" })),
+  ];
+  const count = (s) => requests.filter((r) => r.status === s).length;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {logoutDialog}
-
-      {/* Top Bar */}
-      <header className="bg-white border-b border-black/[0.08] px-5 pt-4 pb-4 flex-shrink-0 sticky top-0 z-20">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <div className="brand-logo w-11 h-11 flex-shrink-0 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center overflow-hidden">
-              <img src={logo} alt="AT-ICE logo" className="w-full h-full object-contain p-1" />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold text-slate-800 leading-tight">
-                {user?.name || "Maintenance"}
-              </div>
-              <div className="text-[11px] text-slate-400 tracking-wide">Maintenance</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <LeaveRequestButton />
-            <HeaderAvatar initials={initialsOf(user?.name, "MA")} name={user?.name || "Maintenance"} subtitle={user?.email || "Maintenance"} onSignOut={askLogout} mobileSignOut />
-          </div>
-        </div>
-
-        <ScopeStatusRow />
-        <div className="mt-3">
-          <div className="text-[18px] font-semibold tracking-tight text-slate-800 leading-tight">Maintenance Dashboard</div>
-          <div className="text-[12px] text-slate-400 mt-0.5">
-            {new Date().toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-          </div>
-        </div>
-      </header>
-
-      {/* Module List */}
-      <div className="flex-1 px-4 py-4 flex flex-col gap-3 overflow-y-auto pb-8">
-        {MODULES.map((mod) => (
-          <button
-            key={mod.title}
-            onClick={() => navigate(mod.route)}
-            className="w-full text-left bg-white border border-black/[0.08] rounded-2xl overflow-hidden shadow-sm px-4 py-4 flex items-start gap-3 cursor-pointer active:bg-slate-50 transition-colors"
-          >
-            <div className="mt-1 flex-shrink-0">
-              <span className={`w-2 h-2 rounded-full inline-block ${mod.dot}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-800">
-                <mod.icon />
-                {mod.title}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1 leading-snug">
-                {mod.description}
-              </div>
-            </div>
-            <span className="text-slate-300 flex-shrink-0 mt-1">
-              <ChevronRightIcon />
-            </span>
-          </button>
-        ))}
+    <RoleShell role="maintenance" title="Maintenance">
+      <TimeInNotice timedIn={timedIn} />
+      <div className="text-[14px] text-slate-500">
+        {new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
       </div>
-    </div>
+
+      {status === "loading" && <CardSkeleton rows={3} />}
+      {status === "error" && <ErrorBanner onRetry={load}>{error}</ErrorBanner>}
+
+      {status === "ready" && (
+        <>
+          {urgent.length > 0 && (
+            <section aria-label="Needs attention" className="space-y-3">
+              {urgent.map((u) => (
+                <Link key={u.key} to={u.to} className={`${CARD_BUTTON} block border-rose-200`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-semibold text-slate-900 truncate">{u.title}</div>
+                      <div className="text-[14px] text-rose-700 mt-1">{u.text}</div>
+                    </div>
+                    <StatusBadge tone="urgent">{u.badge}</StatusBadge>
+                  </div>
+                </Link>
+              ))}
+            </section>
+          )}
+
+          <KpiGrid cols={4}>
+            <KpiCard label="Pending" icon="clock" tone="amber" value={count("pending")} sub="Waiting for Admin" onClick={() => navigate("/maintenance/stock-out-request?status=pending")} />
+            <KpiCard label="Approved" icon="check" tone="cyan" value={count("approved")} sub="Ready to be released" onClick={() => navigate("/maintenance/stock-out-request?status=approved")} />
+            <KpiCard label="Released" icon="box" tone="emerald" value={count("released")} sub={`${requests.length} requests in all`} bar={requests.length ? count("released") / requests.length : 0} onClick={() => navigate("/maintenance/stock-out-request?status=released")} />
+            <KpiCard label="Open projects" icon="tool" tone="violet" value={projects.filter((p) => p.status !== "done").length} sub={`${projects.filter((p) => p.status === "done").length} done`} onClick={() => navigate("/maintenance/projects")} />
+          </KpiGrid>
+
+          <div className="grid grid-cols-1 gap-3">
+            <Link to="/maintenance/stock-out-request?new=1" className={`${CARD_BUTTON} flex items-center gap-3`}>
+              <span className="w-11 h-11 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center flex-shrink-0"><Icon name="wrench" /></span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-semibold text-slate-900">Request parts</span>
+                <span className="block text-[14px] text-slate-500">Truck parts or machine components from the inventory</span>
+              </span>
+              <Icon name="chevron" className="text-slate-300" />
+            </Link>
+            <Link to="/maintenance/projects?new=1" className={`${CARD_BUTTON} flex items-center gap-3`}>
+              <span className="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center flex-shrink-0"><Icon name="clipboard" /></span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-semibold text-slate-900">Log a repair job</span>
+                <span className="block text-[14px] text-slate-500">Add a project for Admin to schedule</span>
+              </span>
+              <Icon name="chevron" className="text-slate-300" />
+            </Link>
+          </div>
+
+          <section aria-label="Latest requests" className="space-y-3">
+            <h2 className="text-[15px] font-semibold text-slate-900">Latest requests</h2>
+            {requests.length === 0 ? (
+              <EmptyCard icon="wrench" title="No requests yet">Tap Request parts to ask for an item.</EmptyCard>
+            ) : requests.slice(0, 3).map((r) => (
+              <div key={r.id} className={CARD}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-semibold text-slate-900 truncate">{r.product?.name || r.item_name}</div>
+                    <div className="text-[14px] text-slate-500">Qty {r.quantity} {r.product?.unit || ""} · {formatDateTime(r.created_at, { year: false })}</div>
+                  </div>
+                  <StatusBadge status={r.status} className="capitalize">{r.status}</StatusBadge>
+                </div>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+    </RoleShell>
   );
 }

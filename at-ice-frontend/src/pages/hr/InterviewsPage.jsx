@@ -18,8 +18,16 @@ import { APPLICANT_POSITIONS, applyUrl, isLocalTesting } from "../../lib/positio
 import { PRINT_BASE_CSS, printDocument } from "../../lib/printDocument";
 import QRCode from "qrcode";
 import { formatDateTime, formatTime } from "../../lib/time";
+import { CIVIL_STATUSES, EDUCATION_LEVELS, SEXES, labelOf } from "../../lib/biodata";
 
-const RefreshIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
+const DOC_LABEL = { photo: "2x2 photo", resume: "Resume", other: "Document" };
+const monthLabel = (v) => (v ? new Date(`${v}-01T00:00:00`).toLocaleDateString("en-PH", { month: "short", year: "numeric" }) : "");
+import Pagination from "../../components/Pagination";
+import { usePagination } from "../../lib/usePagination";
+import FilterSelect from "../../components/FilterSelect";
+import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { ActivityFeed, StatusBreakdown } from "../../components/Insight";
+
 const SearchIcon  = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const PlusIcon    = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const XIcon       = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
@@ -475,22 +483,58 @@ export default function InterviewsPage() {
 
   const actionBtn = "px-2.5 py-1 border rounded-md text-[11px] cursor-pointer whitespace-nowrap";
 
+  const pager = usePagination(filtered);
+
   return (
     <HrLayout
       pageTitle="Interviews"
       breadcrumb="HRIS / Interviews"
-      headerActions={
-        <button
-          onClick={fetchAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/[0.09] rounded-md text-xs text-slate-500 cursor-pointer hover:border-cyan-400 hover:text-cyan-500 transition-colors"
-        >
-          <RefreshIcon /> Refresh
-        </button>
-      }
     >
       {notice && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg px-4 py-2.5">{notice}</div>
       )}
+
+      {(() => {
+        const share = (n) => (counts.all ? n / counts.all : 0);
+        const decided = counts.hired + counts.rejected;
+        const POS_TONES = ["cyan", "emerald", "violet", "amber", "rose", "slate"];
+        const positions = [...new Set(applicants.map((a) => a.position_applied).filter(Boolean))]
+          .map((p, i) => ({ key: p, label: p, count: applicants.filter((a) => a.position_applied === p).length, tone: POS_TONES[i % POS_TONES.length] }))
+          .sort((a, b) => b.count - a.count);
+        const now = new Date();
+        const upcoming = applicants
+          .filter((a) => a.status === "pending" && parseLocal(a.interview_date) && parseLocal(a.interview_date) >= now)
+          .sort((a, b) => parseLocal(a.interview_date) - parseLocal(b.interview_date))
+          .map((a) => ({ id: a.id, title: a.name, meta: a.position_applied || "Applicant", when: fmtInterview(a.interview_date), tone: "cyan", icon: "calendar" }));
+        const viaQr = applicants.filter((a) => a.source === "qr").length;
+        return (
+          <>
+            <KpiGrid cols={5}>
+              <KpiCard label="Applicants" icon="users" tone="cyan" value={counts.all} sub={`${viaQr} applied through the QR form`} onClick={() => setTab("all")} active={tab === "all"} />
+              <KpiCard label="Upcoming interviews" icon="calendar" tone="violet" value={upcomingCount} sub="Scheduled and not yet held" live={upcomingCount > 0} />
+              <KpiCard label="Interviewed" icon="message" tone="amber" value={counts.interviewed} sub="Waiting for a decision" bar={share(counts.interviewed)} onClick={() => setTab("interviewed")} active={tab === "interviewed"} />
+              <KpiCard label="Hired" icon="check" tone="emerald" value={counts.hired} sub={decided ? `${Math.round((counts.hired / decided) * 100)}% of decided applicants` : "No decisions yet"} bar={decided ? counts.hired / decided : 0} onClick={() => setTab("hired")} active={tab === "hired"} />
+              <KpiCard label="Not hired" icon="x" tone="rose" value={counts.rejected} sub="Closed applications" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
+            </KpiGrid>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+              <StatusBreakdown title="Applicants by position" items={positions} empty="No applicants yet. Share the Application QR so people can apply." />
+              <ActivityFeed title="Next interviews" subtitle="Soonest first" items={upcoming} empty="No interviews scheduled. Use Edit on an applicant to set one." max={5} />
+              <StatusBreakdown
+                title="Pipeline"
+                items={[
+                  { key: "pending", label: "Pending", count: counts.pending, tone: "amber" },
+                  { key: "interviewed", label: "Interviewed", count: counts.interviewed, tone: "violet" },
+                  { key: "hired", label: "Hired", count: counts.hired, tone: "emerald" },
+                  { key: "rejected", label: "Not hired", count: counts.rejected, tone: "rose" },
+                ]}
+                onPick={(i) => setTab(i.key)}
+                active={tab}
+                empty="No applicants yet."
+              />
+            </div>
+          </>
+        );
+      })()}
 
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
         {/* HEADER */}
@@ -528,16 +572,9 @@ export default function InterviewsPage() {
         </div>
 
         {/* TABS */}
-        <div className="px-[18px] pt-3 flex flex-wrap gap-2">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)} aria-pressed={tab === t.key}
-              className={`px-3 py-1 rounded-full text-[11px] font-medium border cursor-pointer transition-colors ${tab === t.key ? "bg-cyan-500 border-cyan-500 text-white" : "bg-white border-black/[0.09] text-slate-500 hover:border-cyan-400 hover:text-cyan-500"}`}
-            >
-              {t.label} ({loading ? "…" : counts[t.key]})
-            </button>
-          ))}
+        <div className="px-[18px] pt-3">
+          <FilterSelect label="Status" value={tab} onChange={setTab}
+            options={TABS.map((t) => ({ value: t.key, label: t.label, count: loading ? null : counts[t.key] }))} />
         </div>
 
         {/* TABLE */}
@@ -563,7 +600,7 @@ export default function InterviewsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((a) => {
+                  {pager.pageItems.map((a) => {
                     const hint = scheduleHint(a);
                     return (
                       <tr key={a.id} className="border-b border-black/[0.06] last:border-b-0 hover:bg-slate-50">
@@ -601,18 +638,18 @@ export default function InterviewsPage() {
                               <button onClick={() => addAsEmployee(a)} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`} title="Open Add Employee with this applicant's details">Add as Employee</button>
                             )}
                             {a.status === "pending" && (interviewDue(a) ? (
-                              <button onClick={() => openStatus(a, "interviewed")} className={`${actionBtn} border-cyan-200 text-cyan-600 hover:bg-cyan-50`}>Mark Interviewed</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "interviewed")} className={`${actionBtn} border-cyan-200 text-cyan-600 hover:bg-cyan-50`}>Mark Interviewed</button>
                             ) : (
                               <button disabled title={interviewBlockReason(a)} className={`${actionBtn} border-black/[0.09] text-slate-400 bg-slate-50 cursor-not-allowed`}>Mark Interviewed</button>
                             ))}
                             {a.status === "interviewed" && (
-                              <button onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
                             )}
                             {(a.status === "pending" || a.status === "interviewed") && (
-                              <button onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-red-200 text-red-600 hover:bg-red-50`}>Reject</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-red-200 text-red-600 hover:bg-red-50`}>Reject</button>
                             )}
                             {!isFinal(a) && (
-                              <button onClick={() => { setDeleteTarget(a); setDeleteError(""); }} className={`${actionBtn} border-black/[0.09] text-slate-500 hover:border-red-300 hover:text-red-500`}>Delete</button>
+                              <button data-no-confirm onClick={() => { setDeleteTarget(a); setDeleteError(""); }} className={`${actionBtn} border-black/[0.09] text-slate-500 hover:border-red-300 hover:text-red-500`}>Delete</button>
                             )}
                           </div>
                         </td>
@@ -621,6 +658,7 @@ export default function InterviewsPage() {
                   })}
                 </tbody>
               </table>
+              <Pagination pager={pager} />
             </div>
           )}
         </div>
@@ -838,6 +876,28 @@ export default function InterviewsPage() {
               ["Resume / CV", viewing.resume_name
                 ? <button type="button" onClick={() => openResume(viewing)} className="text-cyan-600 hover:underline font-medium cursor-pointer text-left break-all">{viewing.resume_name}</button>
                 : "—"],
+              ["Photo and Documents", (viewing.documents || []).length === 0 ? "—" : (
+                <span className="flex flex-col gap-1">
+                  {viewing.documents.map((d) => (
+                    <button key={d.id} type="button" onClick={() => previewProtectedFile(`/api/applicants/${viewing.id}/documents/${d.id}`, d.original_name).catch((err) => toast.error(err.message))}
+                      className="text-left text-cyan-600 hover:underline font-medium cursor-pointer break-all">
+                      {DOC_LABEL[d.type] || "Document"} · {d.original_name}
+                    </button>
+                  ))}
+                </span>
+              )],
+              ["Data Privacy Consent", viewing.consented_at ? `Agreed ${fmtDateTime(viewing.consented_at)}` : viewing.source === "qr" ? "—" : "Added by HR"],
+              ["Personal", [
+                viewing.birth_date && `Born ${new Date(`${String(viewing.birth_date).slice(0, 10)}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`,
+                labelOf(SEXES, viewing.sex), labelOf(CIVIL_STATUSES, viewing.civil_status), viewing.nationality, viewing.place_of_birth,
+              ].filter(Boolean).join(" · ") || "—"],
+              ["Emergency Contact", [viewing.emergency_name, viewing.emergency_relationship && `(${viewing.emergency_relationship})`, viewing.emergency_phone].filter(Boolean).join(" ") || "—"],
+              ...(viewing.position_applied === "Driver" ? [["Driver's License", viewing.license_number
+                ? `${viewing.license_number} · expires ${String(viewing.license_expiry || "").slice(0, 10) || "—"}${viewing.license_restrictions ? ` · codes ${viewing.license_restrictions}` : ""}`
+                : "—"]] : []),
+              ["Education", [labelOf(EDUCATION_LEVELS, viewing.education_level), viewing.course, viewing.school, viewing.year_graduated].filter(Boolean).join(" · ") || "—"],
+              ["Work History", (viewing.work_history || []).length === 0 ? "—" : viewing.work_history.map((w) =>
+                `${w.company}${w.position ? `, ${w.position}` : ""} (${monthLabel(w.from) || "?"} – ${w.to ? monthLabel(w.to) : "present"})`).join("\n")],
               ["Address", addressLine(viewing) || "—"],
               ["Interview", fmtInterview(viewing.interview_date)],
               ["Status", STATUS_LABEL[viewing.status] || viewing.status],

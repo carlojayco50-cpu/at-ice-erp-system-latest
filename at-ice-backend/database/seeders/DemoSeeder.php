@@ -10,6 +10,7 @@ use App\Support\PayPeriod;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 // Demo data for testing attendance, leave and payroll without real Time Ins
 // (docs/REVIEW-DECISIONS.md). Local or test databases only:
@@ -24,9 +25,12 @@ use Illuminate\Database\Seeder;
 //   EMP-9003  daily rate, probationary: two absences (unpaid)
 //   EMP-9004  monthly rate, hired in the middle of the period
 //   EMP-9005  inactive (deactivated), for the Archived list
-// Running it again replaces these five and their records.
+// Running it again replaces these five and their records. It then runs
+// ModuleDemoSeeder: example data for every other module.
 class DemoSeeder extends Seeder
 {
+    public const DEMO_IDS = ['EMP-9001', 'EMP-9002', 'EMP-9003', 'EMP-9004', 'EMP-9005'];
+
     public function run(): void
     {
         if (app()->environment('production')) {
@@ -35,9 +39,15 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        Employee::where('employee_id', 'like', 'EMP-90%')->get()->each->delete();
+        // only its own five (never EMP-9006 and up: real staff can get those
+        // numbers), with their payroll, leave and attendance
+        $demoIds = Employee::whereIn('employee_id', self::DEMO_IDS)->whereNull('user_id')->pluck('id');
+        DB::table('payrolls')->whereIn('employee_id', $demoIds)->delete();
+        DB::table('leave_requests')->whereIn('employee_id', $demoIds)->delete();
+        DB::table('attendances')->whereIn('employee_id', $demoIds)->delete();
+        DB::table('employees')->whereIn('id', $demoIds)->delete();
 
-        $period = PayPeriod::previous(now('Asia/Manila')->toDateString());
+        $period = PayPeriod::previous(now(config('atice.timezone'))->toDateString());
         $start = CarbonImmutable::parse($period['start']);
         $workDays = collect(CarbonPeriod::create($start, $period['end']))
             ->filter(fn ($d) => $d->isWeekday())
@@ -87,5 +97,9 @@ class DemoSeeder extends Seeder
             'hours' => 4, 'reason' => 'Family emergency (demo)', 'status' => 'approved', 'is_paid' => false, 'paid_days' => 0, 'unpaid_days' => 0.5, 'approved_at' => now()]);
 
         $this->command?->info("Demo employees EMP-9001 to EMP-9005 with attendance for {$period['start']} to {$period['end']}.");
+
+        // Example data for every other module (deliveries, contracts, invoices,
+        // inventory, projects, applicants, support...).
+        $this->call(ModuleDemoSeeder::class);
     }
 }

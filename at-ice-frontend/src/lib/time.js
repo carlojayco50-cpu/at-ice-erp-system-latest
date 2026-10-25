@@ -1,7 +1,9 @@
 // Every clock shown in the app is 12-hour with AM/PM ("9:05 AM", "11:30 PM"),
 // in Philippine time. Values sent to the API stay 24-hour ("HH:mm[:ss]").
 
-export const TZ = "Asia/Manila";
+// The business time zone. Keep it equal to ATICE_TIMEZONE on the server (config/atice.php);
+// set VITE_BUSINESS_TZ at build time if that is not Asia/Manila.
+export const TZ = import.meta.env.VITE_BUSINESS_TZ || "Asia/Manila";
 
 // "HH:mm" or "HH:mm:ss" on its own (a DB TIME column), not a full date.
 const CLOCK_RE = /^\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*$/;
@@ -49,7 +51,25 @@ export function formatDateTime(v, { year = true, seconds = false, tz = true, fal
   });
 }
 
+/** A date only: ISO string / Date -> "Oct 16" ("Oct 16, 2026" with year). */
+export function formatDateShort(v, { year = false, fallback = "" } = {}) {
+  const d = toDate(v);
+  if (!d) return fallback;
+  return d.toLocaleDateString("en-PH", { timeZone: TZ, month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
+}
+
 // A shift as hours: "9:00 AM – 6:00 PM", or "9:00 PM – 6:00 AM (next day)" overnight.
+// "2026-10-22" for a date the API sends either as a plain date or as a UTC
+// timestamp (a Laravel date cast: "2026-10-21T16:00:00Z" is Oct 22 in Manila).
+export function manilaDate(v) {
+  if (!v) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return String(v);
+  const d = new Date(v);
+  return isNaN(d) ? String(v).slice(0, 10) : d.toLocaleDateString("en-CA", { timeZone: TZ });
+}
+
+export const todayManila = () => manilaDate(new Date());
+
 export function formatShift(start, end) {
   const s = String(start || "").slice(0, 5);
   const e = String(end || "").slice(0, 5);

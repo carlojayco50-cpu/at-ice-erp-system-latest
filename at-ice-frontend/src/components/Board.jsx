@@ -2,7 +2,8 @@ import { TONES } from "../lib/boardTones";
 
 // Board building blocks for Admin pages, in the style of monday.com boards:
 // a group has a colored title and a colored left edge on every row, and each
-// status is a full-width colored cell that reads at a glance.
+// status is a soft pill centered in its cell, the same size as every other
+// table badge (owner, 2026-10-22).
 //
 //   <BoardGroup title="On the road" tone="working" count={3} columns={[...]}>
 //     <BoardRow tone="working" cells={[...]} />
@@ -13,7 +14,7 @@ export function StatusCell({ tone = "idle", children, className = "", title }) {
   return (
     <span
       title={title}
-      className={`flex items-center justify-center min-h-[30px] px-2 text-[11px] font-semibold whitespace-nowrap ${TONES[tone]?.cell || TONES.idle.cell} ${className}`}
+      className={`table-status-badge ${TONES[tone]?.pill || TONES.idle.pill} ${className}`}
     >
       {children}
     </span>
@@ -39,7 +40,7 @@ export function BoardGroup({ title, tone = "info", count, columns, children, foo
               {columns.map((c, i) => (
                 <th
                   key={c.label}
-                  className={`font-medium px-3 py-2 border-b border-black/[0.06] ${i === 0 ? "!text-left" : "text-center"} ${c.className || ""}`}
+                  className={`font-medium px-3 py-2 border-b border-black/[0.06] text-center ${c.className || ""}`}
                   style={i === 0 ? { boxShadow: `inset 4px 0 0 ${t.edge}` } : undefined}
                 >
                   {c.label}
@@ -61,9 +62,8 @@ export function BoardGroup({ title, tone = "info", count, columns, children, foo
   );
 }
 
-// One board row. The first cell is the item name (left, with the group's
-// edge color); the others are centered. A cell may be a <StatusCell>, which
-// fills it edge to edge.
+// One board row. The first cell is the item name (with the group's edge
+// color); every cell is centered, like every other table.
 export function BoardRow({ tone = "info", cells, onClick, title }) {
   const t = TONES[tone] || TONES.info;
   return (
@@ -72,18 +72,15 @@ export function BoardRow({ tone = "info", cells, onClick, title }) {
       title={title}
       className={`border-b border-black/[0.06] last:border-b-0 ${onClick ? "cursor-pointer hover:bg-slate-50" : ""}`}
     >
-      {cells.map((cell, i) => {
-        const fill = cell && typeof cell === "object" && (cell.type === StatusCell || cell.type?.boardFill);
-        return (
-          <td
-            key={i}
-            className={`${fill ? "p-0 border-l border-white" : "px-3 py-2"} ${i === 0 ? "!text-left text-slate-800 font-medium" : "text-center text-slate-600 tabular-nums"}`}
-            style={i === 0 ? { boxShadow: `inset 4px 0 0 ${t.edge}` } : undefined}
-          >
-            {cell}
-          </td>
-        );
-      })}
+      {cells.map((cell, i) => (
+        <td
+          key={i}
+          className={`px-3 py-2 text-center ${i === 0 ? "text-slate-800 font-medium" : "text-slate-600 tabular-nums"}`}
+          style={i === 0 ? { boxShadow: `inset 4px 0 0 ${t.edge}` } : undefined}
+        >
+          {cell}
+        </td>
+      ))}
     </tr>
   );
 }

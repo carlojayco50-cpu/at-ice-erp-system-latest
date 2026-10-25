@@ -136,7 +136,8 @@ class EmployeeNoAccountTest extends TestCase
 
     public function test_face_picture_is_saved_replaced_and_deleted(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
+        \Illuminate\Support\Facades\Storage::fake('public');
+        \Illuminate\Support\Facades\Storage::fake('local'); // face pictures are private
         $this->actingAsHr();
         $id = $this->postJson('/api/employees', $this->payload(['position' => 'Guard']))->json('employee.id');
 
