@@ -7,10 +7,11 @@ import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { StatusBreakdown } from "../../components/Insight";
+import { Icon } from "../../components/icons";
 
 const API_BASE = "/api";
 
-const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const SearchIcon = () => <Icon name="search" size={14} />;
 
 const SUB_ROLE_STYLE = {
   checker:     "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",

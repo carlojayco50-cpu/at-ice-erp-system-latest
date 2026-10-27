@@ -27,10 +27,11 @@ import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, StatusBreakdown } from "../../components/Insight";
+import { Icon } from "../../components/icons";
 
-const SearchIcon  = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-const PlusIcon    = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
-const XIcon       = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const SearchIcon  = () => <Icon name="search" size={13} />;
+const PlusIcon    = () => <Icon name="plus" size={13} strokeWidth={2.2} />;
+const XIcon       = () => <Icon name="x" size={16} />;
 
 const token = () => localStorage.getItem("token") || "";
 

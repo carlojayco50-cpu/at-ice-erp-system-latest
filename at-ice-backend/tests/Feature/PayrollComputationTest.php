@@ -199,4 +199,45 @@ class PayrollComputationTest extends TestCase
         }
         $this->assertSame(['basic' => 96000.0, 'deductions' => 2382.12, 'amount' => 7801.49, 'periods' => 2], ThirteenthMonth::for($e, 2026));
     }
+
+    public function test_admin_removes_an_unpaid_adjustment_and_net_pay_follows(): void
+    {
+        $e = $this->employee();
+        $this->day($e, '2026-10-12');
+        $hr = User::factory()->create(['role' => 'hr']);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Sanctum::actingAs($hr);
+        $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
+        $payroll = Payroll::first();
+
+        Sanctum::actingAs($admin);
+        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
+            ->assertCreated()->json('adjustments.0.id');
+        $this->assertEquals(1100, (float) $payroll->fresh()->net_pay);
+
+        $this->deleteJson("/api/payroll-adjustments/{$adjustment}")->assertOk();
+        $this->assertDatabaseMissing('payroll_adjustments', ['id' => $adjustment]);
+        $this->assertEquals(600, (float) $payroll->fresh()->net_pay);
+    }
+
+    public function test_an_adjustment_cannot_be_removed_once_the_payroll_is_paid(): void
+    {
+        $e = $this->employee();
+        $this->day($e, '2026-10-12');
+        $hr = User::factory()->create(['role' => 'hr']);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Sanctum::actingAs($hr);
+        $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
+        $payroll = Payroll::first();
+
+        Sanctum::actingAs($admin);
+        $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
+            ->assertCreated()->json('adjustments.0.id');
+        $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payroll->id]])->assertOk();
+
+        $this->deleteJson("/api/payroll-adjustments/{$adjustment}")->assertUnprocessable();
+        $this->assertDatabaseHas('payroll_adjustments', ['id' => $adjustment]);
+    }
 }

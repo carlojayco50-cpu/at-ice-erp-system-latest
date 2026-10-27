@@ -25,8 +25,9 @@ import { TZ, formatDateTime, formatTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { Icon } from "../../components/icons";
 
-const SearchIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+const SearchIcon = () => <Icon name="search" size={13} />;
 
 const token = () => localStorage.getItem("token") || "";
 const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${token()}` });

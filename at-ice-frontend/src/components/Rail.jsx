@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Icon } from "./icons";
 
 // Desktop sidebar rail (Admin, HR and Customer layouts). It shows only its
 // icons and opens while the mouse rests on it (OPEN_DELAY, so passing over it
@@ -30,9 +31,7 @@ const OPEN_DELAY = 120;
 const CLOSE_DELAY = 400;
 
 const HideIcon = () => (
-  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-    <polyline points="11 17 6 12 11 7" /><polyline points="18 17 13 12 18 7" />
-  </svg>
+  <Icon name="hide" size={14} />
 );
 
 export default function Rail({ children }) {

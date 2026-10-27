@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { STATUS_STYLE, inputCls, storeName } from "./utils";
+import { Icon } from "../../../components/icons";
 
 // Small pieces of UI shared by Admin > Deliveries (helpers are in utils.js).
 
@@ -21,9 +22,9 @@ export function ReassignedTag({ delivery }) {
   );
 }
 
-export const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
-export const PlusIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
-export const TrashIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>;
+export const XIcon = () => <Icon name="x" size={16} />;
+export const PlusIcon = () => <Icon name="plus" size={14} />;
+export const TrashIcon = () => <Icon name="trashAlt" size={13} />;
 
 export function Modal({ title, onClose, children, wide = false }) {
   return (

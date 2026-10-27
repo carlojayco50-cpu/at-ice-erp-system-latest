@@ -4,6 +4,8 @@ import { ICE_CARD, ICE_INSET } from "../../lib/company";
 import { SkeletonList } from "../../components/Skeleton";
 import { useLiveTick } from "../../lib/live";
 import { MiniBars, TipsWidget } from "../../components/Insight";
+import { KpiIcon } from "../../components/Kpi";
+import { TONES } from "../../lib/kpiTones";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -58,8 +60,13 @@ export default function CustomerPrices() {
               const price = data?.prices?.[p.key];
               return (
                 <div key={p.key} className={`${ICE_CARD} p-6`}>
-                  <div className="text-[15px] font-bold tracking-wide uppercase text-slate-800">{p.name}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">{p.label}</div>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={`w-8 h-8 rounded-lg grid place-items-center flex-shrink-0 ${TONES.cyan.badge}`}><KpiIcon name="tag" /></span>
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-bold tracking-wide uppercase text-slate-800">{p.name}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{p.label}</div>
+                    </div>
+                  </div>
                   <div className={`${ICE_INSET} px-4 py-4 mt-5`}>
                     <div className="text-[11px] text-slate-500">{rateLabel}:</div>
                     {price === null || price === undefined ? (

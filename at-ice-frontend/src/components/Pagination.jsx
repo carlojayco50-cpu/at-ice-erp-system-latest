@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
 import { PAGE_SIZES } from "../lib/usePagination";
+import { Icon } from "./icons";
 
-const ChevLeft = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>;
-const ChevRight = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>;
+const ChevLeft = () => <Icon name="chevronLeft" size={14} />;
+const ChevRight = () => <Icon name="chevron" size={14} />;
 
 // Page numbers to show: all when 7 or fewer, otherwise always exactly 7
 // slots of the same width (first, last, the current page with its

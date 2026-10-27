@@ -1,30 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { getKioskDeviceId, setKioskToken } from "../lib/kiosk";
 import { playSplash } from "../lib/splash";
+import { Icon } from "./icons";
 
 // Screens of the Attendance Station gate (see KioskGate.jsx).
 // Dark soft UI (neumorphism.css, .neu-dark): raised card and icon badge, cyan accent.
 
 const WarningIcon = () => (
-  <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
+  <Icon name="warning" size={28} className="!text-red-500" />
 );
 
 const CameraOffIcon = () => (
-  <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <line x1="1" y1="1" x2="23" y2="23" />
-    <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56" />
-  </svg>
+  <Icon name="cameraOff" size={28} />
 );
 
 const LockIcon = () => (
-  <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <rect x="3" y="11" width="18" height="11" rx="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
+  <Icon name="lock" size={28} />
 );
 
 const BADGE_TONES = {

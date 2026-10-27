@@ -20,6 +20,7 @@ import { confirmAction } from "../../lib/confirm";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
 import { todayManila } from "../../lib/time";
+import { Icon } from "../../components/icons";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -42,7 +43,7 @@ const NO_FILTER = { q: "", month: "", date: "", type: "" };
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const fmt = (d) => new Date(`${d}T00:00:00`).toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
-const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const SearchIcon = () => <Icon name="search" size={14} />;
 
 function HolidayModal({ holiday, onClose, onSaved }) {
   const editing = holiday?.id || null;

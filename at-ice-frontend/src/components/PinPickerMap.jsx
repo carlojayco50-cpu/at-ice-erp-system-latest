@@ -1,5 +1,6 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
+import { Icon } from "./icons";
 import "leaflet/dist/leaflet.css";
 
 // Grab-style map pin for Add/Edit Customer. The pin stays in the middle and
@@ -201,7 +202,7 @@ export default function PinPickerMap({ latitude, longitude, onChange, onAddress 
   );
 }
 
-const LockIcon = ({ className = "" }) => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" className={className}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>;
-const EnlargeIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>;
-const ShrinkIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></svg>;
-const UnlockIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></svg>;
+const LockIcon = ({ className = "" }) => <Icon name="lockSmall" size={13} strokeWidth={2.2} className={className} />;
+const EnlargeIcon = () => <Icon name="enlarge" size={13} strokeWidth={2.2} />;
+const ShrinkIcon = () => <Icon name="shrink" size={13} strokeWidth={2.2} />;
+const UnlockIcon = () => <Icon name="unlock" size={13} strokeWidth={2.2} />;

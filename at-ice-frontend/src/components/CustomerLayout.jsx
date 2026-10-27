@@ -12,10 +12,11 @@ import { initialsOf } from "../lib/initials";
 import SideNav from "./SideNav";
 import Rail from "./Rail";
 import { CUSTOMER_NAV } from "../lib/nav";
+import { Icon } from "./icons";
 
-const ChevRight    = () => <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>;
-const MenuIcon     = () => <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
-const XIcon        = () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const ChevRight = () => <Icon name="chevron" size={10} />;
+const MenuIcon = () => <Icon name="menu" size={20} />;
+const XIcon = () => <Icon name="x" size={18} />;
 
 function SidebarNav({ onNavigate, onClose }) {
   return (

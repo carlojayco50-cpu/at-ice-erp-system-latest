@@ -9,13 +9,14 @@ import { toast } from "../../lib/toast";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, InsightPanel, ProgressRing, StatusBreakdown } from "../../components/Insight";
 import { PILL } from "../../lib/statusTones";
+import { Icon } from "../../components/icons";
 
 // Admin > HRIS > Performance (owner, 2026-10-20). Every active employee gets a
 // Draft Base Rating each pay period from the records (attendance, punctuality
 // and the role's work done; App\Support\PerformanceScore). Only Admin can
 // override the rating or the goal, write remarks and publish the appraisal.
 
-const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const SearchIcon = () => <Icon name="search" size={14} />;
 const selectCls = "px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60";
 const inputCls = "w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500";
 

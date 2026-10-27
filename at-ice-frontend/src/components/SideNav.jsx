@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { Icon } from "./icons";
 
 // Shared sidebar menu (Admin, HR and Customer layouts), laid out like
 // Discord's settings sidebar: top-level sections with an icon; the section of
@@ -15,7 +16,7 @@ import { Link, useLocation } from "react-router-dom";
 // it without changing page. The open sections are saved in localStorage, so
 // they are the same after a page change and after a refresh.
 
-const ChevDown = () => <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>;
+const ChevDown = () => <Icon name="chevronDown" size={10} strokeWidth={2.5} />;
 
 const splitTo = (to) => {
   const [path, hash = ""] = to.split("#");

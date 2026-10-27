@@ -6,21 +6,16 @@ import PasswordRules from "../components/PasswordRules";
 import { RevealButton } from "../components/PasswordInput";
 import { useReveal } from "../lib/useReveal";
 import { isStrongPassword } from "../lib/password";
+import { Icon } from "../components/icons";
 
 const MailIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 6L2 7" />
-  </svg>
+  <Icon name="mail" size={18} strokeWidth={1.8} />
 );
 const LockIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
+  <Icon name="lockWide" size={18} strokeWidth={1.8} />
 );
 const KeyIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <circle cx="7.5" cy="15.5" r="5.5" /><path d="M21 2l-9.6 9.6" /><path d="M15.5 7.5l3 3L22 7l-3-3" />
-  </svg>
+  <Icon name="key" size={18} strokeWidth={1.8} />
 );
 
 // Same field look as the login page

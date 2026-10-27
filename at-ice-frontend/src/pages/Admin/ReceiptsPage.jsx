@@ -16,6 +16,7 @@ import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, MiniBars, StatusBreakdown } from "../../components/Insight";
+import { Icon } from "../../components/icons";
 
 window.Pusher = Pusher;
 const echo = new Echo({
@@ -26,11 +27,11 @@ const echo = new Echo({
 });
 
 // Icons
-const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
-const XIcon = () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
-const EyeIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>;
-const CheckIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>;
-const BellIcon = () => <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
+const SearchIcon = () => <Icon name="search" size={14} />;
+const XIcon = () => <Icon name="x" size={16} />;
+const EyeIcon = () => <Icon name="eye" size={13} />;
+const CheckIcon = () => <Icon name="check" size={13} />;
+const BellIcon = () => <Icon name="bell" size={13} />;
 
 const FILTERS = [
   { key: "all",     label: "All" },
@@ -39,7 +40,7 @@ const FILTERS = [
   { key: "paid",    label: "Paid" },
 ];
 
-const PrintIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+const PrintIcon = () => <Icon name="print" size={14} />;
 
 const MOP_LABELS = { cash: "Cash", gcash: "GCash", check: "Cheque", bank_transfer: "Bank Transfer" };
 

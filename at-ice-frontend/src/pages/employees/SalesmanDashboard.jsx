@@ -13,6 +13,10 @@ import { usePagination } from "../../lib/usePagination";
 import { StopMeta, ArrivalChips } from "../../components/RouteParts";
 import { pressArrived } from "../../lib/route";
 import { toast } from "../../lib/toast";
+import { KpiIcon } from "../../components/Kpi";
+import { TONES } from "../../lib/kpiTones";
+
+const ICON_TONE = { done: "emerald", progress: "cyan", pending: "amber" };
 
 const token = () => localStorage.getItem("token") || "";
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
@@ -85,8 +89,8 @@ export default function SalesmanDashboard() {
 
   const sacks = (d) => (d.items || []).reduce((sum, i) => sum + Number(i.quantity_ordered || 0), 0);
   const summary = delivered
-    ? [["Delivered", done.length, "done"], ["Sacks", done.reduce((sum, d) => sum + sacks(d), 0), "done"]]
-    : [["On route", stops.filter((d) => d.status === "in_transit").length, "progress"], ["Waiting for driver", stops.filter((d) => d.status === "pending").length, "pending"]];
+    ? [["Delivered", done.length, "done", "check"], ["Sacks", done.reduce((sum, d) => sum + sacks(d), 0), "done", "box"]]
+    : [["On route", stops.filter((d) => d.status === "in_transit").length, "progress", "truck"], ["Waiting for driver", stops.filter((d) => d.status === "pending").length, "pending", "users"]];
 
   let actionBar = null;
   if (selected) {
@@ -136,9 +140,12 @@ export default function SalesmanDashboard() {
       )}
 
       <div className="grid grid-cols-1 gap-3">
-        {summary.map(([label, value, tone]) => (
+        {summary.map(([label, value, tone, icon]) => (
           <div key={label} className={`${CARD} flex items-center justify-between`}>
-            <StatusBadge tone={tone}>{label}</StatusBadge>
+            <span className="flex items-center gap-2.5 min-w-0">
+              <span className={`w-8 h-8 rounded-lg grid place-items-center flex-shrink-0 ${TONES[ICON_TONE[tone]].badge}`}><KpiIcon name={icon} /></span>
+              <StatusBadge tone={tone}>{label}</StatusBadge>
+            </span>
             <span className="text-2xl font-bold text-slate-900 tabular-nums">{value}</span>
           </div>
         ))}

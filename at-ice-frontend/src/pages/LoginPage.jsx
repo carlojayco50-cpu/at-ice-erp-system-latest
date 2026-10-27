@@ -9,16 +9,13 @@ import { clearSession, postLoginPath, saveSession } from "../lib/auth";
 import { isBlockedDevice } from "../lib/kiosk";
 import { takeSessionExpiredNotice } from "../lib/sessionExpiry";
 import { playSplash } from "../lib/splash";
+import { Icon } from "../components/icons";
 
 const MailIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <rect x="2" y="4" width="20" height="16" rx="2" /><polyline points="2,4 12,13 22,4" />
-  </svg>
+  <Icon name="mail" size={18} strokeWidth={1.8} />
 );
 const LockIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
+  <Icon name="lockWide" size={18} strokeWidth={1.8} />
 );
 
 const fieldBox =

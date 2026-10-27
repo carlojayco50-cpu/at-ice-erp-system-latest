@@ -14,6 +14,7 @@ import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { Icon } from "../../components/icons";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -30,7 +31,7 @@ const fmtDate = (v) => {
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 };
 
-const PrintIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+const PrintIcon = () => <Icon name="print" size={14} />;
 
 const PRODUCT_LABEL = {
   bags: "Bags (5kg)",

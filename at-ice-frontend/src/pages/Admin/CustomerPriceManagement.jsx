@@ -10,6 +10,7 @@ import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { MiniBars, StatusBreakdown, TipsWidget } from "../../components/Insight";
+import { Icon } from "../../components/icons";
 
 const token = () => localStorage.getItem("token") || "";
 
@@ -23,36 +24,25 @@ const PRODUCT_ORDER = ["bags", "small_sack", "big_sack"];
 
 function SearchIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
+    <Icon name="search" size={14} />
   );
 }
 
 function EditIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
+    <Icon name="edit" size={14} />
   );
 }
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
+    <Icon name="check" size={14} />
   );
 }
 
 function XIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
+    <Icon name="x" size={14} />
   );
 }
 

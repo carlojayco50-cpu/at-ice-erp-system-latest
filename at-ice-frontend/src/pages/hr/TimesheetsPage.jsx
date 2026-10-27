@@ -17,6 +17,7 @@ import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { todayManila } from "../../lib/time";
+import { Icon } from "../../components/icons";
 
 const token = () => localStorage.getItem("token") || "";
 async function api(url, options = {}) {
@@ -30,7 +31,7 @@ const addDays = (ymd, n) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDa
 
 // Same pay-period buttons and search as Admin > Payroll
 const Chevron = ({ left }) => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><polyline points={left ? "15 18 9 12 15 6" : "9 18 15 12 9 6"} /></svg>;
-const SearchIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const SearchIcon = () => <Icon name="search" size={14} />;
 const navBtn = "inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 disabled:opacity-40 cursor-pointer";
 const num = (n) => { const v = Number(n); return !v ? "—" : Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0$/, ""); };
 

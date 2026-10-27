@@ -5,41 +5,25 @@ import logo from "../assets/logo.png";
 import { clearKioskToken, kioskHeaders } from "../lib/kiosk";
 import { playKioskSound, primeKioskSound } from "../lib/kioskSound";
 import { formatTime } from "../lib/time";
+import { Icon } from "../components/icons";
 
 const ScanIcon = () => (
-  <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
+  <Icon name="scan" size={15} />
 );
 const CheckIcon = () => (
-  <svg width="34" height="34" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
+  <Icon name="check" size={34} strokeWidth={2.5} />
 );
 const XIcon = () => (
-  <svg width="34" height="34" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
+  <Icon name="x" size={34} strokeWidth={2.5} />
 );
 const ClockIcon = () => (
-  <svg width="34" height="34" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-  </svg>
+  <Icon name="clock" size={34} strokeWidth={2.5} />
 );
 const LogInIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-    <polyline points="10 17 15 12 10 7" />
-    <line x1="15" y1="12" x2="3" y2="12" />
-  </svg>
+  <Icon name="logIn" size={18} />
 );
 const LogOutIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="16 17 21 12 16 7" />
-    <line x1="21" y1="12" x2="9" y2="12" />
-  </svg>
+  <Icon name="logOut" size={18} />
 );
 
 const MATCH_THRESHOLD = 0.5;

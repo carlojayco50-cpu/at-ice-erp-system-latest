@@ -8,6 +8,7 @@ import { RevealButton } from "../components/PasswordInput";
 import { useReveal } from "../lib/useReveal";
 import { useLogoutConfirm } from "../lib/useLogoutConfirm";
 import { isStrongPassword } from "../lib/password";
+import { Icon } from "../components/icons";
 
 const PORTAL_LABEL = {
   admin: "Admin Portal",
@@ -18,9 +19,7 @@ const PORTAL_LABEL = {
 };
 
 const LockIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
+  <Icon name="lockWide" size={18} strokeWidth={1.8} />
 );
 
 // Same field look as the login page

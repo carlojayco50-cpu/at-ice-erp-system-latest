@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js";
 import { STEP_TEXT, advance, currentStep, failure, isDone, loadLivenessModels, newChallenge, readFrame } from "../lib/liveness";
+import { Icon } from "./icons";
 
-const CameraIcon = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
-const CheckIcon  = () => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+const CameraIcon = () => <Icon name="camera" size={14} />;
+const CheckIcon  = () => <Icon name="check" size={14} />;
 
 // The face-api.js models are loaded once per page load and shared.
 let modelsPromise = null;
