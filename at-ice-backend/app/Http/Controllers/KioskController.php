@@ -161,8 +161,8 @@ class KioskController extends Controller
     public function override(Request $request)
     {
         $request->validate(
-            ['device_id' => self::DEVICE_RULE, 'admin_pin' => ['required', 'string', 'regex:/^\d{6}$/']],
-            ['admin_pin.regex' => 'The Admin PIN is 6 digits.']
+            ['device_id' => self::DEVICE_RULE, 'admin_pin' => ['required', 'string', 'regex:/^\d{4}$/']],
+            ['admin_pin.regex' => 'The Admin PIN is 4 digits.']
         );
 
         $ip = (string) $request->ip();
@@ -240,9 +240,9 @@ class KioskController extends Controller
     {
         $data = $request->validate([
             'current_password' => 'required|string',
-            'admin_pin' => ['required', 'string', 'regex:/^\d{6}$/', 'confirmed'],
+            'admin_pin' => ['required', 'string', 'regex:/^\d{4}$/', 'confirmed'],
         ], [
-            'admin_pin.regex' => 'The Admin override PIN must be exactly 6 digits.',
+            'admin_pin.regex' => 'The Admin override PIN must be exactly 4 digits.',
         ]);
 
         $this->assertPassword($request, $data['current_password']);

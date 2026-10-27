@@ -238,7 +238,7 @@ export function PinEntry({ onUnlocked }) {
 }
 
 // A kiosk locked after too many wrong HR PINs. It stays locked (no timer) until
-// an Admin types the 6-digit Admin override PIN here, on this kiosk. HR cannot
+// an Admin types the 4-digit Admin override PIN here, on this kiosk. HR cannot
 // unlock it. Every try is logged on the server.
 function AdminOverride({ onUnlocked }) {
   const [pin, setPin] = useState("");
@@ -247,7 +247,7 @@ function AdminOverride({ onUnlocked }) {
 
   async function submit(e) {
     e.preventDefault();
-    if (pin.length !== 6 || busy) return;
+    if (pin.length !== 4 || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -275,20 +275,20 @@ function AdminOverride({ onUnlocked }) {
       <div role="alert" className="text-[13px] text-red-200 bg-red-500/10 border border-red-400/30 rounded-xl px-4 py-3">
         This kiosk is locked after too many wrong PINs. Only an Admin can unlock it, here on this kiosk.
       </div>
-      <label htmlFor="kiosk-admin-pin" className="text-[12px] text-slate-300">Admin override PIN (6 digits)</label>
+      <label htmlFor="kiosk-admin-pin" className="text-[12px] text-slate-300">Admin override PIN (4 digits)</label>
       <input
         id="kiosk-admin-pin"
         type="password"
         inputMode="numeric"
         autoComplete="off"
-        maxLength={6}
+        maxLength={4}
         value={pin}
-        onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 6)); setError(""); }}
+        onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }}
         className="mx-auto w-48 text-center tracking-[0.5em] font-mono text-[20px] px-3 py-2.5 rounded-xl bg-slate-950/70 border border-slate-600/60 text-cyan-100 outline-none focus:border-cyan-400"
         autoFocus
       />
       {error && <div role="alert" className="text-[13px] text-red-300">{error}</div>}
-      <button type="submit" disabled={pin.length !== 6 || busy} className="mx-auto px-5 py-2.5 rounded-xl bg-cyan-500 text-slate-900 text-[14px] font-semibold disabled:opacity-50 cursor-pointer">
+      <button type="submit" disabled={pin.length !== 4 || busy} className="mx-auto px-5 py-2.5 rounded-xl bg-cyan-500 text-slate-900 text-[14px] font-semibold disabled:opacity-50 cursor-pointer">
         {busy ? "Checking…" : "Unlock kiosk"}
       </button>
     </form>

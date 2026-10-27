@@ -115,49 +115,74 @@ function SettingRow({ s, onSaved }) {
   );
 }
 
+const PIN_LENGTH = 4;
+const flagCls = "text-[11px] text-red-600";
+
 function OverridePinForm() {
-  const [form, setForm] = useState({ current_password: "", admin_pin: "", admin_pin_confirmation: "" });
+  const empty = { current_password: "", admin_pin: "", admin_pin_confirmation: "" };
+  const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
-  const digits = (v) => v.replace(/\D/g, "").slice(0, 6);
-  const ok = form.current_password && /^\d{6}$/.test(form.admin_pin) && form.admin_pin === form.admin_pin_confirmation;
+  const [submitted, setSubmitted] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const digits = (v) => v.replace(/\D/g, "").slice(0, PIN_LENGTH);
+
+  // Client-side checks. The error flags only show after the first submit attempt.
+  const errors = {
+    current_password: form.current_password ? "" : "Enter your account password.",
+    admin_pin: form.admin_pin.length === PIN_LENGTH ? "" : `The PIN must be exactly ${PIN_LENGTH} digits.`,
+    admin_pin_confirmation: form.admin_pin_confirmation !== form.admin_pin ? "The PINs do not match." : "",
+  };
+  const valid = !Object.values(errors).some(Boolean);
 
   const submit = async (e) => {
     e.preventDefault();
+    setSubmitted(true);
+    setServerError("");
+    if (!valid || busy) return;
     setBusy(true);
     try {
       const data = await api("/api/admin/kiosk-override-pin", { method: "PUT", body: JSON.stringify(form) });
       toast.success(data.message);
-      setForm({ current_password: "", admin_pin: "", admin_pin_confirmation: "" });
+      setForm(empty);
+      setSubmitted(false);
     } catch (err) {
+      setServerError(err.message);
       toast.error(err.message);
     } finally {
       setBusy(false);
     }
   };
 
+  const show = (key) => submitted && errors[key];
+
   return (
-    <form onSubmit={submit} className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3">
+    <form onSubmit={submit} noValidate className="bg-white border border-black/[0.09] rounded-xl p-[18px] flex flex-col gap-3">
       <div>
         <h2 className="text-[15px] font-semibold text-slate-800">Kiosk Admin override PIN</h2>
         <p className="text-[12px] text-slate-500 mt-0.5">
-          A kiosk locked after too many wrong HR PINs stays locked until an Admin types this 6-digit PIN on it. Keep it private.
+          A kiosk locked after too many wrong HR PINs stays locked until an Admin types this 4-digit PIN on it. Keep it private.
         </p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-slate-500">Your account password</span>
-          <PasswordInput autoComplete="current-password" value={form.current_password} onChange={(e) => setForm({ ...form, current_password: e.target.value })} className={inputCls} required />
+          <PasswordInput autoComplete="current-password" value={form.current_password} onChange={(e) => setForm({ ...form, current_password: e.target.value })} className={`${inputCls} ${show("current_password") ? "border-red-400" : ""}`} />
+          {show("current_password") && <span className={flagCls}>{errors.current_password}</span>}
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-slate-500">New Admin PIN (6 digits)</span>
-          <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={form.admin_pin} onChange={(e) => setForm({ ...form, admin_pin: digits(e.target.value) })} className={inputCls} required />
+          <span className="text-[11px] text-slate-500">New Admin PIN (4 digits)</span>
+          <PasswordInput inputMode="numeric" autoComplete="off" maxLength={PIN_LENGTH} placeholder="4 digits" value={form.admin_pin} onChange={(e) => setForm({ ...form, admin_pin: digits(e.target.value) })} className={`${inputCls} ${show("admin_pin") ? "border-red-400" : ""}`} />
+          {show("admin_pin") && <span className={flagCls}>{errors.admin_pin}</span>}
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-slate-500">Confirm Admin PIN</span>
-          <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={form.admin_pin_confirmation} onChange={(e) => setForm({ ...form, admin_pin_confirmation: digits(e.target.value) })} className={inputCls} required />
+          <PasswordInput inputMode="numeric" autoComplete="off" maxLength={PIN_LENGTH} placeholder="Repeat the 4 digits" value={form.admin_pin_confirmation} onChange={(e) => setForm({ ...form, admin_pin_confirmation: digits(e.target.value) })} className={`${inputCls} ${show("admin_pin_confirmation") ? "border-red-400" : ""}`} />
+          {show("admin_pin_confirmation") && <span className={flagCls}>{errors.admin_pin_confirmation}</span>}
         </label>
       </div>
-      <button type="submit" disabled={!ok || busy} className="self-start px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
+      {serverError && <div role="alert" className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{serverError}</div>}
+      <p className="text-[11px] text-slate-400">Reminder: the override PIN is exactly 4 numeric digits (0 to 9).</p>
+      <button type="submit" disabled={busy} className="self-start px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
         {busy ? "Saving…" : "Save Admin PIN"}
       </button>
     </form>

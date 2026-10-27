@@ -104,7 +104,7 @@ class EmployeeAttendanceKioskTest extends TestCase
     public function test_five_wrong_pins_lock_only_that_kiosk_until_admin_overrides_it(): void
     {
         KioskSetting::current()->setPin('1234', null);
-        KioskSetting::current()->setAdminPin('987654');
+        KioskSetting::current()->setAdminPin('9876');
         $unlock = fn ($pin, $device = self::DEVICE) => $this->postJson('/api/kiosk/unlock', ['device_id' => $device, 'pin' => $pin]);
 
         for ($i = 1; $i <= 4; $i++) {
@@ -122,8 +122,8 @@ class EmployeeAttendanceKioskTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
         $this->postJson('/api/hr/kiosk-pin/clear-lockout', ['current_password' => 'password'])->assertNotFound();
 
-        $this->postJson('/api/kiosk/override', ['device_id' => self::DEVICE, 'admin_pin' => '111111'])->assertStatus(422);
-        $this->postJson('/api/kiosk/override', ['device_id' => self::DEVICE, 'admin_pin' => '987654'])->assertOk();
+        $this->postJson('/api/kiosk/override', ['device_id' => self::DEVICE, 'admin_pin' => '1111'])->assertStatus(422);
+        $this->postJson('/api/kiosk/override', ['device_id' => self::DEVICE, 'admin_pin' => '9876'])->assertOk();
         $unlock('1234')->assertOk()->assertJsonStructure(['token']);
 
         $device = KioskDevice::where('device_id', self::DEVICE)->first();
@@ -138,11 +138,11 @@ class EmployeeAttendanceKioskTest extends TestCase
     {
         $hr = User::factory()->create(['role' => 'hr', 'password' => 'Secret-123!']);
         Sanctum::actingAs($hr);
-        $this->putJson('/api/admin/kiosk-override-pin', ['current_password' => 'Secret-123!', 'admin_pin' => '987654', 'admin_pin_confirmation' => '987654'])->assertForbidden();
+        $this->putJson('/api/admin/kiosk-override-pin', ['current_password' => 'Secret-123!', 'admin_pin' => '9876', 'admin_pin_confirmation' => '9876'])->assertForbidden();
 
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'password' => 'Secret-123!']));
-        $this->putJson('/api/admin/kiosk-override-pin', ['current_password' => 'Secret-123!', 'admin_pin' => '987654', 'admin_pin_confirmation' => '987654'])->assertOk();
-        $this->assertTrue(KioskSetting::current()->checkAdminPin('987654'));
+        $this->putJson('/api/admin/kiosk-override-pin', ['current_password' => 'Secret-123!', 'admin_pin' => '9876', 'admin_pin_confirmation' => '9876'])->assertOk();
+        $this->assertTrue(KioskSetting::current()->checkAdminPin('9876'));
     }
 
     public function test_history_by_date_range_newest_first_and_csv_export(): void
