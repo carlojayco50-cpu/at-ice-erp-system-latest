@@ -1,8 +1,8 @@
-// src/pages/Admin/PayrollRecordsPage.jsx
+// src/pages/hr/PayrollRecordsPage.jsx
 //
-// Admin Payroll Records (docs/REVIEW-DECISIONS.md). HR approves each
+// HR Payroll Records (docs/REVIEW-DECISIONS.md). HR approves each
 // employee's timesheet for a pay period (HR > Timesheets), which makes the
-// payroll; Admin pays it here:
+// payroll; HR pays it here:
 //   - pick the pay period (start and end are fixed), filter All / Unpaid / Paid,
 //     search by employee ID
 //   - add earnings (bonus, incentive, referral bonus; taxable or not)
@@ -12,7 +12,7 @@
 // Salary is confidential: there are no totals or summary cards.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import AdminLayout from "../../components/AdminLayout";
+import HrLayout from "../../components/HrLayout";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
@@ -250,7 +250,7 @@ export default function PayrollRecordsPage() {
   const pager = usePagination(rows);
 
   return (
-    <AdminLayout pageTitle="Payroll" breadcrumb="HRIS / Payroll">
+    <HrLayout pageTitle="Payroll" breadcrumb="HRIS / Payroll">
       <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl self-start" role="group" aria-label="View" data-fx-tabs>
         {[["records", "Payroll Records"], ["thirteenth", "13th Month"]].map(([k, l]) => (
           <button key={k} type="button" aria-pressed={view === k} onClick={() => setView(k)}
@@ -356,6 +356,6 @@ export default function PayrollRecordsPage() {
         </>
       )}
       {adjusting && <AdjustModal payroll={adjusting} onClose={() => setAdjusting(null)} onChanged={load} />}
-    </AdminLayout>
+    </HrLayout>
   );
 }

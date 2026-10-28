@@ -19,7 +19,6 @@ export const ADMIN_NAV = [
   { icon: UsersIcon, label: "HRIS", children: [
       { label: "Employees", to: "/admin/employees" },
       { label: "Performance", to: "/admin/performance" },
-      { label: "Payroll", to: "/admin/payroll" },
       { label: "Holidays", to: "/admin/holidays" },
     ] },
   // Delivery proofs live inside Deliveries (Proof column and View dialog).
@@ -54,6 +53,7 @@ export const HR_NAV = [
       { label: "Leave Requests", to: "/hr/leave-requests" },
       { label: "Memos", to: "/hr/memos" },
       { label: "Timesheets", to: "/hr/timesheets" },
+      { label: "Payroll", to: "/hr/payroll" },
       { label: "Holidays", to: "/hr/holidays" },
       { label: "Kiosk PIN", to: "/hr/kiosk-pin" },
     ] },

@@ -4,7 +4,7 @@
 // for one pay period (cutoff), worked out from the Attendance Station and
 // approved leave: days present, absences, late minutes, leave. HR approves the
 // timesheets once the period has ended; that makes each employee's payroll,
-// which Admin then pays (Admin > Payroll). Salary is confidential, so no pay
+// which HR then pays (HR > Payroll). Salary is confidential, so no pay
 // amounts are shown here.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -29,7 +29,7 @@ async function api(url, options = {}) {
 const todayLocal = () => new Date().toLocaleDateString("en-CA");
 const addDays = (ymd, n) => { const d = new Date(`${ymd}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-// Same pay-period buttons and search as Admin > Payroll
+// Same pay-period buttons and search as HR > Payroll
 const Chevron = ({ left }) => <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true"><polyline points={left ? "15 18 9 12 15 6" : "9 18 15 12 9 6"} /></svg>;
 const SearchIcon = () => <Icon name="search" size={14} />;
 const navBtn = "inline-flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-400 disabled:opacity-40 cursor-pointer";
@@ -140,7 +140,7 @@ export default function TimesheetsPage() {
 
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
         <div className="px-[18px] py-3 border-b border-black/[0.09] text-[11px] text-slate-400">
-          From the Attendance Station and approved leave. Approving makes the payroll; Admin pays it. Pay amounts are not shown here. Tick the overtime to approve it with the timesheet; overtime not approved is not paid.
+          From the Attendance Station and approved leave. Approving makes the payroll; pay it in Payroll. Pay amounts are not shown here. Tick the overtime to approve it with the timesheet; overtime not approved is not paid.
         </div>
         {loading ? <SkeletonList /> : error ? (
           <div className="px-[18px] py-8 text-center text-[12px] text-red-600">{error}</div>

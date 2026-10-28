@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 // Payroll (docs/REVIEW-DECISIONS.md). HR approves timesheets
-// (TimesheetController), which makes each payroll; Admin processes the pay
+// (TimesheetController), which makes each payroll; HR processes the pay
 // here: Payroll Records for one pay period, adjustments (bonus, incentive,
 // referral bonus), marking paid (final, audited), payslips and the 13th month.
 // Salary is confidential: no totals or summaries are returned.
@@ -39,7 +39,7 @@ class PayrollController extends Controller
             ->get(['id', 'employee_id', 'period_start', 'period_end', 'pay_day', 'status', 'paid_at']));
     }
 
-    // GET /api/payroll-records?date=&status=unpaid|paid (Admin): every active
+    // GET /api/payroll-records?date=&status=unpaid|paid (HR): every active
     // employee for the pay period, with their payroll once HR approved it.
     public function records(Request $request)
     {
@@ -69,13 +69,13 @@ class PayrollController extends Controller
         ]);
     }
 
-    // GET /api/payrolls/{id}/payslip (Admin): everything on the payslip
+    // GET /api/payrolls/{id}/payslip (HR): everything on the payslip
     public function payslip($id)
     {
         return response()->json(Payroll::with(['employee', 'adjustments'])->findOrFail($id));
     }
 
-    // POST /api/payrolls/{id}/adjustments { label, amount, taxable } (Admin)
+    // POST /api/payrolls/{id}/adjustments { label, amount, taxable } (HR)
     public function addAdjustment(Request $request, $id)
     {
         $payroll = $this->unpaid($id);
@@ -91,7 +91,7 @@ class PayrollController extends Controller
         return response()->json($payroll->fresh()->load('adjustments'), 201);
     }
 
-    // DELETE /api/payroll-adjustments/{id} (Admin)
+    // DELETE /api/payroll-adjustments/{id} (HR)
     public function removeAdjustment($id)
     {
         $adj = PayrollAdjustment::findOrFail($id);
@@ -103,7 +103,7 @@ class PayrollController extends Controller
         return response()->json($payroll->fresh()->load('adjustments'));
     }
 
-    // POST /api/payrolls/mark-paid { ids: [] } (Admin). Paid is final.
+    // POST /api/payrolls/mark-paid { ids: [] } (HR). Paid is final.
     public function markPaid(Request $request)
     {
         $data = $request->validate(['ids' => 'required|array|min:1', 'ids.*' => 'integer|exists:payrolls,id']);
@@ -117,7 +117,7 @@ class PayrollController extends Controller
         return response()->json(['message' => "{$count} payroll".($count === 1 ? '' : 's').' marked paid.', 'paid' => $count]);
     }
 
-    // GET /api/thirteenth-month?year= (Admin): each employee's 13th month pay so far
+    // GET /api/thirteenth-month?year= (HR): each employee's 13th month pay so far
     public function thirteenthMonth(Request $request)
     {
         $year = (int) $request->input('year', now(config('atice.timezone'))->year);

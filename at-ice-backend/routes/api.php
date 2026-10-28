@@ -136,14 +136,6 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         Route::get('pay-multipliers', [SettingsController::class, 'multipliers']);
         Route::post('pay-multipliers', [SettingsController::class, 'setMultiplier']);
 
-        // Payroll Records: pay, adjustments, mark paid, payslip, 13th month
-        Route::get('payroll-records', [PayrollController::class, 'records']);
-        Route::get('payrolls/{id}/payslip', [PayrollController::class, 'payslip']);
-        Route::post('payrolls/{id}/adjustments', [PayrollController::class, 'addAdjustment']);
-        Route::delete('payroll-adjustments/{id}', [PayrollController::class, 'removeAdjustment']);
-        Route::post('payrolls/mark-paid', [PayrollController::class, 'markPaid']);
-        Route::get('thirteenth-month', [PayrollController::class, 'thirteenthMonth']);
-
         // Records past the retention period: Admin keeps or deletes each (never automatic)
         Route::get('retention-review', [RetentionController::class, 'index']);
         Route::post('retention-review/keep', [RetentionController::class, 'keep']);
@@ -323,9 +315,17 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // The cutoff containing a date (read-only start and end)
         Route::get('pay-period', [SettingsController::class, 'payPeriod']);
         // Payroll: HR approves each employee's timesheet for a pay period, which
-        // makes their payroll; Admin pays it (payroll-records, admin group). HR
-        // sees no amounts.
+        // makes their payroll, then HR processes it in Payroll Records. The
+        // Timesheets page itself shows no amounts.
         Route::get('payrolls', [PayrollController::class, 'index']);
+        // Payroll Records (HR; Admin passes every role check): pay, adjustments,
+        // mark paid, payslip, 13th month
+        Route::get('payroll-records', [PayrollController::class, 'records']);
+        Route::get('payrolls/{id}/payslip', [PayrollController::class, 'payslip']);
+        Route::post('payrolls/{id}/adjustments', [PayrollController::class, 'addAdjustment']);
+        Route::delete('payroll-adjustments/{id}', [PayrollController::class, 'removeAdjustment']);
+        Route::post('payrolls/mark-paid', [PayrollController::class, 'markPaid']);
+        Route::get('thirteenth-month', [PayrollController::class, 'thirteenthMonth']);
         Route::get('timesheets', [TimesheetController::class, 'index']);
 
         // Holiday calendar (HR and Admin)

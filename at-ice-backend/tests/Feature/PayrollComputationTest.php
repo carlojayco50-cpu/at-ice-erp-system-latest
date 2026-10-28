@@ -165,7 +165,7 @@ class PayrollComputationTest extends TestCase
         $this->assertArrayNotHasKey('net_pay', $sheet->json('rows.0')); // HR sees no pay
         $this->postJson('/api/timesheets/approve', ['date' => '2026-11-02', 'employee_ids' => [$e->id]])->assertUnprocessable(); // period not over
         $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
-        $this->getJson('/api/payroll-records?date=2026-10-14')->assertForbidden();
+        $this->getJson('/api/payroll-records?date=2026-10-14')->assertOk(); // HR processes payroll
 
         $payroll = Payroll::first();
         $this->assertSame('unpaid', $payroll->status);

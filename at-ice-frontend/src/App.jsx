@@ -54,7 +54,7 @@ import MemoManager from './pages/hr/MemoManager'
 import InterviewsPage from './pages/hr/InterviewsPage'
 import TimesheetsPage from './pages/hr/TimesheetsPage'
 import HolidaysPage from './pages/hr/HolidaysPage'
-import PayrollRecordsPage from './pages/Admin/PayrollRecordsPage'
+import PayrollRecordsPage from './pages/hr/PayrollRecordsPage'
 import KioskPinPage from './pages/hr/KioskPinPage'
 
 // -- Employee Module
@@ -281,15 +281,6 @@ function App() {
         />
         {/* Settings: account only. Profile, change password,
             sign out other devices. */}
-        {/* Payroll Records: pay, earnings, mark paid, payslips, 13th month */}
-        <Route
-          path="/admin/payroll"
-          element={
-            <ProtectedRoute allowedRoles={["admin"]}>
-              <PayrollRecordsPage />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/admin/settings/:section?"
           element={
@@ -367,7 +358,7 @@ function App() {
           }
         />
         {/* Timesheets: HR approves each pay period's attendance, which makes the
-            payroll (no pay amounts shown). Admin pays it on /admin/payroll. */}
+            payroll (no pay amounts shown). HR then pays it on /hr/payroll. */}
         <Route
           path="/hr/timesheets"
           element={
@@ -376,7 +367,15 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/hr/payroll" element={<Navigate to="/hr/timesheets" replace />} />
+        {/* Payroll Records: pay, earnings, mark paid, payslips, 13th month */}
+        <Route
+          path="/hr/payroll"
+          element={
+            <ProtectedRoute allowedRoles={["hr"]}>
+              <PayrollRecordsPage />
+            </ProtectedRoute>
+          }
+        />
         {/* Holiday calendar: attendance, leave and payroll read holidays from it */}
         <Route
           path="/hr/holidays"
