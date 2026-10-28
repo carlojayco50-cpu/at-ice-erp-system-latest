@@ -394,7 +394,8 @@ aside.rail:not(.is-open) .rail-section {
    The open section's pages sit under its icon on a thin line; the current
    page is bold with a short accent on the line, the others muted. On the
    closed rail the list folds away (after the same pause as the labels). */
-.sidenav-chev { opacity: 0.6; transition: transform 150ms ease, opacity 150ms ease; }
+.sidenav-chev { color: #0e7490; opacity: 0.9; transition: transform 150ms ease, opacity 150ms ease; }
+.cp-dark .sidenav-chev { color: #22d3ee; }
 .sidenav-sub {
   display: grid;
   grid-template-rows: 0fr;
@@ -1175,3 +1176,9 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 .neu .kpi-card { border-color: transparent !important; border-radius: var(--neu-radius) !important; box-shadow: var(--neu-raised) !important; }
 .neu .kpi-card-active { box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(6, 182, 212, 0.65) !important; }
 .neu .insight-panel { border-color: transparent !important; border-radius: var(--neu-radius) !important; box-shadow: var(--neu-raised) !important; }
+
+/* Any box that holds a table scrolls sideways instead of cutting off the right edge */
+:where(div):has(> table) { width: 100%; overflow-x: auto; }
+:where(div):has(> table) > table { min-width: 100%; }
+/* Cards in the page column keep their height and scroll with the page, not shrink */
+.ice-main > * { flex-shrink: 0; }

@@ -9,6 +9,8 @@ import { PUBLIC_POSITIONS } from "../lib/positions";
 import { useDraft } from "../lib/useDraft";
 import DraftHint from "../components/DraftHint";
 import { CIVIL_STATUSES, EDUCATION_LEVELS, RESTRICTIONS, SEXES } from "../lib/biodata";
+import { UploadBar } from "../components/FileDropZone";
+import { sendForm } from "../lib/upload";
 import { formatLicense, licenseError, expiryError, tomorrowStr } from "../lib/license";
 
 // Public job application / digital biodata (owner, 2026-10-20), opened by
@@ -94,6 +96,7 @@ export default function ApplyPage() {
   const [errors, setErrors] = useState({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [sent, setSent] = useState(null);
   const [resume, setResume] = useState(null);
   const [photo, setPhoto] = useState(null);
@@ -147,22 +150,21 @@ export default function ApplyPage() {
       if (photo) body.append("photo", photo);
       documents.forEach((d) => body.append("documents[]", d));
 
-      const res = await fetch("/api/apply", { method: "POST", headers: { Accept: "application/json" }, body });
-      const data = await res.json().catch(() => null);
-      if (res.status === 422 && data?.errors) {
-        setErrors(data.errors);
-        setTimeout(() => document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
-        return;
-      }
-      if (res.status === 413) throw new Error("The files are too large. Use smaller files and try again.");
-      if (res.status === 429) throw new Error("Too many applications were sent from this network. Wait a few minutes and try again.");
-      if (!res.ok) throw new Error(data?.message || "The application could not be sent. Try again.");
+      setProgress(0);
+      await sendForm("/api/apply", body, { onProgress: setProgress });
       setSent({ name: form.name, phone: form.phone, position_applied: form.position_applied });
       draft.clear();
       resetFiles();
       window.scrollTo({ top: 0 });
     } catch (err) {
-      setError(err.message);
+      if (err.status === 422 && err.errors) {
+        setErrors(err.errors);
+        setTimeout(() => document.querySelector("[data-apply-error]")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+        return;
+      }
+      if (err.status === 413) setError("The files are too large. Use smaller files and try again.");
+      else if (err.status === 429) setError("Too many applications were sent from this network. Wait a few minutes and try again.");
+      else setError(err.message);
     } finally {
       setBusy(false);
     }
@@ -392,6 +394,7 @@ export default function ApplyPage() {
               <input type="text" name="website" value={form.website} onChange={set("website")} tabIndex={-1} autoComplete="off" aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 opacity-0" />
 
               {error && <div role="alert" className="text-[13px] text-red-700 bg-red-100/70 border border-red-300/60 rounded-xl px-4 py-3 text-center">{error}</div>}
+              {busy && progress !== null && <UploadBar progress={progress} />}
               <button type="submit" disabled={busy || !consent} className={primaryBtn}>{busy ? "Sending…" : "Send Application"}</button>
               <p className="text-[11px] text-[var(--neu-faint)] text-center">Your details are used only by Bella Erin HR for this application.</p>
             </form>

@@ -6,6 +6,7 @@ import FilterSelect from "../../components/FilterSelect";
 import Pagination from "../../components/Pagination";
 import FileDropZone from "../../components/FileDropZone";
 import { usePagination } from "../../lib/usePagination";
+import { sendForm } from "../../lib/upload";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { ActivityFeed, StatusBreakdown, TipsWidget } from "../../components/Insight";
 import { useLiveTick } from "../../lib/live";
@@ -30,7 +31,8 @@ const authHeaders = (extra = {}) => ({
   ...extra,
 });
 
-async function call(url, { method = "GET", body, form } = {}) {
+async function call(url, { method = "GET", body, form, onProgress } = {}) {
+  if (form) return sendForm(url, form, { method, onProgress });
   const res = await fetch(url, {
     method,
     headers: authHeaders(form || !body ? {} : { "Content-Type": "application/json" }),
@@ -62,6 +64,7 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
   const [edited, setEdited] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState(null);
   const zero = violations.find((v) => v.key === form.violation)?.category === "zero_tolerance";
 
   // the suggested level and letter follow the employee, violation, date and level
@@ -97,12 +100,13 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
       return;
     }
     setBusy(send ? "send" : "draft");
+    setProgress(files.length ? 0 : null);
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => v !== "" && fd.append(k, v));
       fd.append("send", send ? "1" : "0");
       files.forEach((f) => fd.append("files[]", f));
-      const memo = await call("/api/memos", { method: "POST", form: fd });
+      const memo = await call("/api/memos", { method: "POST", form: fd, onProgress: setProgress });
       toast.success(send ? `Memo ${memo.memo_no} sent to the employee.` : `Memo ${memo.memo_no} saved as a draft.`);
       onSaved(memo);
     } catch (err) {
@@ -157,7 +161,7 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
 
         <div className="flex flex-col gap-1">
           <span className="text-[11px] font-medium text-slate-600">Files (optional)</span>
-          <FileDropZone files={files} onChange={setFiles} accept={MEMO_FILE_ACCEPT} label="Drop a signed memo, NTE letter, CCTV stills, GPS logs or photos" hint="PDF, Word (.docx) or pictures, up to 10 MB each, 10 files" />
+          <FileDropZone files={files} onChange={setFiles} accept={MEMO_FILE_ACCEPT} label="Drop a signed memo, NTE letter, CCTV stills, GPS logs or photos" hint="PDF, Word (.docx) or pictures, up to 10 MB each, 10 files" progress={files.length ? progress : null} uploadError={error} />
         </div>
 
         {error && <div className="text-[12px] text-red-600">{error}</div>}
@@ -198,9 +202,11 @@ function MemoPanel({ memo, onChanged, onClose }) {
     setError("");
   }, [memo.id, memo.body, memo.subject]);
 
+  const [progress, setProgress] = useState(null);
   const run = async (key, url, opts, done) => {
     setBusy(key);
     setError("");
+    setProgress(opts.form ? 0 : null);
     try {
       const data = await call(url, opts);
       toast.success(done);
@@ -222,7 +228,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
     const fd = new FormData();
     fd.append("kind", kind);
     list.forEach((f) => fd.append("files[]", f));
-    return run(kind, `/api/memos/${memo.id}/files`, { method: "POST", form: fd }, done);
+    return run(kind, `/api/memos/${memo.id}/files`, { method: "POST", form: fd, onProgress: setProgress }, done);
   };
 
   const emp = memo.employee || {};
@@ -292,7 +298,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
           )}
           {memo.status !== "cancelled" && (
             <div className="space-y-2 pt-1">
-              <FileDropZone files={extra} onChange={setExtra} accept={MEMO_FILE_ACCEPT} label="Drop evidence or letters to attach" hint="PDF, Word or pictures, up to 10 MB each" />
+              <FileDropZone files={extra} onChange={setExtra} accept={MEMO_FILE_ACCEPT} label="Drop evidence or letters to attach" hint="PDF, Word or pictures, up to 10 MB each" progress={busy === "attachment" ? progress : null} uploadError={busy === "" ? error : ""} />
               {extra.length > 0 && (
                 <button type="button" disabled={busy === "attachment"} onClick={async () => (await upload("attachment", extra, "Files attached.")) && setExtra([])} title="Attach these files to the memo" className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
                   {busy === "attachment" ? "Uploading…" : "Attach files"}
@@ -305,7 +311,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
         {memo.status === "awaiting_physical" && (
           <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50/50 p-3">
             <div className="text-[12px] font-medium text-rose-800">Physical sign-off: upload the scanned wet-signed memo to archive it in the 201 file.</div>
-            <FileDropZone files={signed} onChange={setSigned} accept={MEMO_FILE_ACCEPT} label="Drop the scanned signed copy" hint="PDF or a clear photo of every page" />
+            <FileDropZone files={signed} onChange={setSigned} accept={MEMO_FILE_ACCEPT} label="Drop the scanned signed copy" hint="PDF or a clear photo of every page" progress={busy === "signed_copy" ? progress : null} uploadError={busy === "" ? error : ""} />
             <button type="button" disabled={busy === "signed_copy"} onClick={async () => (await upload("signed_copy", signed, "Signed copy uploaded. Memo archived.")) && setSigned([])} title="Upload the signed copy and archive the memo" className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer disabled:opacity-50">
               {busy === "signed_copy" ? "Uploading…" : "Upload signed copy"}
             </button>

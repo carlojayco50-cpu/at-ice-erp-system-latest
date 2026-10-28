@@ -42,9 +42,45 @@ function hasKioskHeader(input, init) {
   });
 }
 
+let redirecting = false;
+
+// Called with the address and method of a request that came back 401. Ends the
+// session and goes to the login page, unless the request is one that is ignored
+// (see isIgnored), carries the kiosk token, or nobody is signed in. Shared by the
+// fetch wrapper below and by XMLHttpRequest uploads (lib/upload.js), which fetch
+// never sees.
+export function handleUnauthorized(rawUrl, method = "GET", kiosk = false) {
+  if (redirecting) return;
+
+  try {
+    const url = new URL(rawUrl, window.location.origin);
+
+    const isOurApi = url.origin === window.location.origin && url.pathname.startsWith("/api/");
+    // Only when someone is signed in: nothing to expire otherwise.
+    if (!isOurApi || isIgnored(url.pathname, String(method).toUpperCase()) || kiosk || !localStorage.getItem("token")) {
+      return;
+    }
+
+    redirecting = true;
+    clearSession();
+    try {
+      sessionStorage.setItem(NOTICE_KEY, SESSION_EXPIRED_MESSAGE);
+    } catch {
+      // the redirect still happens without the message
+    }
+    // Already on the login page: it shows the message itself, no reload needed.
+    if (window.location.pathname !== LOGIN_PATH) {
+      window.location.assign(LOGIN_PATH);
+    } else {
+      redirecting = false;
+    }
+  } catch {
+    // never break the original response because of this check
+  }
+}
+
 export function installSessionExpiryHandler() {
   const originalFetch = window.fetch.bind(window);
-  let redirecting = false;
 
   window.fetch = async (input, init) => {
     const response = await originalFetch(input, init);
@@ -53,28 +89,8 @@ export function installSessionExpiryHandler() {
 
     try {
       const rawUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      const url = new URL(rawUrl, window.location.origin);
       const method = String(init?.method || (typeof input === "object" && input.method) || "GET").toUpperCase();
-
-      const isOurApi = url.origin === window.location.origin && url.pathname.startsWith("/api/");
-      // Only when someone is signed in: nothing to expire otherwise.
-      if (!isOurApi || isIgnored(url.pathname, method) || hasKioskHeader(input, init) || !localStorage.getItem("token")) {
-        return response;
-      }
-
-      redirecting = true;
-      clearSession();
-      try {
-        sessionStorage.setItem(NOTICE_KEY, SESSION_EXPIRED_MESSAGE);
-      } catch {
-        // the redirect still happens without the message
-      }
-      // Already on the login page: it shows the message itself, no reload needed.
-      if (window.location.pathname !== LOGIN_PATH) {
-        window.location.assign(LOGIN_PATH);
-      } else {
-        redirecting = false;
-      }
+      handleUnauthorized(rawUrl, method, hasKioskHeader(input, init));
     } catch {
       // never break the original response because of this check
     }
