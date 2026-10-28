@@ -78,7 +78,7 @@ class NegativeNetPayTest extends TestCase
     {
         $e = $this->employee();
         $p = $this->payroll($e, self::NOV23);
-        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+        Sanctum::actingAs(User::factory()->create(['role' => 'hr']));
         $this->getJson("/api/payrolls/{$p->id}/payslip")->assertOk()->assertJsonMissingPath('notes');
         $this->getJson('/api/payroll-records?date=2026-11-23')->assertOk()->assertJsonMissingPath('rows.0.payroll.notes');
     }

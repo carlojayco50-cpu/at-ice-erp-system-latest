@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Employee;
+use App\Models\Payroll;
 use App\Models\User;
 use App\Support\PayPeriod;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,15 +48,71 @@ class PayrollPageRulesTest extends TestCase
         }
     }
 
-    public function test_only_hr_and_admin_can_open_payroll_records(): void
+    /** @return array<int, array{string, string}> */
+    private function payrollCalls(int $payrollId, int $adjustmentId): array
     {
-        foreach (['employee', 'driver', 'customer'] as $role) {
-            Sanctum::actingAs(User::factory()->create(['role' => $role]));
-            $this->getJson('/api/payroll-records')->assertForbidden();
-            $this->getJson('/api/thirteenth-month')->assertForbidden();
-            $this->postJson('/api/payrolls/mark-paid', ['ids' => [1]])->assertForbidden();
+        return [
+            ['GET', '/api/payroll-records?date=2026-10-14'],
+            ['GET', "/api/payrolls/{$payrollId}/payslip"],
+            ['POST', "/api/payrolls/{$payrollId}/adjustments"],
+            ['DELETE', "/api/payroll-adjustments/{$adjustmentId}"],
+            ['POST', '/api/payrolls/mark-paid'],
+            ['GET', '/api/thirteenth-month'],
+        ];
+    }
+
+    private function payrollWithAdjustment(): array
+    {
+        $employee = Employee::create(['employee_id' => 'EMP-0002', 'first_name' => 'Ben', 'last_name' => 'Cruz', 'position' => 'Guard', 'daily_rate' => 700, 'date_hired' => '2026-01-05', 'is_active' => true]);
+        $payroll = Payroll::create(['employee_id' => $employee->id, 'period_start' => '2026-10-01', 'period_end' => '2026-10-14', 'gross_pay' => 5000, 'net_pay' => 4500, 'status' => 'unpaid', 'prepared_by' => User::factory()->create(['role' => 'hr'])->id]);
+        $adjustment = $payroll->adjustments()->create(['label' => 'Referral bonus', 'amount' => 100, 'taxable' => false]);
+
+        return [$payroll->id, $adjustment->id];
+    }
+
+    // Payroll Records are HR only (owner decision): HR works, Admin and every other
+    // role is refused, and a signed-out caller gets 401.
+    public function test_payroll_endpoints_are_hr_only(): void
+    {
+        [$payrollId, $adjustmentId] = $this->payrollWithAdjustment();
+        $body = ['label' => 'Bonus', 'amount' => 50, 'taxable' => false, 'ids' => [$payrollId]];
+
+        foreach ($this->payrollCalls($payrollId, $adjustmentId) as [$method, $uri]) {
+            $this->json($method, $uri, $body)->assertUnauthorized();
         }
-        Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
-        $this->getJson('/api/payroll-records')->assertOk();
+
+        $others = [
+            ['admin', null], ['employee', 'checker'], ['employee', 'salesman'], ['employee', 'maintenance'],
+            ['employee', null], ['driver', null], ['customer', null],
+        ];
+        foreach ($others as [$role, $sub]) {
+            Sanctum::actingAs(User::factory()->create(['role' => $role, 'sub_role' => $sub, 'is_active' => true]));
+            foreach ($this->payrollCalls($payrollId, $adjustmentId) as [$method, $uri]) {
+                $this->json($method, $uri, $body)->assertForbidden();
+            }
+        }
+        $this->assertSame('unpaid', Payroll::find($payrollId)->status);
+        $this->assertDatabaseHas('payroll_adjustments', ['id' => $adjustmentId]);
+    }
+
+    public function test_hr_can_use_every_payroll_endpoint_and_admin_keeps_other_admin_pages(): void
+    {
+        [$payrollId, $adjustmentId] = $this->payrollWithAdjustment();
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'hr', 'is_active' => true]));
+        $this->getJson('/api/payroll-records?date=2026-10-14')->assertOk();
+        $this->getJson("/api/payrolls/{$payrollId}/payslip")->assertOk();
+        $this->postJson("/api/payrolls/{$payrollId}/adjustments", ['label' => 'Bonus', 'amount' => 50, 'taxable' => false])->assertCreated();
+        $this->deleteJson("/api/payroll-adjustments/{$adjustmentId}")->assertOk();
+        $this->getJson('/api/thirteenth-month?year=2026')->assertOk();
+        $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payrollId]])->assertOk();
+        $this->assertSame('paid', Payroll::find($payrollId)->status);
+
+        // Admin is refused payroll but still passes the admin-only and HR pages that are not payroll.
+        Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
+        $this->getJson('/api/payroll-records?date=2026-10-14')->assertForbidden();
+        $this->getJson('/api/pay-multipliers')->assertOk();
+        $this->getJson('/api/holidays')->assertOk();
+        $this->getJson('/api/payrolls')->assertOk();
     }
 }

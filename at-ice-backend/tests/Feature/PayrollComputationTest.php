@@ -152,12 +152,11 @@ class PayrollComputationTest extends TestCase
         $this->assertEquals(36696.63, $p['net_pay']);
     }
 
-    public function test_hr_approves_timesheets_and_admin_pays_with_adjustments(): void
+    public function test_hr_approves_timesheets_and_pays_with_adjustments(): void
     {
         $e = $this->employee();
         $this->day($e, '2026-10-12');
         $hr = User::factory()->create(['role' => 'hr']);
-        $admin = User::factory()->create(['role' => 'admin']);
 
         Sanctum::actingAs($hr);
         $sheet = $this->getJson('/api/timesheets?date=2026-10-14')->assertOk();
@@ -171,7 +170,6 @@ class PayrollComputationTest extends TestCase
         $this->assertSame('unpaid', $payroll->status);
         $this->assertEquals(600, (float) $payroll->net_pay);
 
-        Sanctum::actingAs($admin);
         $this->getJson('/api/payroll-records?date=2026-10-14')->assertOk()->assertJsonPath('rows.0.payroll.status', 'unpaid');
         $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])->assertCreated();
         $this->assertEquals(1100, (float) $payroll->fresh()->net_pay);
@@ -200,18 +198,16 @@ class PayrollComputationTest extends TestCase
         $this->assertSame(['basic' => 96000.0, 'deductions' => 2382.12, 'amount' => 7801.49, 'periods' => 2], ThirteenthMonth::for($e, 2026));
     }
 
-    public function test_admin_removes_an_unpaid_adjustment_and_net_pay_follows(): void
+    public function test_hr_removes_an_unpaid_adjustment_and_net_pay_follows(): void
     {
         $e = $this->employee();
         $this->day($e, '2026-10-12');
         $hr = User::factory()->create(['role' => 'hr']);
-        $admin = User::factory()->create(['role' => 'admin']);
 
         Sanctum::actingAs($hr);
         $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
         $payroll = Payroll::first();
 
-        Sanctum::actingAs($admin);
         $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
             ->assertCreated()->json('adjustments.0.id');
         $this->assertEquals(1100, (float) $payroll->fresh()->net_pay);
@@ -226,13 +222,11 @@ class PayrollComputationTest extends TestCase
         $e = $this->employee();
         $this->day($e, '2026-10-12');
         $hr = User::factory()->create(['role' => 'hr']);
-        $admin = User::factory()->create(['role' => 'admin']);
 
         Sanctum::actingAs($hr);
         $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [$e->id]])->assertOk();
         $payroll = Payroll::first();
 
-        Sanctum::actingAs($admin);
         $adjustment = $this->postJson("/api/payrolls/{$payroll->id}/adjustments", ['label' => 'Referral bonus', 'amount' => 500, 'taxable' => false])
             ->assertCreated()->json('adjustments.0.id');
         $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payroll->id]])->assertOk();
