@@ -1180,4 +1180,5 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 /* Any box that holds a table scrolls sideways instead of cutting off the right edge */
 :where(div):has(> table) { width: 100%; overflow-x: auto; }
 :where(div):has(> table) > table { min-width: 100%; }
-th { min-width: 120px; }
+/* Cards in the page column keep their height and scroll with the page, not shrink */
+.ice-main > * { flex-shrink: 0; }
