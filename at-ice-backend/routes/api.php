@@ -311,16 +311,19 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
         // Payroll: full CRUD, computation happens on the frontend
         // (Sweldong Pinoy-style: SSS/PhilHealth/Pag-IBIG/withholding tax),
         // this endpoint just stores whatever computed values are sent.
-        Route::get('payroll-periods', [PayrollController::class, 'periods']);
-        // The cutoff containing a date (read-only start and end)
-        Route::get('pay-period', [SettingsController::class, 'payPeriod']);
-        // Payroll: HR approves each employee's timesheet for a pay period, which
-        // makes their payroll, then HR processes it in Payroll Records. The
-        // Timesheets page itself shows no amounts.
-        Route::get('payrolls', [PayrollController::class, 'index']);
-        // Payroll Records (HR only, Admin too is refused): pay, adjustments,
-        // mark paid, payslip, 13th month
+        // Payroll is HR only (owner decision): RoleMiddleware lets Admin pass every role
+        // check, so everything that reads, makes or pays payroll also passes EnsureHrOnly.
         Route::middleware(\App\Http\Middleware\EnsureHrOnly::class)->group(function () {
+            Route::get('payroll-periods', [PayrollController::class, 'periods']);
+            // The cutoff containing a date (read-only start and end)
+            Route::get('pay-period', [SettingsController::class, 'payPeriod']);
+            // HR approves each employee's timesheet for a pay period, which makes their
+            // payroll, then HR processes it in Payroll Records. The Timesheets page
+            // itself shows no amounts.
+            Route::get('payrolls', [PayrollController::class, 'index']);
+            Route::get('timesheets', [TimesheetController::class, 'index']);
+            Route::post('timesheets/approve', [TimesheetController::class, 'approve']);
+            // Payroll Records: pay, adjustments, mark paid, payslip, 13th month
             Route::get('payroll-records', [PayrollController::class, 'records']);
             Route::get('payrolls/{id}/payslip', [PayrollController::class, 'payslip']);
             Route::post('payrolls/{id}/adjustments', [PayrollController::class, 'addAdjustment']);
@@ -328,14 +331,12 @@ Route::middleware(['auth:sanctum', 'password.changed', 'throttle:120,1,api'])->g
             Route::post('payrolls/mark-paid', [PayrollController::class, 'markPaid']);
             Route::get('thirteenth-month', [PayrollController::class, 'thirteenthMonth']);
         });
-        Route::get('timesheets', [TimesheetController::class, 'index']);
 
         // Holiday calendar (HR and Admin)
         Route::get('holidays', [HolidayController::class, 'index']);
         Route::post('holidays', [HolidayController::class, 'store']);
         Route::put('holidays/{id}', [HolidayController::class, 'update']);
         Route::delete('holidays/{id}', [HolidayController::class, 'destroy']);
-        Route::post('timesheets/approve', [TimesheetController::class, 'approve']);
 
         Route::get('attendances', [AttendanceController::class, 'index']);
         Route::get('attendances/summary', [AttendanceController::class, 'summary']);

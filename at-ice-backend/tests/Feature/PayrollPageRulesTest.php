@@ -58,6 +58,11 @@ class PayrollPageRulesTest extends TestCase
             ['DELETE', "/api/payroll-adjustments/{$adjustmentId}"],
             ['POST', '/api/payrolls/mark-paid'],
             ['GET', '/api/thirteenth-month'],
+            ['GET', '/api/payrolls'],
+            ['GET', '/api/payroll-periods'],
+            ['GET', '/api/pay-period?date=2026-10-14'],
+            ['GET', '/api/timesheets?date=2026-10-14'],
+            ['POST', '/api/timesheets/approve'],
         ];
     }
 
@@ -85,12 +90,17 @@ class PayrollPageRulesTest extends TestCase
             ['admin', null], ['employee', 'checker'], ['employee', 'salesman'], ['employee', 'maintenance'],
             ['employee', null], ['driver', null], ['customer', null],
         ];
+        $bad = [];
         foreach ($others as [$role, $sub]) {
             Sanctum::actingAs(User::factory()->create(['role' => $role, 'sub_role' => $sub, 'is_active' => true]));
             foreach ($this->payrollCalls($payrollId, $adjustmentId) as [$method, $uri]) {
-                $this->json($method, $uri, $body)->assertForbidden();
+                $status = $this->json($method, $uri, $body)->getStatusCode();
+                if ($status !== 403) {
+                    $bad[] = "$role/$sub $method $uri -> $status";
+                }
             }
         }
+        $this->assertSame([], $bad, "Payroll endpoints reachable by a non-HR role:\n".implode("\n", $bad));
         $this->assertSame('unpaid', Payroll::find($payrollId)->status);
         $this->assertDatabaseHas('payroll_adjustments', ['id' => $adjustmentId]);
     }
@@ -107,12 +117,16 @@ class PayrollPageRulesTest extends TestCase
         $this->getJson('/api/thirteenth-month?year=2026')->assertOk();
         $this->postJson('/api/payrolls/mark-paid', ['ids' => [$payrollId]])->assertOk();
         $this->assertSame('paid', Payroll::find($payrollId)->status);
+        $this->getJson('/api/payrolls')->assertOk();
+        $this->getJson('/api/payroll-periods')->assertOk();
+        $this->getJson('/api/pay-period?date=2026-10-14')->assertOk();
+        $this->getJson('/api/timesheets?date=2026-10-14')->assertOk();
+        $this->postJson('/api/timesheets/approve', ['date' => '2026-10-14', 'employee_ids' => [Employee::first()->id]])->assertOk();
 
         // Admin is refused payroll but still passes the admin-only and HR pages that are not payroll.
         Sanctum::actingAs(User::factory()->create(['role' => 'admin', 'is_active' => true]));
         $this->getJson('/api/payroll-records?date=2026-10-14')->assertForbidden();
         $this->getJson('/api/pay-multipliers')->assertOk();
         $this->getJson('/api/holidays')->assertOk();
-        $this->getJson('/api/payrolls')->assertOk();
     }
 }
