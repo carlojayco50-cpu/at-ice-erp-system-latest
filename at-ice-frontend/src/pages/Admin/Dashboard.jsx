@@ -522,7 +522,7 @@ export default function Dashboard() {
                     <button key={k} onClick={() => { setChartPeriod(k); setChartValue(""); }} aria-pressed={chartPeriod === k} className={`px-2.5 py-1 text-[10px] font-medium rounded transition-colors border-0 cursor-pointer ${chartPeriod === k ? "bg-white text-slate-800 shadow-sm" : "text-slate-400 bg-transparent hover:text-slate-600"}`}>{label}</button>
                   ))}
                 </div>
-                <label className="flex items-center gap-1.5 bg-slate-100 rounded-md p-0.5 pl-2 text-[10px] text-slate-400">
+                <label className="flex items-center gap-1.5 bg-slate-100/60 rounded-md p-0.5 pl-2 text-[10px] text-slate-500">
                   {chartPeriod === "year" && <CalendarIconLocal />}
                   <span className="sr-only">Compare with</span>
                   {chartPeriod === "year" ? (
@@ -542,7 +542,7 @@ export default function Dashboard() {
                       max={salesChart?.period === chartPeriod ? salesChart.max_value : undefined}
                       onChange={(e) => e.target.value && setChartValue(e.target.value)}
                       aria-label={chartPeriod === "day" ? "Day to compare with today" : "Month to compare with this month"}
-                      className="px-2 py-1 rounded bg-white shadow-sm text-[10px] font-medium text-slate-800 outline-none cursor-pointer"
+                      className="px-2 py-1 rounded bg-white/70 text-[10px] font-medium text-slate-800 outline-none cursor-pointer"
                     />
                   )}
                   <span className="pr-2 whitespace-nowrap">vs {chartPeriod === "day" ? "today" : chartPeriod === "month" ? "this month" : "this year"}</span>

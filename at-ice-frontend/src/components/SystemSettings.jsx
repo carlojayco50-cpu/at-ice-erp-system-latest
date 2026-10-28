@@ -163,7 +163,7 @@ function OverridePinForm() {
           A kiosk locked after too many wrong HR PINs stays locked until an Admin types this 4-digit PIN on it. Keep it private.
         </p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <label className="flex flex-col gap-1">
           <span className="text-[11px] text-slate-500">Your account password</span>
           <PasswordInput autoComplete="current-password" value={form.current_password} onChange={(e) => setForm({ ...form, current_password: e.target.value })} className={`${inputCls} ${show("current_password") ? "border-red-400" : ""}`} />
@@ -181,7 +181,7 @@ function OverridePinForm() {
         </label>
       </div>
       {serverError && <div role="alert" className="text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{serverError}</div>}
-      <p className="text-[11px] text-slate-400">Reminder: the override PIN is exactly 4 numeric digits (0 to 9).</p>
+      <p className="text-[11px] leading-relaxed text-slate-500 mt-3">Reminder: the override PIN is exactly 4 numeric digits (0 to 9).</p>
       <button type="submit" disabled={busy} className="self-start px-3.5 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium disabled:opacity-50">
         {busy ? "Saving…" : "Save Admin PIN"}
       </button>

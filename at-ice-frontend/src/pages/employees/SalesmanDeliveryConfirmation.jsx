@@ -11,6 +11,8 @@ import DraftHint from "../../components/DraftHint";
 import { useMaxQuantity } from "../../lib/limits";
 import { useTimedIn } from "../../lib/timeIn";
 import TimeInNotice from "../../components/TimeInNotice";
+import { UploadBar } from "../../components/FileDropZone";
+import { sendForm } from "../../lib/upload";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 const PRODUCTS = [
@@ -74,6 +76,7 @@ export default function SalesmanDeliveryConfirmation() {
   const [step, setStep] = useState("form"); // form | review | success
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadPct, setUploadPct] = useState(null);
   const [result, setResult] = useState(null);
 
   useEffect(() => {
@@ -121,6 +124,7 @@ export default function SalesmanDeliveryConfirmation() {
     if (submitting) return;
     setSubmitError("");
     setSubmitting(true);
+    setUploadPct(0);
     try {
       const fd = new FormData();
       fd.append("delivery_id", delivery.id);
@@ -129,9 +133,7 @@ export default function SalesmanDeliveryConfirmation() {
         fd.append(`products[${i}][quantity]`, l.qty);
       });
       fd.append("photo", photoFile);
-      const res = await fetch("/api/delivery-confirmation", { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token()}` }, body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || "Delivery confirmation failed.");
+      const data = await sendForm("/api/delivery-confirmation", fd, { onProgress: setUploadPct });
       toast.success("Delivery confirmed. The invoice was created.");
       draft.clear();
       setResult(data);
@@ -223,6 +225,7 @@ export default function SalesmanDeliveryConfirmation() {
 
       {status === "ready" && step === "review" && (
         <>
+          {submitting && uploadPct !== null && <UploadBar progress={uploadPct} />}
           <ErrorBanner>{submitError}</ErrorBanner>
           <p className="text-[14px] text-slate-500">Check before sending. It cannot be edited after you send it.</p>
           <div className={`${CARD} space-y-2`}>

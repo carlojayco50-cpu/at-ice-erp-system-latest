@@ -391,7 +391,7 @@ export default function DeliveriesPage() {
       <AdjustmentRequests onChanged={refreshAll} />
 
       <div className="bg-white border border-black/[0.09] rounded-xl">
-        <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex flex-wrap items-center justify-between gap-3">
+        <div className="px-[18px] py-3.5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-[15px] font-semibold text-slate-800">Deliveries</h2>
             <p className="text-[12px] text-slate-500 mt-0.5 max-w-2xl">
@@ -437,7 +437,7 @@ export default function DeliveriesPage() {
           </div>
         </div>
 
-        <div className="px-[18px] border-b border-black/[0.09] flex flex-wrap gap-1" role="tablist" aria-label="Deliveries views">
+        <div className="px-[18px] flex flex-wrap gap-1" role="tablist" aria-label="Deliveries views">
           {TABS.map((t) => (
             <button
               key={t.value}

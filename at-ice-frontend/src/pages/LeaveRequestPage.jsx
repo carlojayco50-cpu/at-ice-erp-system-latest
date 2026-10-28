@@ -20,6 +20,8 @@ import { openProtectedFile } from "../lib/openFile";
 import { useDraft } from "../lib/useDraft";
 import DraftHint from "../components/DraftHint";
 import FileField from "../components/FileField";
+import { UploadBar } from "../components/FileDropZone";
+import { sendForm } from "../lib/upload";
 import { confirmAction } from "../lib/confirm";
 import { PILL } from "../lib/statusTones";
 
@@ -69,6 +71,7 @@ export default function LeaveRequestPage() {
   const setReason = touched(raw.reason);
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadPct, setUploadPct] = useState(null);
   const [formError, setFormError] = useState("");
 
   const load = useCallback(async () => {
@@ -148,11 +151,9 @@ export default function LeaveRequestPage() {
     if (file) fd.append("attachment", file);
 
     setSubmitting(true);
+    setUploadPct(file ? 0 : null);
     try {
-      // No Content-Type header: the browser sets it for FormData.
-      const res = await fetch("/api/my-leave-requests", { method: "POST", headers: authHeaders(), body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.errors ? Object.values(data.errors)[0][0] : data.message || `Could not submit (${res.status})`);
+      const data = await sendForm("/api/my-leave-requests", fd, { onProgress: setUploadPct });
       toast.success(data.message || "Leave request was sent.");
       draft.clear();
       setFile(null);
@@ -277,9 +278,10 @@ export default function LeaveRequestPage() {
               </label>
               <FileField id="lv-file" file={file} onChange={setFile} accept=".png,.jpg,.jpeg,.pdf" maxBytes={5 * 1024 * 1024}
                 onError={setFormError} label="Choose a file" hint="PNG, JPG or PDF, up to 5MB" />
+              {submitting && uploadPct !== null && <UploadBar progress={uploadPct} />}
             </div>
 
-            {formError && <div role="alert" className="px-3 py-2 text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg">{formError}</div>}
+            {formError &&<div role="alert" className="px-3 py-2 text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg">{formError}</div>}
 
             <button onClick={submit} disabled={submitting} className="w-full py-3 text-[13px] font-semibold text-white bg-cyan-500 rounded-xl hover:bg-cyan-600 disabled:opacity-60">
               {submitting ? "Submitting..." : "Submit Leave Request"}

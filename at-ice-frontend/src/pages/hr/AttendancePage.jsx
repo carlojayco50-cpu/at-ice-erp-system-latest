@@ -24,7 +24,7 @@ import { toast } from "../../lib/toast";
 import { TZ, formatDateTime, formatTime } from "../../lib/time";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
-import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { KpiCard } from "../../components/Kpi";
 import { Icon } from "../../components/icons";
 
 const SearchIcon = () => <Icon name="search" size={13} />;
@@ -201,7 +201,7 @@ export default function AttendancePage() {
   return (
     <HrLayout pageTitle="Attendance" breadcrumb="HRIS / Attendance">
       {/* FILTERS */}
-      <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center justify-between gap-3">
         <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl" role="group" aria-label="View" data-fx-tabs>
           {[["daily", "Daily"], ["history", "History log"]].map(([key, label]) => (
             <button key={key} type="button" aria-pressed={view === key} onClick={() => changeView(key)}
@@ -267,7 +267,7 @@ export default function AttendancePage() {
       </div>
 
       {/* STATUS CARDS = FILTERS */}
-      <KpiGrid cols={4}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
         {cards.map((c) => {
           const look = { all: ["users", "cyan"], in: ["check", "emerald"], present: ["check", "emerald"], late: ["clock", "amber"], other: ["calendar", "violet"], not_in: ["x", "rose"], on_leave: ["calendar", "violet"] }[c.key] || ["chart", "cyan"];
           const total = cards[0]?.value;
@@ -278,7 +278,7 @@ export default function AttendancePage() {
               onClick={() => setCardFilter(c.key)} active={cardFilter === c.key} />
           );
         })}
-      </KpiGrid>
+      </div>
 
       {/* EMPLOYEE TABLE (follows the selected card) */}
       <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
@@ -355,19 +355,20 @@ export default function AttendancePage() {
 
 // Not In Yet and On Leave: employee ID, name and one more column. Not clickable.
 function PeopleTable({ rows, empty, third, thirdOf }) {
+  const pager = usePagination(rows);
   if (rows.length === 0) return <div className="px-[18px] py-8 text-center text-[12px] text-slate-400">{empty}</div>;
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left text-slate-400 border-b border-black/[0.09]">
-            <th className="px-[18px] py-2.5 font-medium">Employee ID</th>
-            <th className="px-[18px] py-2.5 font-medium">Name</th>
-            <th className="px-[18px] py-2.5 font-medium">{third}</th>
+            <th className="px-[18px] py-2.5 font-medium min-w-[120px]">Employee ID</th>
+            <th className="px-[18px] py-2.5 font-medium min-w-[160px]">Name</th>
+            <th className="px-[18px] py-2.5 font-medium min-w-[140px]">{third}</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((e) => (
+          {pager.pageItems.map((e) => (
             <tr key={e.id} className="border-b border-black/[0.06] last:border-b-0">
               <td className="px-[18px] py-2.5 font-mono text-slate-600">{e.employee_id || "—"}</td>
               <td className="px-[18px] py-2.5 text-slate-800 font-medium">{e.name}</td>
@@ -376,6 +377,7 @@ function PeopleTable({ rows, empty, third, thirdOf }) {
           ))}
         </tbody>
       </table>
+      <Pagination pager={pager} />
     </div>
   );
 }
