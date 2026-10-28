@@ -15,6 +15,8 @@ import { usePagination } from "../../lib/usePagination";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
 import { Icon } from "../../components/icons";
+import { UploadBar } from "../../components/FileDropZone";
+import { sendForm } from "../../lib/upload";
 
 const authHeaders = () => ({
   Accept: "application/json",
@@ -271,6 +273,7 @@ function PaymentProofSection({ receipt, onSent }) {
   const { method, referenceNo } = draft.values;
   const { method: setMethod, referenceNo: setReferenceNo } = draft.set;
   const [sending, setSending] = useState(false);
+  const [uploadPct, setUploadPct] = useState(null);
   const [error, setError] = useState("");
 
   const proofs = receipt.payment_proofs || [];
@@ -282,18 +285,14 @@ function PaymentProofSection({ receipt, onSent }) {
     e.preventDefault();
     if (!file) { setError("Attach a photo or PDF of your payment receipt."); return; }
     setSending(true);
+    setUploadPct(0);
     setError("");
     try {
       const body = new FormData();
       body.append("file", file);
       if (method) body.append("method", method);
       if (referenceNo.trim()) body.append("reference_no", referenceNo.trim());
-      const res = await fetch(`/api/my-receipts/${receipt.id}/payment-proofs`, { method: "POST", headers: authHeaders(), body });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        const first = data?.errors && Object.values(data.errors)[0]?.[0];
-        throw new Error(first || data?.message || "Couldn't send the payment proof.");
-      }
+      await sendForm(`/api/my-receipts/${receipt.id}/payment-proofs`, body, { onProgress: setUploadPct });
       toast.success(`Payment proof for ${receipt.receipt_no} sent. We'll check it soon.`);
       setFile(null); draft.clear();
       onSent();
@@ -364,6 +363,7 @@ function PaymentProofSection({ receipt, onSent }) {
               label="Choose a photo or PDF"
               hint="PNG, JPG, WEBP or PDF, up to 5 MB"
             />
+            {sending && uploadPct !== null && <UploadBar progress={uploadPct} />}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">

@@ -10,6 +10,8 @@ import { useLiveTick } from "../../lib/live";
 import EmptyState from "../../components/EmptyState";
 import AddressFields from "../../components/AddressFields";
 import ScanDropZone from "../../components/ScanDropZone";
+import { UploadBar } from "../../components/FileDropZone";
+import { sendForm } from "../../lib/upload";
 import DraftHint from "../../components/DraftHint";
 import { useDraft } from "../../lib/useDraft";
 import { filledFrom } from "../../lib/scanDocument";
@@ -72,7 +74,7 @@ const TABS = [
   { key: "pending", label: "Pending" },
   { key: "interviewed", label: "Interviewed" },
   { key: "hired", label: "Hired" },
-  { key: "rejected", label: "Rejected" },
+  { key: "rejected", label: "Not hired" },
 ];
 
 const parseLocal = (s) => {
@@ -275,6 +277,7 @@ export default function InterviewsPage() {
   const { editing, form } = formDraft.values; // editing: null = closed, {} = new, applicant = edit
   const { editing: setEditing, form: setForm } = formDraft.set;
   const [saving, setSaving] = useState(false);
+  const [uploadPct, setUploadPct] = useState(null);
   const [formError, setFormError] = useState("");
   const handleAddress = useCallback((patch) => setForm((f) => ({ ...f, ...patch })), [setForm]);
   // Name, mobile number, email and address read from a PDF or Word resume.
@@ -407,10 +410,11 @@ export default function InterviewsPage() {
       for (const [k, v] of Object.entries(payload)) if (v !== null && v !== undefined) body.append(k, v);
       body.append("resume", form.resumeFile);
       if (method !== "POST") body.append("_method", method);
-      return api(url, { method: "POST", body });
+      return sendForm(url, body, { onProgress: setUploadPct });
     };
 
     setSaving(true);
+    setUploadPct(form.resumeFile ? 0 : null);
     try {
       if (isNew) {
         await send("/api/applicants", "POST");
@@ -670,6 +674,7 @@ export default function InterviewsPage() {
         <Modal title={isNew ? "Add Applicant" : "Edit Applicant"} onClose={() => !saving && setEditing(null)}>
           <form onSubmit={submitForm} className="p-5 flex flex-col gap-3.5">
             <DraftHint draft={formDraft} />
+            {saving && uploadPct !== null && <UploadBar progress={uploadPct} />}
             <ScanDropZone kind="resume" onScan={handleScan} onRemove={() => setForm((f) => ({ ...f, resumeFile: null }))} fills="name, mobile number, email and address. The resume is attached to the applicant" />
             {form.resumeFile ? (
               <div className="text-[11px] text-slate-500 -mt-1">

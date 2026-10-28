@@ -437,7 +437,7 @@ export default function DeliveriesPage() {
           </div>
         </div>
 
-        <div className="px-[18px] border-b border-black/[0.09] flex flex-wrap gap-1" role="tablist" aria-label="Deliveries views">
+        <div className="px-[18px] flex flex-wrap gap-1" role="tablist" aria-label="Deliveries views">
           {TABS.map((t) => (
             <button
               key={t.value}
