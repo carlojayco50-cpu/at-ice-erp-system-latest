@@ -20,7 +20,7 @@ export function sendForm(url, body, { method = "POST", onProgress } = {}) {
       try { data = JSON.parse(req.responseText); } catch { /* not json */ }
       if (req.status >= 200 && req.status < 300) {
         onProgress?.(100);
-        resolve(data);
+        resolve(data ?? {});
         return;
       }
       if (req.status === 401) handleUnauthorized(url, method);
