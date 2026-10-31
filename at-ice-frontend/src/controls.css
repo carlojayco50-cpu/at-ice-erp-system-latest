@@ -4,9 +4,9 @@
    or a button always lines up. Loaded after the neumorphism and glow styles. */
 
 :root {
-  --ctl-h: 36px;
-  --ctl-radius: 10px;
-  --ctl-font: 12px;
+  --ctl-h: var(--control-height); /* the app's one control height (index.css): 40px */
+  --ctl-radius: var(--control-radius);
+  --ctl-font: 13px;
   --ctl-icon: 14px;
 }
 @media (max-width: 639px) {
@@ -24,14 +24,41 @@
   line-height: 1.25;
 }
 /* Search rows: an icon and a bare field inside one box. The box is the control. */
+/* Root cause of the tall search box: the field inside it is forced to the
+   control height (40px) by index.css, and the box added its own py-1.5 and
+   border on top, so the box came out about 54px next to 40px dropdowns. The
+   box is now exactly the control height with no vertical padding, and the
+   field inside just fills it. */
 :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) {
+  height: var(--ctl-h);
   min-height: var(--ctl-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  box-sizing: border-box;
   border-radius: var(--ctl-radius) !important;
   font-size: var(--ctl-font);
 }
 :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) > :is(input, select) {
   font-size: var(--ctl-font);
+  height: 100%;
   min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Labels over fields in a filter row: same size, same space under them, so the
+   tops of the labels and the tops and bottoms of the fields line up. */
+:is(.ice-main, .ice-scope) label.flex.flex-col {
+  gap: 4px;
+}
+:is(.ice-main, .ice-scope) label.flex.flex-col > span:first-child:not(.flex) {
+  display: block;
+  font-size: 10px;
+  line-height: 14px;
+  min-height: 14px;
+}
+:is(.ice-main, .ice-scope) :is(.flex.flex-wrap.items-end, .flex.items-end):has(> label.flex-col) {
+  align-items: flex-end;
 }
 :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) > :is(svg, .icon) {
   width: var(--ctl-icon);
