@@ -509,8 +509,10 @@
 
 /* ---- Dropdown and calendar popups (components/SoftPickers.jsx) ------------ */
 .soft-pop {
-  position: fixed;
+  position: absolute; /* a child of the field's scroll box (SoftPickers.jsx), so it scrolls with the field */
   z-index: 1500;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
   background-color: var(--neu-bg);
   color: var(--neu-text);
   border-radius: var(--neu-radius);

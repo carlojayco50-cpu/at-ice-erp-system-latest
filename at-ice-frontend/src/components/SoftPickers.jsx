@@ -11,6 +11,16 @@ import TimeSelect from "./TimeSelect";
 // A picked value is written to the field and an input/change event is fired,
 // so React's onChange runs exactly as if the user had used the native popup.
 // Opt out on a field with the data-native attribute.
+//
+// Where the popup lives: inside the box that scrolls the field (the page
+// content, a modal panel, a side panel), as an absolutely positioned child, so
+// the browser scrolls it together with the field. It used to be a position:
+// fixed layer on document.body that a scroll listener moved with getBoundingClientRect
+// and setState on every scroll event; the page scrolls first and React catches
+// up a frame or more later, which showed up as the popup lagging behind its
+// field (worst on phones, where scrolling runs off the main thread). Now the
+// position is worked out once when it opens and again only when the window or
+// the field changes size; nothing runs while scrolling.
 
 const DATE_TYPES = new Set(["date", "month", "datetime-local"]);
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -38,6 +48,26 @@ function parseValue(v) {
   const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?(?:T(\d{2}):(\d{2}))?/.exec(v || "");
   if (!m) return null;
   return { y: +m[1], m: +m[2] - 1, d: m[3] ? +m[3] : 1, time: m[4] ? `${m[4]}:${m[5]}` : "" };
+}
+
+// The box the popup lives in: the nearest ancestor that scrolls up and down, else the page.
+// A wrapper that only scrolls sideways (a wide table) is skipped, it would clip the popup.
+function findHost(el) {
+  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if (o !== "auto" && o !== "scroll" && o !== "overlay") continue;
+    const sideOnly = p.scrollHeight <= p.clientHeight && p.scrollWidth > p.clientWidth;
+    if (sideOnly || p.firstElementChild?.tagName === "TABLE") continue;
+    return p;
+  }
+  return document.body;
+}
+
+// The popup is placed inside the host, so the host has to be a positioned box. Returns the undo.
+function keepPositioned(host) {
+  if (host === document.body || getComputedStyle(host).position !== "static") return () => {};
+  host.style.position = "relative";
+  return () => { host.style.position = ""; };
 }
 
 // ---- Dropdown list ----------------------------------------------------------
@@ -387,7 +417,9 @@ export default function SoftPickers() {
       const el = e.target.closest?.("select, input");
       if (popRef.current?.contains(e.target)) return;
       if (!isSoftField(el)) {
-        setOpen(null);
+        // A finger on the page may be the start of a scroll: a touch outside closes the
+        // popup only if it turns out to be a tap (the click handler below).
+        if (e.pointerType !== "touch") setOpen(null);
         return;
       }
       const isSelect = el.tagName === "SELECT";
@@ -397,12 +429,16 @@ export default function SoftPickers() {
       if (isSelect || e.pointerType === "mouse") el.focus({ preventScroll: true });
       setOpen((cur) => {
         if (cur?.el === el) return isSelect ? null : cur;
-        return { el, kind: isSelect ? "select" : "date", run: Date.now() };
+        return { el, kind: isSelect ? "select" : "date", run: Date.now(), host: findHost(el) };
       });
     };
     const onClick = (e) => {
       const el = e.target.closest?.("select, input");
-      if (isSoftField(el)) e.preventDefault();
+      if (isSoftField(el)) {
+        e.preventDefault();
+      } else if (!popRef.current?.contains(e.target)) {
+        setOpen(null); // a tap outside (touch taps never reach pointerdown's close)
+      }
     };
     const onKeyDown = (e) => {
       const el = e.target;
@@ -413,7 +449,7 @@ export default function SoftPickers() {
         e.key === "F4";
       if (opens) {
         e.preventDefault();
-        setOpen({ el, kind: el.tagName === "SELECT" ? "select" : "date", run: Date.now() });
+        setOpen({ el, kind: el.tagName === "SELECT" ? "select" : "date", run: Date.now(), host: findHost(el) });
       } else if (e.key === "Escape") {
         setOpen(null);
       }
@@ -439,32 +475,56 @@ export default function SoftPickers() {
     return () => pop?.removeEventListener("keydown", onKey);
   }, [open, close]);
 
-  // Place the popup under the field (above it when there is no room), and keep
-  // it there while the page scrolls or resizes.
+  // Place the popup under the field (above it when there is no room). This runs when it
+  // opens and when the window or the field changes size, never while scrolling: the
+  // popup is a child of the field's scroll box, so scrolling moves both together.
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
+    const { el, kind, host } = open;
+    const pop = popRef.current;
+    if (!pop) return undefined;
+    const release = keepPositioned(host);
+
     const place = () => {
-      if (!open.el.isConnected) { setOpen(null); return; }
-      const r = open.el.getBoundingClientRect();
-      const pop = popRef.current;
-      const h = pop ? pop.offsetHeight : 320;
-      const w = open.kind === "date" ? 292 : Math.max(r.width, 180);
+      if (!el.isConnected) { setOpen(null); return; }
+      const r = el.getBoundingClientRect();
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const below = r.bottom + 8 + h <= vh || r.top - 8 - h < 0;
-      setPos({
-        top: below ? r.bottom + 8 : r.top - 8 - h,
-        left: Math.min(Math.max(8, r.left), vw - w - 8),
-        width: w,
-        maxHeight: below ? vh - r.bottom - 16 : r.top - 16,
-      });
+      const h = pop.offsetHeight;
+      const w = kind === "date" ? Math.min(292, vw - 16) : Math.min(Math.max(r.width, 180), vw - 16);
+      // the part of the screen the popup may use: the host's visible box, within the window
+      const hr = host === document.body ? { top: 0, bottom: vh } : host.getBoundingClientRect();
+      const topLimit = Math.max(0, hr.top);
+      const bottomLimit = Math.min(vh, hr.bottom);
+      const below = r.bottom + 8 + h <= bottomLimit || r.top - 8 - h < topLimit;
+      const viewTop = below ? r.bottom + 8 : r.top - 8 - h;
+      const viewLeft = Math.min(Math.max(8, r.left), vw - w - 8);
+      // window coordinates -> coordinates inside the popup's containing block
+      const cb = pop.offsetParent;
+      let top;
+      let left;
+      if (!cb || (cb === document.body && getComputedStyle(cb).position === "static") || cb === document.documentElement) {
+        top = viewTop + window.scrollY;
+        left = viewLeft + window.scrollX;
+      } else {
+        const cr = cb.getBoundingClientRect();
+        top = viewTop - cr.top - cb.clientTop + cb.scrollTop;
+        left = viewLeft - cr.left - cb.clientLeft + cb.scrollLeft;
+      }
+      const maxHeight = below ? bottomLimit - r.bottom - 16 : r.top - topLimit - 16;
+      setPos((p) => (p && p.top === top && p.left === left && p.width === w && p.maxHeight === maxHeight ? p : { top, left, width: w, maxHeight }));
     };
     place();
-    window.addEventListener("scroll", place, true);
+    const watch = new ResizeObserver(place); // the field, the popup (5 or 6 week months) and the host
+    watch.observe(el);
+    watch.observe(pop);
+    if (host !== document.body) watch.observe(host);
     window.addEventListener("resize", place);
     return () => {
-      window.removeEventListener("scroll", place, true);
+      watch.disconnect();
       window.removeEventListener("resize", place);
+      release();
+      setPos(null);
     };
   }, [open]);
 
@@ -482,6 +542,6 @@ export default function SoftPickers() {
         ? <SelectList key={open.run} el={open.el} close={close} />
         : <Calendar key={open.run} el={open.el} close={close} />}
     </div>,
-    document.body
+    open.host
   );
 }

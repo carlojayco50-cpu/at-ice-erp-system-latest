@@ -79,9 +79,10 @@
   to   { --glow-pulse: 1; }
 }
 
-/* Dropdowns and calendars: a still, soft glow behind the popup */
+/* Dropdowns and calendars: a still, soft glow behind the popup. A box-shadow, not a
+   filter, so it costs nothing extra while the page scrolls. */
 .soft-pop {
-  filter: drop-shadow(0 0 14px rgba(var(--glow-rgb), calc(var(--glow-rest) * 0.9)));
+  box-shadow: var(--float-shadow-sm), 0 0 18px rgba(var(--glow-rgb), calc(var(--glow-rest) * 0.6));
 }
 
 /* Reduced motion: no breathing, a still glow instead */
