@@ -8,6 +8,7 @@ import { useReveal } from "../lib/useReveal";
 import { clearSession, postLoginPath, saveSession } from "../lib/auth";
 import { isBlockedDevice } from "../lib/kiosk";
 import { takeSessionExpiredNotice } from "../lib/sessionExpiry";
+import { clock, lockedEmail, useLoginLock } from "../lib/loginLock";
 import { playSplash } from "../lib/splash";
 import { Icon } from "../components/icons";
 
@@ -35,12 +36,14 @@ const PEEK = 72;
 // dashboard, chosen by the role and sub_role the API returns.
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  // a lockout in progress puts its email back after a refresh (lib/loginLock.js)
+  const [email, setEmail] = useState(lockedEmail);
   const [password, setPassword] = useState("");
   // the eye button shows or hides the password
   const [showPassword, revealProps] = useReveal();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const lock = useLoginLock(email);
   // "Your session expired..." after an API call came back 401 (see lib/sessionExpiry.js)
   const [notice, setNotice] = useState(() => takeSessionExpiredNotice());
 
@@ -106,6 +109,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setNotice("");
+    if (lock.locked) return; // the server refuses it anyway; this just skips the call
     if (!email.trim() || !password) {
       setError("Please enter your email and password.");
       return;
@@ -118,6 +122,10 @@ export default function LoginPage() {
         body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json().catch(() => null);
+      if (res.status === 429 && data?.retry_after_seconds) {
+        lock.start(Number(data.retry_after_seconds));
+        return;
+      }
       if (!res.ok) {
         setError(data?.message || "Invalid credentials. Please try again.");
         return;
@@ -266,7 +274,14 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {error && (
+              {lock.locked && (
+                <div role="alert" className="text-[13px] text-amber-900 bg-amber-100/70 border border-amber-300/60 rounded-xl px-4 py-3 text-center">
+                  <div className="font-semibold">Sign-in is temporarily locked</div>
+                  <div className="mt-0.5">Too many wrong passwords. Try again in <span className="font-mono tabular-nums font-semibold">{clock(lock.seconds)}</span>.</div>
+                </div>
+              )}
+
+              {error && !lock.locked && (
                 <div role="alert" className="text-[13px] text-red-700 bg-red-100/70 border border-red-300/60 rounded-xl px-4 py-3 text-center">
                   {error}
                 </div>
@@ -274,7 +289,7 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || lock.locked}
                 className="mt-1 w-full min-h-[48px] py-3 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 text-slate-900 text-[16px] font-semibold rounded-xl transition-[background-color,box-shadow] duration-150 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-[5px_5px_12px_var(--neu-lo),-5px_-5px_12px_var(--neu-hi)] active:shadow-[inset_3px_3px_6px_rgba(8,51,68,0.45),inset_-3px_-3px_6px_rgba(255,255,255,0.2)]"
               >
                 {loading ? (
@@ -282,6 +297,8 @@ export default function LoginPage() {
                     <span className="w-4 h-4 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin" />
                     Signing in…
                   </>
+                ) : lock.locked ? (
+                  `Locked ${clock(lock.seconds)}`
                 ) : (
                   "Sign In"
                 )}
