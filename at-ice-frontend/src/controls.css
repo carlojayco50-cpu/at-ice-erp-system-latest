@@ -1,0 +1,85 @@
+/* One size for every search box, text field, dropdown and date or period
+   button. Pages keep their own widths; height, radius, text size, icon size
+   and the hover and focus glow come from here, so a field next to a dropdown
+   or a button always lines up. Loaded after the neumorphism and glow styles. */
+
+:root {
+  --ctl-h: 36px;
+  --ctl-radius: 10px;
+  --ctl-font: 12px;
+  --ctl-icon: 14px;
+}
+@media (max-width: 639px) {
+  :root { --ctl-h: 44px; } /* touch target, same as the phone rule in neumorphism.css */
+}
+
+/* Standalone fields and selects */
+:is(.ice-main, .ice-scope) :is(
+  input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]),
+  select
+):not(.flex.items-center.border > input, .soft-pop *) {
+  min-height: var(--ctl-h);
+  border-radius: var(--ctl-radius);
+  font-size: var(--ctl-font);
+  line-height: 1.25;
+}
+/* Search rows: an icon and a bare field inside one box. The box is the control. */
+:is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) {
+  min-height: var(--ctl-h);
+  border-radius: var(--ctl-radius) !important;
+  font-size: var(--ctl-font);
+}
+:is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) > :is(input, select) {
+  font-size: var(--ctl-font);
+  min-height: 0;
+}
+:is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)) > :is(svg, .icon) {
+  width: var(--ctl-icon);
+  height: var(--ctl-icon);
+  flex-shrink: 0;
+}
+
+/* Previous / Next period and page buttons: one height and shape */
+:is(.ice-main, .ice-scope) button:is([aria-label^="Previous"], [aria-label^="Next"]) {
+  min-height: var(--ctl-h);
+  border-radius: var(--ctl-radius);
+  font-size: var(--ctl-font);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+:is(.ice-main, .ice-scope) button:is([aria-label^="Previous"], [aria-label^="Next"]):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+/* The calendar popup's arrows match them */
+.soft-icon-btn, .soft-cal-caption { height: var(--ctl-h) !important; }
+.soft-icon-btn { width: var(--ctl-h) !important; border-radius: var(--ctl-radius) !important; }
+.soft-cal-caption { border-radius: var(--ctl-radius) !important; }
+@media (hover: hover) {
+  .soft-icon-btn:not(:disabled):hover, .soft-cal-caption:not(:disabled):hover, .soft-day:not(:disabled):hover {
+    filter: drop-shadow(0 0 7px rgba(var(--glow-rgb), calc(var(--glow-lift) * 0.8)));
+  }
+}
+.soft-icon-btn:not(:disabled):active, .soft-day:not(:disabled):active { filter: none; }
+
+/* Hover and focus: a soft cyan glow, stronger on focus. Fields keep their
+   pressed-in look; the glow is added to it, and an error outline wins. */
+@media (hover: hover) {
+  :is(.ice-main, .ice-scope) :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea):not(:focus):hover,
+  :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)):not(:focus-within):hover {
+    filter: drop-shadow(0 0 7px rgba(var(--glow-rgb), calc(var(--glow-lift) * 0.7)));
+  }
+}
+.neu :is(.ice-main, .ice-scope) :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea):focus-visible:not([class*=" border-red"], [class^="border-red"]) {
+  outline: none;
+  box-shadow: var(--neu-inset), 0 0 0 2px rgba(var(--glow-rgb), 0.7), 0 0 16px 2px rgba(var(--glow-rgb), 0.35);
+}
+.neu :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)):focus-within {
+  box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(var(--glow-rgb), 0.7), 0 0 16px 2px rgba(var(--glow-rgb), 0.35) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.ice-main, .ice-scope) :is(input, select, textarea, button) { transition: none; }
+}

@@ -383,7 +383,7 @@ export default function DeliveriesPage() {
       <KpiGrid cols={5}>
         <KpiCard label="Stops today" icon="store" tone="cyan" value={todays.length} sub={`${counts.all || 0} deliveries on record`} />
         <KpiCard label="Delivered today" icon="check" tone="emerald" value={todayOf("delivered")} sub={todays.length ? `${Math.round((todayOf("delivered") / todays.length) * 100)}% of today's stops` : "No stops today"} bar={todays.length ? todayOf("delivered") / todays.length : 0} />
-        <KpiCard label="In transit" icon="truck" tone="cyan" value={todayOf("in_transit")} sub="On the road now" live={todayOf("in_transit") > 0} bar={todays.length ? todayOf("in_transit") / todays.length : 0} />
+        <KpiCard label="In transit" icon="truck" tone="cyan" value={todayOf("in_transit")} sub="On the road now" live={todayOf("in_transit") > 0} onClick={() => setParams({ tab: "list", status: tab === "list" && statusFilter === "in_transit" ? "all" : "in_transit" })} active={tab === "list" && statusFilter === "in_transit"} bar={todays.length ? todayOf("in_transit") / todays.length : 0} />
         <KpiCard label="Waiting" icon="clock" tone="amber" value={todayOf("pending") + todayOf("queued")} sub={`${todayOf("queued")} queued without a driver`} bar={todays.length ? (todayOf("pending") + todayOf("queued")) / todays.length : 0} />
         <KpiCard label="Drivers available" icon="users" tone="violet" value={driversFree} sub={`${driversOn} on shift of ${availability.drivers.length} drivers`} bar={availability.drivers.length ? driversOn / availability.drivers.length : 0} />
       </KpiGrid>

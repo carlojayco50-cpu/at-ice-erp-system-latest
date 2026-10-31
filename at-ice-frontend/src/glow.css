@@ -117,3 +117,19 @@
     box-shadow: 0 0 0 2px rgba(var(--glow-rgb), 0.55), 0 0 24px 2px rgba(var(--glow-rgb), 0.3);
   }
 }
+
+/* ---- Cards: hover, pressed and selected look different ----------------------
+   Hover: a cyan glow around the card and a 1px lift. Pressed: the card sinks
+   (inset shadow) with a tighter glow. Selected: a steady cyan ring on the sunken
+   card that breathes (see the selected rule above), so it is not mistaken for
+   hover. The lift is a transform, so nothing around it moves. */
+@media (hover: hover) {
+  .neu button.kpi-card:not(.kpi-card-active):hover {
+    transform: translateY(-1px);
+    transition: transform 160ms ease-out, filter 160ms ease-out;
+  }
+}
+.neu button.kpi-card:active {
+  transform: none;
+  box-shadow: var(--neu-inset) !important;
+}

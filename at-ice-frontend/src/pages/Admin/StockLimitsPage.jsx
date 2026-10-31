@@ -26,12 +26,24 @@ function firstError(data, fallback) {
   return data?.message || fallback;
 }
 
+// Stock level of an item: out, low (at or under the minimum), over (past the maximum) or ok.
+const levelOf = (p) => {
+  const cur = Number(p.current_stock ?? 0);
+  const min = p.minimum_stock == null ? null : Number(p.minimum_stock);
+  const max = p.maximum_stock == null ? null : Number(p.maximum_stock);
+  if (cur <= 0) return "out";
+  if (min != null && cur <= min) return "low";
+  if (max != null && max > 0 && cur > max) return "over";
+  return "ok";
+};
+
 export default function StockLimitsPage() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [level, setLevel] = useState(""); // "", ok, low, out or over: set by the cards
   // Edited values per item id: { min, max }
   // Unsaved values survive a refresh.
   const limitsDraft = useDraft("stock-limits", { drafts: {} });
@@ -62,9 +74,9 @@ export default function StockLimitsPage() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter((p) => p.name?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q));
-  }, [products, search]);
+    return products.filter((p) => (!level || levelOf(p) === level)
+      && (!q || p.name?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q)));
+  }, [products, search, level]);
 
   const valueOf = (p, key) => {
     const d = drafts[p.id];
@@ -112,15 +124,6 @@ export default function StockLimitsPage() {
   const pager = usePagination(rows);
 
   // Stock health for the KPI cards and side panels
-  const levelOf = (p) => {
-    const cur = Number(p.current_stock ?? 0);
-    const min = p.minimum_stock == null ? null : Number(p.minimum_stock);
-    const max = p.maximum_stock == null ? null : Number(p.maximum_stock);
-    if (cur <= 0) return "out";
-    if (min != null && cur <= min) return "low";
-    if (max != null && max > 0 && cur > max) return "over";
-    return "ok";
-  };
   const health = { ok: 0, low: 0, out: 0, over: 0 };
   products.forEach((p) => { health[levelOf(p)] += 1; });
   const noLimits = products.filter((p) => p.minimum_stock == null || p.maximum_stock == null).length;
@@ -139,11 +142,11 @@ export default function StockLimitsPage() {
   return (
     <AdminLayout pageTitle="Stock Limits" breadcrumb="Inventory / Stock Limits">
       <KpiGrid cols={5}>
-        <KpiCard label="Items" icon="box" tone="cyan" value={products.length} sub={`${noLimits} without limits set`} bar={share(products.length - noLimits)} />
-        <KpiCard label="Healthy" icon="check" tone="emerald" value={health.ok} sub="Between minimum and maximum" bar={share(health.ok)} />
-        <KpiCard label="Low stock" icon="alert" tone="amber" value={health.low} sub="At or under the minimum" bar={share(health.low)} />
-        <KpiCard label="Out of stock" icon="x" tone="rose" value={health.out} sub="Nothing on hand" bar={share(health.out)} />
-        <KpiCard label="Over maximum" icon="chart" tone="violet" value={health.over} sub="More than the maximum" bar={share(health.over)} />
+        <KpiCard label="Items" icon="box" tone="cyan" value={products.length} sub={`${noLimits} without limits set`} bar={share(products.length - noLimits)}  onClick={() => setLevel("")} />
+        <KpiCard label="Healthy" icon="check" tone="emerald" value={health.ok} sub="Between minimum and maximum" bar={share(health.ok)} onClick={() => setLevel((l) => (l === "ok" ? "" : "ok"))} active={level === "ok"} />
+        <KpiCard label="Low stock" icon="alert" tone="amber" value={health.low} sub="At or under the minimum" bar={share(health.low)} onClick={() => setLevel((l) => (l === "low" ? "" : "low"))} active={level === "low"} />
+        <KpiCard label="Out of stock" icon="x" tone="rose" value={health.out} sub="Nothing on hand" bar={share(health.out)} onClick={() => setLevel((l) => (l === "out" ? "" : "out"))} active={level === "out"} />
+        <KpiCard label="Over maximum" icon="chart" tone="violet" value={health.over} sub="More than the maximum" bar={share(health.over)} onClick={() => setLevel((l) => (l === "over" ? "" : "over"))} active={level === "over"} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
@@ -180,7 +183,7 @@ export default function StockLimitsPage() {
           <div className="text-[12px] text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
         )}
         {!loading && !error && rows.length === 0 && (
-          <EmptyState>{search ? "No item matches your search." : "No inventory items yet. The Checker adds them."}</EmptyState>
+          <EmptyState>{search || level ? "No item matches your search or filter." : "No inventory items yet. The Checker adds them."}</EmptyState>
         )}
 
         {!loading && rows.length > 0 && (

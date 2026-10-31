@@ -97,6 +97,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [focus, setFocus] = useState(""); // "", open, done, stuck or overdue: set by the cards
   const [open, setOpen] = useState(() => new Set());
   // Kept as a draft while the modal is open, so a refresh reopens it as it was.
   const formDraft = useDraft("projects:form", { editing: null, form: EMPTY }, { when: (v) => !!v.editing });
@@ -121,8 +122,9 @@ export default function ProjectsPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? projects.filter((p) => `${p.name} ${p.owner || ""} ${p.description || ""}`.toLowerCase().includes(q)) : projects;
-  }, [projects, search]);
+    const inFocus = (p) => !focus || (focus === "open" ? p.status !== "done" : focus === "overdue" ? p.overdue : p.status === focus);
+    return projects.filter((p) => inFocus(p) && (!q || `${p.name} ${p.owner || ""} ${p.description || ""}`.toLowerCase().includes(q)));
+  }, [projects, search, focus]);
 
   const totals = useMemo(() => ({
     open: projects.filter((p) => p.status !== "done").length,
@@ -214,10 +216,10 @@ export default function ProjectsPage() {
         const share = (n) => (projects.length ? n / projects.length : 0);
         return (
           <KpiGrid cols={5}>
-            <KpiCard label="Open projects" icon="tool" tone="cyan" value={totals.open} sub={`${projects.length} projects in all`} bar={share(totals.open)} />
-            <KpiCard label="Done" icon="check" tone="emerald" value={done} sub={`${Math.round(share(done) * 100)}% completed`} bar={share(done)} />
-            <KpiCard label="Stuck" icon="alert" tone="rose" value={totals.stuck} sub="Need a decision to move on" bar={share(totals.stuck)} />
-            <KpiCard label="Overdue" icon="clock" tone="amber" value={totals.overdue} sub="Past their due date" bar={share(totals.overdue)} />
+            <KpiCard label="Open projects" icon="tool" tone="cyan" value={totals.open} sub={`${projects.length} projects in all`} bar={share(totals.open)} onClick={() => setFocus((f) => (f === "open" ? "" : "open"))} active={focus === "open"} />
+            <KpiCard label="Done" icon="check" tone="emerald" value={done} sub={`${Math.round(share(done) * 100)}% completed`} bar={share(done)} onClick={() => setFocus((f) => (f === "done" ? "" : "done"))} active={focus === "done"} />
+            <KpiCard label="Stuck" icon="alert" tone="rose" value={totals.stuck} sub="Need a decision to move on" bar={share(totals.stuck)} onClick={() => setFocus((f) => (f === "stuck" ? "" : "stuck"))} active={focus === "stuck"} />
+            <KpiCard label="Overdue" icon="clock" tone="amber" value={totals.overdue} sub="Past their due date" bar={share(totals.overdue)} onClick={() => setFocus((f) => (f === "overdue" ? "" : "overdue"))} active={focus === "overdue"} />
             <KpiCard label="Supplies used" icon="box" tone="violet" money value={totals.cost} sub={budget ? `of ${peso(budget)} budget` : "No budgets set"} bar={budget ? totals.cost / budget : null} />
           </KpiGrid>
         );
