@@ -7,6 +7,15 @@ export const PHONE_PREFIX = "+63";
 export const MOBILE_REGEX = /^9\d{9}$/;
 export const MOBILE_MESSAGE = "Enter 10 digits starting with 9 (e.g. 9171234567).";
 
+// Messages for the live check under a mobile field.
+export function mobileError(digits) {
+  if (!digits) return "";
+  if (!/^\d+$/.test(digits)) return "Only numbers are allowed.";
+  if (digits[0] !== "9") return "Philippine mobile number must start with 9.";
+  if (digits.length !== 10) return "Enter exactly 10 digits after +63.";
+  return "";
+}
+
 // Mobile or landline with area code: 9 to 10 digits (customers, suppliers).
 export const ANY_REGEX = /^\d{9,10}$/;
 export const ANY_MESSAGE = "Enter 9 to 10 digits. Landlines need the area code, without the 0 (e.g. 281234567).";

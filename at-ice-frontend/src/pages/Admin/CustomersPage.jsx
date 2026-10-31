@@ -3,7 +3,7 @@ import { CUSTOMER_TYPES, typeForChain } from "../../lib/customerTypes";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import PhoneInput from "../../components/PhoneInput";
-import { ANY_REGEX, ANY_MESSAGE, localDigits, toStoredPhone } from "../../lib/phone";
+import { mobileError, localDigits, toStoredPhone } from "../../lib/phone";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { toast } from "../../lib/toast";
 import { useLiveTick } from "../../lib/live";
@@ -186,6 +186,9 @@ export default function CustomersPage() {
   // be saved without it. Whatever is typed into such a field must still be valid.
   const savedCustomer = editingId ? customers.find((c) => c.id === editingId) : null;
   const need = (field) => !savedCustomer || !!savedCustomer[field];
+  // An old saved number (e.g. a landline) is not flagged until it is changed.
+  const contactUnchangedLive = !!savedCustomer?.contact_number && form.contact_number === localDigits(savedCustomer.contact_number);
+  const liveContactError = contactUnchangedLive ? "" : mobileError(form.contact_number);
 
   async function submitForm(e) {
     e.preventDefault();
@@ -204,8 +207,8 @@ export default function CustomersPage() {
       setFormError(`${missingContact.join(", ")} ${missingContact.length === 1 ? "is" : "are"} required.`);
       return;
     }
-    if (form.contact_number && !contactUnchanged && !ANY_REGEX.test(form.contact_number)) {
-      setFormError(ANY_MESSAGE);
+    if (form.contact_number && !contactUnchanged && mobileError(form.contact_number)) {
+      setFormError(mobileError(form.contact_number));
       return;
     }
     // City and Province are always required, even on an old customer
@@ -576,9 +579,11 @@ export default function CustomersPage() {
                     onChange={(v) => setForm({ ...form, contact_number: v })}
                     placeholder="9171234567"
                     required={need("contact_number")}
-                    invalid={form.contact_number.length > 10}
+                    maxDigits={10}
+                    invalid={!!liveContactError}
                     className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   />
+                  {liveContactError && <span className="text-[10px] text-red-600">{liveContactError}</span>}
                 </div>
                 <div className="col-span-2">
                   <EmailDomainField
