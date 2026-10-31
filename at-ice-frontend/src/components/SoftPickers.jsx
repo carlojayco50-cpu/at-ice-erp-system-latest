@@ -70,6 +70,19 @@ function keepPositioned(host) {
   return () => { host.style.position = ""; };
 }
 
+// Scrolls the popup's own list so the option shows. Not scrollIntoView(): that scrolls
+// every ancestor too, including the page, and since the popup sits inside the page's
+// scroll box it pulled the whole form to wherever the popup was at that moment (the top,
+// before it was placed). Only the popup's box is moved here.
+function keepInView(item) {
+  const box = item?.closest(".soft-pop");
+  if (!box) return;
+  const b = box.getBoundingClientRect();
+  const i = item.getBoundingClientRect();
+  if (i.top < b.top) box.scrollTop -= b.top - i.top;
+  else if (i.bottom > b.bottom) box.scrollTop += i.bottom - b.bottom;
+}
+
 // ---- Dropdown list ----------------------------------------------------------
 
 // Long lists (e.g. barangays) get a search box at the top.
@@ -90,13 +103,19 @@ function SelectList({ el, close }) {
   const searchRef = useRef(null);
 
   // The popup is hidden until it is placed, and a hidden field cannot take
-  // focus, so focus waits a frame.
+  // focus, so focus waits a frame. By then it is placed and sized, so the chosen
+  // option is brought into view inside it.
   useEffect(() => {
-    const f = requestAnimationFrame(() => (searchRef.current || listRef.current)?.focus({ preventScroll: true }));
+    const f = requestAnimationFrame(() => {
+      (searchRef.current || listRef.current)?.focus({ preventScroll: true });
+      keepInView(listRef.current?.querySelector(`[data-i="${active}"]`));
+    });
     return () => cancelAnimationFrame(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // arrow keys and typing move the active option; only the popup's list follows it
   useEffect(() => {
-    listRef.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
+    keepInView(listRef.current?.querySelector(`[data-i="${active}"]`));
   }, [active]);
 
   const pick = (i) => {
@@ -277,7 +296,7 @@ function Calendar({ el, close }) {
     const d = new Date(p.y, p.m, p.d + map[e.key]);
     const key = ymd(d.getFullYear(), d.getMonth(), d.getDate());
     if (d.getMonth() !== cursor.m) setCursor({ y: d.getFullYear(), m: d.getMonth() });
-    requestAnimationFrame(() => gridRef.current?.querySelector(`[data-day="${key}"]`)?.focus());
+    requestAnimationFrame(() => gridRef.current?.querySelector(`[data-day="${key}"]`)?.focus({ preventScroll: true }));
   };
 
   const yearStart = cursor.y - (cursor.y % 12);
