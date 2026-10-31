@@ -41,7 +41,7 @@ export function StatusBreakdown({ title = "Status breakdown", subtitle, items, e
               <li key={i.label}>
                 <Row
                   {...(onPick ? { type: "button", onClick: () => onPick(i), "data-no-confirm": true, "aria-current": active === i.key ? "true" : undefined } : {})}
-                  className={`w-full text-left ${onPick ? "cursor-pointer rounded-md" : ""} ${onPick && active === i.key ? "font-semibold" : ""}`}
+                  className={`w-full text-left ${onPick ? "cursor-pointer rounded-md -mx-1.5 px-1.5 py-1 transition-colors hover:bg-black/[0.04] active:bg-black/[0.07]" : ""} ${onPick && active === i.key ? "font-semibold" : ""}`}
                 >
                   <div className="flex items-center gap-2 text-[12px]">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${t.bar}`} />

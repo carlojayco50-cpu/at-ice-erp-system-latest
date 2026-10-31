@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { SkeletonTableRows } from "../../components/Skeleton";
 import { fullName, shiftLabel } from "../../lib/names";
@@ -48,6 +48,7 @@ export default function EmployeesOverviewPage() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [filter, setFilter]       = useState(NO_FILTER);
+  const listRef = useRef(null);
 
   const token = localStorage.getItem("token");
   const authHeaders = {
@@ -104,22 +105,30 @@ export default function EmployeesOverviewPage() {
   const byRole = roles.map((r, i) => ({ key: r || "none", label: ROLE_LABEL(r), count: employees.filter((e) => (displayRole(e) || "") === r).length, tone: ROLE_TONES[i % ROLE_TONES.length] }));
   const byPosition = positions.map((p, i) => ({ key: p, label: p, count: employees.filter((e) => e.position === p).length, tone: ROLE_TONES[(i + 2) % ROLE_TONES.length] }));
 
+  // A card or chart row sets (or, when clicked again, clears) one filter, keeps the
+  // others, and scrolls the list into view inside the page's own scroll area.
+  const pick = (field, value) => {
+    const applying = filter[field] !== value;
+    setFilter((f) => ({ ...f, [field]: f[field] === value ? "" : value }));
+    if (applying) requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   return (
     <AdminLayout pageTitle="Employees" breadcrumb="Employees">
       <KpiGrid cols={5}>
         <KpiCard label="Active staff" icon="users" tone="cyan" value={employees.length} sub={`${positions.length} positions`} />
         <KpiCard label="With a login" icon="key" tone="emerald" value={withLogin} sub="System accounts" bar={share(withLogin)} />
         <KpiCard label="Attendance only" icon="shield" tone="violet" value={employees.length - withLogin} sub="Guards and Baggers" bar={share(employees.length - withLogin)} />
-        <KpiCard label="Day shift" icon="clock" tone="amber" value={dayShift} sub={`${Math.round(share(dayShift) * 100)}% of staff`} bar={share(dayShift)} onClick={() => setFilter((f) => ({ ...f, shift: f.shift === "day" ? "" : "day" }))} active={filter.shift === "day"} />
-        <KpiCard label="Night shift" icon="clock" tone="slate" value={nightShift} sub={`${Math.round(share(nightShift) * 100)}% of staff`} bar={share(nightShift)} onClick={() => setFilter((f) => ({ ...f, shift: f.shift === "night" ? "" : "night" }))} active={filter.shift === "night"} />
+        <KpiCard label="Day shift" icon="clock" tone="amber" value={dayShift} sub={`${Math.round(share(dayShift) * 100)}% of staff`} bar={share(dayShift)} onClick={() => pick("shift", "day")} active={filter.shift === "day"} />
+        <KpiCard label="Night shift" icon="clock" tone="slate" value={nightShift} sub={`${Math.round(share(nightShift) * 100)}% of staff`} bar={share(nightShift)} onClick={() => pick("shift", "night")} active={filter.shift === "night"} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-        <StatusBreakdown title="Staff by role" items={byRole} onPick={(i) => setFilter((f) => ({ ...f, role: f.role === (i.key === "none" ? "none" : i.key) ? "" : (i.key === "none" ? "none" : i.key) }))} active={filter.role} empty="No employees yet." />
-        <StatusBreakdown title="Staff by position" items={byPosition} onPick={(i) => setFilter((f) => ({ ...f, position: f.position === i.key ? "" : i.key }))} active={filter.position} empty="No employees yet." />
+        <StatusBreakdown title="Staff by role" items={byRole} onPick={(i) => pick("role", i.key)} active={filter.role} empty="No employees yet." />
+        <StatusBreakdown title="Staff by position" items={byPosition} onPick={(i) => pick("position", i.key)} active={filter.position} empty="No employees yet." />
       </div>
 
-      <div className="bg-white border border-black/[0.09] rounded-xl">
+      <div ref={listRef} className="bg-white border border-black/[0.09] rounded-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.09]">
           <div>
             <div className="text-[15px] font-semibold text-slate-800">Employees</div>
