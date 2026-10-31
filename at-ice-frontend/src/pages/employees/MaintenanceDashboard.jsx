@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import RoleShell from "../../components/RoleShell";
 import { Icon, StatusBadge, ErrorBanner, CardSkeleton, EmptyCard } from "../../components/MobileUi";
 import { CARD, CARD_BUTTON } from "../../lib/mobileUi";
@@ -15,7 +15,6 @@ const headers = () => ({ Accept: "application/json", Authorization: `Bearer ${lo
 // requests), then the request counts and the way into Parts and Projects.
 export default function MaintenanceDashboard() {
   const timedIn = useTimedIn();
-  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [projects, setProjects] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | error
@@ -79,10 +78,10 @@ export default function MaintenanceDashboard() {
           )}
 
           <KpiGrid cols={4}>
-            <KpiCard label="Pending" icon="clock" tone="amber" value={count("pending")} sub="Waiting for Admin" onClick={() => navigate("/maintenance/stock-out-request?status=pending")} />
-            <KpiCard label="Approved" icon="check" tone="cyan" value={count("approved")} sub="Ready to be released" onClick={() => navigate("/maintenance/stock-out-request?status=approved")} />
-            <KpiCard label="Released" icon="box" tone="emerald" value={count("released")} sub={`${requests.length} requests in all`} bar={requests.length ? count("released") / requests.length : 0} onClick={() => navigate("/maintenance/stock-out-request?status=released")} />
-            <KpiCard label="Open projects" icon="tool" tone="violet" value={projects.filter((p) => p.status !== "done").length} sub={`${projects.filter((p) => p.status === "done").length} done`} onClick={() => navigate("/maintenance/projects")} />
+            <KpiCard label="Pending" icon="clock" tone="amber" value={count("pending")} sub="Waiting for Admin" to="/maintenance/stock-out-request?status=pending" />
+            <KpiCard label="Approved" icon="check" tone="cyan" value={count("approved")} sub="Ready to be released" to="/maintenance/stock-out-request?status=approved" />
+            <KpiCard label="Released" icon="box" tone="emerald" value={count("released")} sub={`${requests.length} requests in all`} bar={requests.length ? count("released") / requests.length : 0} to="/maintenance/stock-out-request?status=released" />
+            <KpiCard label="Open projects" icon="tool" tone="violet" value={projects.filter((p) => p.status !== "done").length} sub={`${projects.filter((p) => p.status === "done").length} done`} to="/maintenance/projects" />
           </KpiGrid>
 
           <div className="grid grid-cols-1 gap-3">

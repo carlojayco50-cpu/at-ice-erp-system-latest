@@ -60,9 +60,9 @@ export default function CheckerDashboard() {
         <>
           <KpiGrid cols={4}>
             <KpiCard label="Trucks to count" icon="truck" tone="amber" value={toCount} sub={`${data.trucks.length} trucks today`} bar={data.trucks.length ? (data.trucks.length - toCount) / data.trucks.length : 0} />
-            <KpiCard label="Low stock" icon="alert" tone={low.length ? "rose" : "emerald"} value={low.length} sub={`${data.products.length} items tracked`} />
-            <KpiCard label="To confirm" icon="clock" tone="violet" value={waiting} sub="Stock movements" live={waiting > 0} />
-            <KpiCard label="Items in stock" icon="box" tone="cyan" value={data.products.filter((p) => Number(p.current_stock) > 0).length} sub="Supplies on hand" />
+            <KpiCard to="/checker/inventory?filter=low" label="Low stock" icon="alert" tone={low.length ? "rose" : "emerald"} value={low.length} sub={`${data.products.length} items tracked`} />
+            <KpiCard to="/checker/stock-movements" label="To confirm" icon="clock" tone="violet" value={waiting} sub="Stock movements" live={waiting > 0} />
+            <KpiCard to="/checker/inventory" label="Items in stock" icon="box" tone="cyan" value={data.products.filter((p) => Number(p.current_stock) > 0).length} sub="Supplies on hand" />
           </KpiGrid>
           {low.length > 0 && (
             <Link to="/checker/inventory?filter=low" className={`${CARD_BUTTON} block border-rose-200`}>

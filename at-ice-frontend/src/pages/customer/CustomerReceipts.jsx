@@ -64,7 +64,10 @@ export default function CustomerReceipts() {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(() => {
+    const f = new URLSearchParams(window.location.search).get("filter");
+    return ["unpaid", "overdue", "paid"].includes(f) ? f : "all";
+  });
   // The open invoice comes back after a refresh (with its payment proof draft).
   const openDraft = useDraft("receipts:open", { selectedId: null }, { when: (v) => v.selectedId != null });
   const { selectedId } = openDraft.values;

@@ -79,7 +79,10 @@ export default function CustomerDeliveries() {
   const [deliveries, setDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(() => {
+    const f = new URLSearchParams(window.location.search).get("filter");
+    return ["pending", "in_transit", "delivered"].includes(f) ? f : "all";
+  });
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [topUp, setTopUp] = useState(false);

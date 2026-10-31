@@ -97,3 +97,23 @@
     transition: none;
   }
 }
+
+/* ---- Destination pulse ----------------------------------------------------
+   lib/destination.js puts data-dest-pulse on the list a card points to for
+   about 2.6 seconds. Two cyan breaths, then the element is as it was. The
+   glow is a box-shadow around it (never inside), so nothing is covered. */
+@keyframes dest-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--glow-rgb), 0); }
+  25%, 75% { box-shadow: 0 0 0 3px rgba(var(--glow-rgb), 0.55), 0 0 36px 6px rgba(var(--glow-rgb), 0.45); }
+  50%      { box-shadow: 0 0 0 2px rgba(var(--glow-rgb), 0.3), 0 0 22px 2px rgba(var(--glow-rgb), 0.22); }
+}
+[data-dest-pulse] {
+  animation: dest-pulse 1.3s ease-in-out 2;
+  scroll-margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-dest-pulse] {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(var(--glow-rgb), 0.55), 0 0 24px 2px rgba(var(--glow-rgb), 0.3);
+  }
+}

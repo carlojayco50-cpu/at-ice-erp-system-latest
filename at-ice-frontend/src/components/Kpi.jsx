@@ -9,8 +9,14 @@
 //
 // value: a number (formatted here) or a ready string. money: show as ₱.
 // bar: 0..1 for a thin progress bar. trend: { dir: "up" | "down" | "flat", text }.
-// onClick makes the card a filter button (aria-pressed when active).
+// onClick makes the card a filter button (aria-pressed when active); after it
+// runs, the page's list scrolls into view and pulses (lib/destination.js).
+// to: open another page instead, e.g. "/admin/receipts?filter=overdue"; the
+// list there pulses once it has loaded. dest: id of a data-dest element to
+// pulse, when it is not the page's first table.
+import { useNavigate } from "react-router-dom";
 import { TONES } from "../lib/kpiTones";
+import { focusDestination } from "../lib/destination";
 import { Icon } from "./icons";
 
 // Same icon set as every other screen (components/icons.jsx).
@@ -20,17 +26,23 @@ export function KpiIcon({ name, className = "" }) {
 
 const peso = (n) => `₱${Number(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export function KpiCard({ label, value, icon = "chart", tone = "cyan", sub, trend, bar, live = false, money = false, onClick, active = false, title }) {
+export function KpiCard({ label, value, icon = "chart", tone = "cyan", sub, trend, bar, live = false, money = false, onClick, to, dest, active = false, title }) {
+  const navigate = useNavigate();
   const t = TONES[tone] || TONES.cyan;
   const isNum = typeof value === "number" && Number.isFinite(value);
   const shown = value == null || value === "" ? "—" : isNum ? (money ? peso(value) : value.toLocaleString("en-PH")) : value;
   const pct = typeof bar === "number" && Number.isFinite(bar) ? Math.max(0, Math.min(1, bar)) : null;
-  const Tag = onClick ? "button" : "div";
+  const press = to
+    ? () => { onClick?.(); navigate(to, { state: { dest: dest || true } }); }
+    : onClick
+      ? () => { onClick(); focusDestination(dest); }
+      : null;
+  const Tag = press ? "button" : "div";
   return (
     <Tag
-      {...(onClick ? { type: "button", onClick, "aria-current": active ? "true" : undefined, "data-no-confirm": true } : {})}
+      {...(press ? { type: "button", onClick: press, "aria-current": active ? "true" : undefined, "data-no-confirm": true } : {})}
       title={title}
-      className={`kpi-card bg-white border border-black/[0.09] rounded-xl px-4 py-3.5 flex flex-col gap-2 text-left min-w-0 h-full ${onClick ? "cursor-pointer" : ""} ${active ? "kpi-card-active" : ""}`}
+      className={`kpi-card bg-white border border-black/[0.09] rounded-xl px-4 py-3.5 flex flex-col gap-2 text-left min-w-0 h-full ${press ? "cursor-pointer" : ""} ${active ? "kpi-card-active" : ""}`}
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${t.badge}`}><KpiIcon name={icon} /></span>

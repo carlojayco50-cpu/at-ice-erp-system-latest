@@ -160,10 +160,10 @@ export default function CustomerDashboard() {
 
           {/* Summary cards */}
           <KpiGrid cols={4}>
-            <KpiCard label="Pending" icon="clock" tone="amber" value={pendingCount} sub="Not yet dispatched" bar={deliveries.length ? pendingCount / deliveries.length : 0} />
-            <KpiCard label="In transit" icon="truck" tone="cyan" value={inTransitCount} sub="On the way to you" live={inTransitCount > 0} bar={deliveries.length ? inTransitCount / deliveries.length : 0} />
-            <KpiCard label="Delivered" icon="check" tone="emerald" value={deliveredCount} sub={`${deliveries.length} deliveries in all`} bar={deliveries.length ? deliveredCount / deliveries.length : 0} />
-            <KpiCard label="Balance due" icon="wallet" tone={overdueCount ? "rose" : "violet"} money value={balanceDue} sub={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "All current"} />
+            <KpiCard to="/customer/deliveries?filter=pending" label="Pending" icon="clock" tone="amber" value={pendingCount} sub="Not yet dispatched" bar={deliveries.length ? pendingCount / deliveries.length : 0} />
+            <KpiCard to="/customer/deliveries?filter=in_transit" label="In transit" icon="truck" tone="cyan" value={inTransitCount} sub="On the way to you" live={inTransitCount > 0} bar={deliveries.length ? inTransitCount / deliveries.length : 0} />
+            <KpiCard to="/customer/deliveries?filter=delivered" label="Delivered" icon="check" tone="emerald" value={deliveredCount} sub={`${deliveries.length} deliveries in all`} bar={deliveries.length ? deliveredCount / deliveries.length : 0} />
+            <KpiCard to="/customer/receipts?filter=unpaid" label="Balance due" icon="wallet" tone={overdueCount ? "rose" : "violet"} money value={balanceDue} sub={overdueCount > 0 ? `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}` : "All current"} />
           </KpiGrid>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">

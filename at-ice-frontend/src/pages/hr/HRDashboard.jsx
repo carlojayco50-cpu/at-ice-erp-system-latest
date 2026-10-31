@@ -72,11 +72,11 @@ export default function HRDashboard() {
 
   const enrolled = data.faces?.length || 0;
   const cards = [
-    { label: "Enrolled workers", icon: "users", tone: "cyan", value: show(data.faces, enrolled), sub: "Faces registered for attendance" },
-    { label: "Timed in today", icon: "check", tone: "emerald", live: todayAttendance.length > 0, value: show(data.attendances, todayAttendance.length), sub: enrolled ? `${Math.round((todayAttendance.length / enrolled) * 100)}% of enrolled workers` : "No faces enrolled yet", bar: enrolled ? todayAttendance.length / enrolled : 0 },
-    { label: "Late today", icon: "clock", tone: "amber", value: show(data.attendances, lateToday), sub: todayAttendance.length ? `${Math.round((lateToday / todayAttendance.length) * 100)}% of today's time-ins` : "Nobody timed in yet", bar: todayAttendance.length ? lateToday / todayAttendance.length : 0 },
-    { label: "Leave to review", icon: "calendar", tone: "violet", value: show(data.leaves, pendingLeaves.length), sub: "Waiting for your approval" },
-    { label: "Upcoming interviews", icon: "user", tone: "slate", value: show(data.interviews, data.interviews?.length), sub: "Scheduled applicants" },
+    { label: "Enrolled workers", to: "/hr/employees", icon: "users", tone: "cyan", value: show(data.faces, enrolled), sub: "Faces registered for attendance" },
+    { label: "Timed in today", to: "/hr/attendance", icon: "check", tone: "emerald", live: todayAttendance.length > 0, value: show(data.attendances, todayAttendance.length), sub: enrolled ? `${Math.round((todayAttendance.length / enrolled) * 100)}% of enrolled workers` : "No faces enrolled yet", bar: enrolled ? todayAttendance.length / enrolled : 0 },
+    { label: "Late today", to: "/hr/attendance", icon: "clock", tone: "amber", value: show(data.attendances, lateToday), sub: todayAttendance.length ? `${Math.round((lateToday / todayAttendance.length) * 100)}% of today's time-ins` : "Nobody timed in yet", bar: todayAttendance.length ? lateToday / todayAttendance.length : 0 },
+    { label: "Leave to review", to: "/hr/leave-requests", icon: "calendar", tone: "violet", value: show(data.leaves, pendingLeaves.length), sub: "Waiting for your approval" },
+    { label: "Upcoming interviews", to: "/hr/interviews", icon: "user", tone: "slate", value: show(data.interviews, data.interviews?.length), sub: "Scheduled applicants" },
   ];
   // Time-ins over the last 7 days
   const week = [...Array(7)].map((_, i) => {

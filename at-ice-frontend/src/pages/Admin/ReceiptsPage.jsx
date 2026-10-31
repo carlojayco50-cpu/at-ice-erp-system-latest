@@ -56,7 +56,10 @@ export default function ReceiptsPage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
   const [search, setSearch]     = useState("");
-  const [filter, setFilter]     = useState("all");
+  const [filter, setFilter]     = useState(() => {
+    const f = new URLSearchParams(window.location.search).get("filter");
+    return ["paid", "unpaid", "overdue"].includes(f) ? f : "all";
+  });
 
   const [viewing, setViewing]           = useState(null);
   // Mark as Paid and Reject proof modals reopen after a refresh as they were.
