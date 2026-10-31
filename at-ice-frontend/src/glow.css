@@ -1,0 +1,99 @@
+/* Ambient glow and breathing light.
+   Soft diffused light behind dialogs and interactive surfaces, in the app's
+   cyan. Everything reads the tokens below, so a theme or a new component
+   changes the look in one place. Loaded after the neumorphism styles. */
+
+/* The two animated values. Registered so the browser can animate them. */
+@property --glow-pulse { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glow-boost { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --glow-open  { syntax: "<number>"; inherits: false; initial-value: 1; }
+
+:root {
+  --glow-rgb: 34, 211, 238;        /* cyan-400, the brand accent */
+  --glow-pulse-time: 3.2s;         /* breathing cycle, 2.5 to 4s */
+  --glow-rest: 0.3;                /* modal glow opacity at rest ... */
+  --glow-swing: 0.16;              /* ... plus this at the top of a breath */
+  --glow-hover: 0.22;              /* ... plus this while the pointer is over it */
+  --glow-blur: 56px;
+  --glow-blur-swing: 16px;
+  --glow-lift: 0.38;               /* hover glow on buttons and cards */
+}
+.cp-dark,
+.neu-dark {
+  --glow-rest: 0.36;
+  --glow-lift: 0.45;
+}
+
+/* ---- Dialogs, drawers and confirmation boxes ------------------------------
+   Marked by lib/modalGlow.js: data-glow="active" on the topmost one (pulses),
+   "idle" on any under it (a quiet, still glow). It is a wide box-shadow added
+   after the panel's own drop shadow, so it sits behind and around the panel,
+   is never clipped by its scroll box, and takes no clicks. The repeated
+   attribute is only specificity, to beat the older panel shadow rules. */
+:root:not(#glow) [data-glow][data-glow][data-glow][data-glow][data-glow] {
+  box-shadow:
+    var(--float-shadow, 0 24px 48px -12px rgba(15, 23, 42, 0.32)),
+    0 0 calc(var(--glow-blur) + var(--glow-pulse) * var(--glow-blur-swing) + var(--glow-boost) * 16px)
+      calc(6px + var(--glow-boost) * 6px)
+      rgba(var(--glow-rgb), calc((var(--glow-rest) + var(--glow-pulse) * var(--glow-swing) + var(--glow-boost) * var(--glow-hover)) * var(--glow-open))) !important;
+  transition: --glow-boost 0.45s ease;
+}
+:root:not(#glow) [data-glow="idle"][data-glow][data-glow][data-glow][data-glow] {
+  --glow-rest: 0.07;
+}
+@media (hover: hover) {
+  [data-glow="active"]:hover { --glow-boost: 1; }
+}
+
+/* ---- Hover, pressed and selected surfaces ---------------------------------
+   One glow for every button, card button, tab and sidebar link: a drop-shadow
+   behind the element that eases in on hover. It is a filter, so it works on
+   top of whatever shadow the element already has and never moves the layout.
+   Only the hovered or selected element is affected, so a dense page stays
+   cheap. */
+@media (hover: hover) {
+  .neu :is(button, [role="button"], a.sidenav-link, summary):not(:disabled):not([aria-disabled="true"]):hover,
+  .kpi-card:is(button):hover,
+  .soft-link:hover {
+    filter: drop-shadow(0 0 10px rgba(var(--glow-rgb), var(--glow-lift)));
+  }
+}
+/* Pressed: the glow pulls in while the button sinks */
+.neu :is(button, [role="button"]):not(:disabled):is(:active, [data-pressed]) {
+  filter: drop-shadow(0 0 4px rgba(var(--glow-rgb), calc(var(--glow-lift) * 0.5)));
+}
+
+/* Selected or current: a steady glow that breathes. It follows real state
+   (aria-pressed, aria-selected, aria-current), and the selected look is still
+   there without it, so the glow is never the only sign. */
+.neu :is(
+  button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"],
+  .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500
+) {
+  --glow-pulse: 0.5;
+  filter: drop-shadow(0 0 calc(7px + var(--glow-pulse) * 6px) rgba(var(--glow-rgb), calc(0.22 + var(--glow-pulse) * 0.2)));
+  animation: glow-breathe var(--glow-pulse-time) ease-in-out infinite alternate;
+}
+@keyframes glow-breathe {
+  from { --glow-pulse: 0; }
+  to   { --glow-pulse: 1; }
+}
+
+/* Dropdowns and calendars: a still, soft glow behind the popup */
+.soft-pop {
+  filter: drop-shadow(0 0 14px rgba(var(--glow-rgb), calc(var(--glow-rest) * 0.9)));
+}
+
+/* Reduced motion: no breathing, a still glow instead */
+@media (prefers-reduced-motion: reduce) {
+  .neu :is(
+    button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"],
+    .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500
+  ) {
+    animation: none;
+  }
+  :root:not(#glow) [data-glow][data-glow][data-glow][data-glow][data-glow] {
+    --glow-pulse: 0.5;
+    transition: none;
+  }
+}
