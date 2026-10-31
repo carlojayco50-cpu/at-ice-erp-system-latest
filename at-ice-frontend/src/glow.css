@@ -133,3 +133,75 @@
   transform: none;
   box-shadow: var(--neu-inset) !important;
 }
+
+/* ---- Every summary card glows the same way --------------------------------
+   One rule set for KPI cards (components/Kpi.jsx) and the Admin Dashboard's own
+   stat cards, clickable or not. Hover: a cyan glow around the card, softer on a
+   card that does nothing when clicked and stronger on one that does. Pressed:
+   the card sinks. Selected: the steady breathing ring (rules above). Only real
+   hover devices get the hover glow, so nothing stays lit after a tap. */
+:root {
+  --glow-card: 0.5;        /* hover glow of a clickable card */
+  --glow-card-still: 0.28; /* hover glow of a card that is only informational */
+}
+.cp-dark, .neu-dark { --glow-card: 0.6; --glow-card-still: 0.34; }
+.kpi-card, .stat-card { transition: filter 0.25s ease-out, transform 0.16s ease-out, box-shadow 0.2s ease-out; }
+@media (hover: hover) {
+  .kpi-card:not(button):hover,
+  .stat-card:not([role="button"]):hover {
+    filter: drop-shadow(0 0 12px rgba(var(--glow-rgb), var(--glow-card-still)));
+  }
+  .neu button.kpi-card:not(.kpi-card-active):hover,
+  .stat-card[role="button"]:not([data-selected="true"]):hover {
+    filter: drop-shadow(0 0 14px rgba(var(--glow-rgb), var(--glow-card)));
+  }
+  .stat-card[role="button"]:not([data-selected="true"]):hover { transform: translateY(-1px); }
+}
+.stat-card[role="button"]:active {
+  transform: none;
+  filter: drop-shadow(0 0 4px rgba(var(--glow-rgb), calc(var(--glow-card) * 0.5)));
+}
+/* The Dashboard's selected stat card breathes like a selected KPI card */
+.stat-card[data-selected="true"] {
+  --glow-pulse: 0.5;
+  filter: drop-shadow(0 0 calc(7px + var(--glow-pulse) * 6px) rgba(var(--glow-rgb), calc(0.22 + var(--glow-pulse) * 0.2)));
+  animation: glow-breathe var(--glow-pulse-time) ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat-card[data-selected="true"] { animation: none; }
+}
+
+/* ---- Winning over the base hover rule --------------------------------------
+   index.css dims every button on hover with
+     #root :is(button, [role="button"], ...):hover { filter: brightness(.93) }
+   and an id selector beats the plain class rules above, so the glow never
+   showed on buttons and cards. These repeat the glow rules behind #root so
+   they win; the same filter property carries hover, pressed and selected, and
+   they are listed hover first, then pressed, then selected, so the later
+   state wins when two apply (a selected card that is hovered stays selected). */
+@media (hover: hover) {
+  #root .neu :is(button, [role="button"], a.sidenav-link, summary):not(:disabled):not([aria-disabled="true"]):hover {
+    filter: drop-shadow(0 0 10px rgba(var(--glow-rgb), var(--glow-lift)));
+  }
+  #root .neu button.kpi-card.kpi-card:not(:disabled):hover,
+  #root .neu .stat-card.stat-card[role="button"]:not([aria-disabled="true"]):not(:disabled):hover {
+    filter: drop-shadow(0 0 14px rgba(var(--glow-rgb), var(--glow-card)));
+  }
+}
+#root .neu :is(button, [role="button"]):not(:disabled):not([aria-disabled="true"]):is(:active, [data-pressed]) {
+  filter: drop-shadow(0 0 4px rgba(var(--glow-rgb), calc(var(--glow-card) * 0.5)));
+}
+#root .neu :is(
+  button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"],
+  .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500,
+  .stat-card[data-selected="true"]
+):is(:hover, :active) {
+  filter: drop-shadow(0 0 calc(7px + var(--glow-pulse) * 6px) rgba(var(--glow-rgb), calc(0.22 + var(--glow-pulse) * 0.2)));
+}
+
+/* The optional motion layer (ui-effects) sets its own card transition; keep the
+   glow easing in beside its lift */
+html[data-fx] .kpi-card.kpi-card,
+html[data-fx] .stat-card.stat-card {
+  transition: filter 0.25s ease-out, transform var(--fx-mid, 0.2s) var(--fx-ease, ease-out), box-shadow var(--fx-mid, 0.2s) var(--fx-ease, ease-out);
+}

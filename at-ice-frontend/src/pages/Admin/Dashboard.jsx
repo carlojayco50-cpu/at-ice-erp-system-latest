@@ -364,8 +364,11 @@ export default function Dashboard() {
         {/* PRIMARY METRIC: Total Sales (opens Receipts) */}
         <div
           onClick={() => navigate("/admin/receipts", { state: { dest: true } })}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/admin/receipts", { state: { dest: true } }); } }}
           title="Open Invoices"
-          className={`col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${activeCard ? "opacity-60" : ""}`}
+          className={`stat-card col-span-2 md:col-span-1 bg-white border border-black/[0.09] rounded-xl p-5 flex flex-col gap-1.5 cursor-pointer hover:shadow-md hover:-translate-y-px transition-all duration-150 ${activeCard ? "opacity-60" : ""}`}
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className={`w-7 h-7 rounded-lg grid place-items-center flex-shrink-0 ${TONES.emerald.badge}`}><KpiIcon name="wallet" /></span>
