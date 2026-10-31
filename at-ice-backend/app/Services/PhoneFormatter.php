@@ -16,6 +16,20 @@ class PhoneFormatter
 
     public const ANY_MESSAGE = 'Contact number must be +63 followed by 9 to 10 digits (mobile, or landline with area code).';
 
+    // Strict version for mobile fields: only digits with an optional leading + are
+    // accepted. Spaces, dashes and other characters are left in, so the MOBILE_REGEX
+    // check fails. The 10 digits alone, 09... and 63... all become +639XXXXXXXXX.
+    public static function mobile(?string $value): ?string
+    {
+        if ($value === null || ! preg_match('/^\+?\d+$/', $value)) {
+            return $value;
+        }
+
+        $number = self::normalize($value);
+
+        return preg_match('/^9\d{9}$/', $number) ? '+63'.$number : $number;
+    }
+
     // Removes spaces, dashes and brackets, then turns a leading 0 (or 63) into +63.
     // Anything else is returned cleaned but otherwise as it was.
     public static function normalize(?string $value): ?string

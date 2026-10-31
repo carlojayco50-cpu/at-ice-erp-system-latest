@@ -35,11 +35,8 @@ export function localDigits(stored) {
 export const PHONE_MAX_DIGITS = 10;
 
 // Cleans what the user types or pastes into the input: digits only, no leading 0,
-// no pasted 63 country code. It never cuts digits off the end: a number that is
-// too long stays visible (up to a sanity cap of 15) and the form rejects it, so a
-// digit can never be dropped silently. (A version that cut the number to 10 digits
-// here lost the 11th digit typed without any message.) The input has no maxLength
-// for the same reason.
+// no pasted 63 country code. It keeps up to 15 digits; PhoneInput then cuts the
+// result to PHONE_MAX_DIGITS, so nothing longer than a valid number is ever kept.
 export function typedDigits(input) {
   let d = String(input || "").replace(/\D/g, "");
   if (d.startsWith("0")) d = d.slice(1);

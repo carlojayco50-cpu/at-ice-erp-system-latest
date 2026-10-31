@@ -19,7 +19,7 @@ class PublicApplicationTest extends TestCase
     {
         return $overrides + [
             'name' => 'Maria Clara Reyes',
-            'phone' => '0917 123 4567',
+            'phone' => '09171234567',
             'email' => 'Maria@Example.com',
             'position_applied' => 'Driver',
             'street' => 'Rizal St',
@@ -134,7 +134,7 @@ class PublicApplicationTest extends TestCase
         Storage::fake('local');
         $this->post('/api/apply', $this->form([
             'birth_date' => '1995-04-12', 'sex' => 'female', 'civil_status' => 'single', 'nationality' => 'Filipino',
-            'emergency_name' => 'Ana Reyes', 'emergency_relationship' => 'Mother', 'emergency_phone' => '0918 765 4321',
+            'emergency_name' => 'Ana Reyes', 'emergency_relationship' => 'Mother', 'emergency_phone' => '09187654321',
             'education_level' => 'college_graduate', 'school' => 'BulSU', 'course' => 'BS Business Administration', 'year_graduated' => 2016,
             'work_history' => [['company' => 'Coca-Cola Bulacan', 'position' => 'Driver', 'from' => '2018-01', 'to' => '2024-06'], ['company' => '']],
             'license_restrictions' => ['B', 'B1'],

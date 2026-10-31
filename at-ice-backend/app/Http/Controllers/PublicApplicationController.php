@@ -53,7 +53,7 @@ class PublicApplicationController extends Controller
         }
 
         if ($request->filled('phone')) {
-            $request->merge(['phone' => PhoneFormatter::normalize((string) $request->phone)]);
+            $request->merge(['phone' => PhoneFormatter::mobile((string) $request->phone)]);
         }
         $request->merge(['email' => Applicant::normalizeEmail($request->input('email'))]);
         Biodata::clean($request);

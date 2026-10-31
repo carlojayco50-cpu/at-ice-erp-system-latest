@@ -90,7 +90,7 @@ class Biodata
             }
         }
         if ($request->filled('emergency_phone')) {
-            $merge['emergency_phone'] = PhoneFormatter::normalize((string) $request->emergency_phone);
+            $merge['emergency_phone'] = PhoneFormatter::mobile((string) $request->emergency_phone);
         }
         if ($request->has('personal_email')) {
             $merge['personal_email'] = filled($request->personal_email) ? mb_strtolower(trim($request->personal_email)) : null;

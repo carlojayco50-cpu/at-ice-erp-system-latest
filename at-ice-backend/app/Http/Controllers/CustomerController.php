@@ -30,13 +30,8 @@ class CustomerController extends Controller
     // 10 digits alone (what the form's input holds) get the +63 in front.
     private function cleanContactNumber(Request $request): void
     {
-        // Spaces, dashes and other characters are not cleaned away here: they fail the check.
-        if ($request->filled('contact_number') && preg_match('/^\+?\d+$/', (string) $request->contact_number)) {
-            $number = PhoneFormatter::normalize((string) $request->contact_number);
-            if (preg_match('/^9\d{9}$/', $number)) {
-                $number = '+63'.$number;
-            }
-            $request->merge(['contact_number' => $number]);
+        if ($request->filled('contact_number')) {
+            $request->merge(['contact_number' => PhoneFormatter::mobile((string) $request->contact_number)]);
         }
     }
 

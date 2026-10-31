@@ -579,7 +579,6 @@ export default function CustomersPage() {
                     onChange={(v) => setForm({ ...form, contact_number: v })}
                     placeholder="9171234567"
                     required={need("contact_number")}
-                    maxDigits={10}
                     invalid={!!liveContactError}
                     className="bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
                   />

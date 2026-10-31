@@ -70,7 +70,7 @@ class EmployeeController extends Controller
     private function cleanPhone(Request $request): void
     {
         if ($request->filled('phone')) {
-            $request->merge(['phone' => PhoneFormatter::normalize((string) $request->phone)]);
+            $request->merge(['phone' => PhoneFormatter::mobile((string) $request->phone)]);
         }
     }
 
