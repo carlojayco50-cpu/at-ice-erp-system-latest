@@ -91,7 +91,7 @@
     button[aria-pressed="true"], button[aria-selected="true"], [role="tab"][aria-selected="true"],
     .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500
   ) {
-    animation: none;
+    animation: none !important;
   }
   :root:not(#glow) [data-glow][data-glow][data-glow][data-glow][data-glow] {
     --glow-pulse: 0.5;
@@ -114,7 +114,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   [data-dest-pulse] {
-    animation: none;
+    animation: none !important;
     box-shadow: 0 0 0 2px rgba(var(--glow-rgb), 0.55), 0 0 24px 2px rgba(var(--glow-rgb), 0.3);
   }
 }
@@ -205,4 +205,79 @@
 html[data-fx] .kpi-card.kpi-card,
 html[data-fx] .stat-card.stat-card {
   transition: filter 0.25s ease-out, transform var(--fx-mid, 0.2s) var(--fx-ease, ease-out), box-shadow var(--fx-mid, 0.2s) var(--fx-ease, ease-out);
+}
+
+/* ---- Hero cards: no glow, no backlight, no coloured shadow -----------------
+   The cards keep their neumorphic shadows. The destination pulse is a small
+   scale change (lib/destination.js and lib/heroPulse.js), never a glow. These
+   rules come last so they win over the glow rules above. */
+.kpi-card, .stat-card,
+#root .neu button.kpi-card.kpi-card,
+#root .neu .stat-card.stat-card {
+  filter: none !important;
+}
+.kpi-card:not([data-hero-pulse]),
+.stat-card:not([data-hero-pulse]) {
+  animation: none !important;
+}
+
+/* The destination pulse: one heartbeat, about one second, scale only */
+@keyframes hero-beat {
+  0%, 100% { transform: scale(1); }
+  25%, 75% { transform: scale(1.025); }
+  50% { transform: scale(1); }
+}
+[data-dest-pulse],
+[data-hero-pulse] {
+  box-shadow: none;
+  animation: hero-beat 1s ease-in-out 1 !important;
+  scroll-margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-dest-pulse],
+  [data-hero-pulse] {
+    animation: none !important;
+  }
+}
+
+/* ---- Global: no glow, no backlight, anywhere ------------------------------
+   The glow rules above (buttons, tabs, sidebar links, dropdowns, fields and
+   selected states) are all switched off here, last in the cascade. Neumorphic
+   shadows stay where the design has them. Focus keeps a plain outline. */
+:root {
+  --glow-lift: 0;
+  --glow-rest: 0;
+  --glow-hover: 0;
+  --glow-card: 0;
+  --glow-card-still: 0;
+}
+[data-glow], [data-glow] * ,
+.soft-pop, .soft-link, .soft-link:hover {
+  filter: none !important;
+  box-shadow: var(--float-shadow-sm, none) !important;
+}
+#root :is(button, [role="button"], a, summary, [role="tab"], input, select, textarea, label, div),
+#root :is(button, [role="button"], a, summary, [role="tab"], input, select, textarea, label, div):hover,
+#root :is(button, [role="button"], a, summary, [role="tab"], input, select, textarea, label, div):active,
+#root :is(button, [role="button"], a, summary, [role="tab"], input, select, textarea, label, div):focus,
+#root :is(button, [role="button"], a, summary, [role="tab"], input, select, textarea, label, div):focus-visible {
+  filter: none !important;
+}
+#root :is([aria-pressed="true"], [aria-selected="true"], [aria-current], [data-selected="true"], [data-pressed], .kpi-card-active, .stat-card):not([data-hero-pulse]):not([data-dest-pulse]) {
+  animation: none !important;
+  filter: none !important;
+}
+#root :is(input, select, textarea):focus,
+#root :is(input, select, textarea):focus-visible {
+  box-shadow: none !important;
+  outline: 2px solid #94a3b8 !important;
+  outline-offset: 1px;
+}
+#root :is([data-dest-pulse], [data-hero-pulse]) {
+  box-shadow: none !important;
+}
+
+/* Sidebar links and the brand logo: no coloured drop-shadow */
+#root aside a, #root nav a, #root aside img, #root header img {
+  filter: none !important;
 }

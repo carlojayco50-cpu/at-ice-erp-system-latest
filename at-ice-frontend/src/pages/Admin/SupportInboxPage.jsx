@@ -388,10 +388,10 @@ export default function SupportInboxPage() {
   return (
     <AdminLayout pageTitle="Support Tickets" breadcrumb="CRM / Support Tickets">
       <KpiGrid cols={4}>
-        <KpiCard label="Open" icon="message" tone="amber" value={counts.open} sub="Not handled yet" bar={all.length ? counts.open / all.length : 0} onClick={() => setFilter("open")} active={filter === "open"} live={counts.open > 0} />
-        <KpiCard label="In progress" icon="clock" tone="cyan" value={counts.in_progress} sub="Being worked on" onClick={() => setFilter("in_progress")} active={filter === "in_progress"} />
-        <KpiCard label="Overdue" icon="alert" tone="rose" value={counts.overdue} sub={`Waiting over ${overdueHours} hours`} onClick={() => setFilter("overdue")} active={filter === "overdue"} live={counts.overdue > 0} />
-        <KpiCard label="Resolved this week" icon="check" tone="emerald" value={resolvedWeek.length} sub={avgHours == null ? "None in the last 7 days" : `Average ${avgHours}h to resolve`} onClick={() => setFilter("resolved")} active={filter === "resolved"} />
+        <KpiCard heroKey="open" label="Open" icon="message" tone="amber" value={counts.open} sub="Not handled yet" bar={all.length ? counts.open / all.length : 0} onClick={() => setFilter("open")} active={filter === "open"} live={counts.open > 0} />
+        <KpiCard heroKey="in_progress" label="In progress" icon="clock" tone="cyan" value={counts.in_progress} sub="Being worked on" onClick={() => setFilter("in_progress")} active={filter === "in_progress"} />
+        <KpiCard heroKey="overdue" label="Overdue" icon="alert" tone="rose" value={counts.overdue} sub={`Waiting over ${overdueHours} hours`} onClick={() => setFilter("overdue")} active={filter === "overdue"} live={counts.overdue > 0} />
+        <KpiCard heroKey="resolved" label="Resolved this week" icon="check" tone="emerald" value={resolvedWeek.length} sub={avgHours == null ? "None in the last 7 days" : `Average ${avgHours}h to resolve`} onClick={() => setFilter("resolved")} active={filter === "resolved"} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">

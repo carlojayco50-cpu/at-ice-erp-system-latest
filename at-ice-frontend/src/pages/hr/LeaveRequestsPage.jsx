@@ -187,11 +187,11 @@ export default function LeaveRequestsPage() {
   return (
     <HrLayout pageTitle="Leave Requests" breadcrumb="HRIS / Leave Requests">
       <KpiGrid cols={5}>
-        <KpiCard label="To review" icon="clock" tone="amber" value={counts.pending} sub="Waiting for your decision" bar={share(counts.pending)} onClick={() => setTab("pending")} active={tab === "pending"} live={counts.pending > 0} />
-        <KpiCard label="Approved" icon="check" tone="emerald" value={counts.approved} sub={`${Math.round(share(counts.approved) * 100)}% of requests`} bar={share(counts.approved)} onClick={() => setTab("approved")} active={tab === "approved"} />
-        <KpiCard label="Rejected" icon="x" tone="rose" value={counts.rejected} sub="With a reason given" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
+        <KpiCard heroKey="pending" label="To review" icon="clock" tone="amber" value={counts.pending} sub="Waiting for your decision" bar={share(counts.pending)} onClick={() => setTab("pending")} active={tab === "pending"} live={counts.pending > 0} />
+        <KpiCard heroKey="approved" label="Approved" icon="check" tone="emerald" value={counts.approved} sub={`${Math.round(share(counts.approved) * 100)}% of requests`} bar={share(counts.approved)} onClick={() => setTab("approved")} active={tab === "approved"} />
+        <KpiCard heroKey="rejected" label="Rejected" icon="x" tone="rose" value={counts.rejected} sub="With a reason given" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
         <KpiCard label="On leave today" icon="calendar" tone="violet" value={onLeaveToday} sub="Approved leave covering today" />
-        <KpiCard label="All requests" icon="file" tone="cyan" value={counts.all} sub="Filed by employees" onClick={() => setTab("all")} active={tab === "all"} />
+        <KpiCard heroKey="all" label="All requests" icon="file" tone="cyan" value={counts.all} sub="Filed by employees" onClick={() => setTab("all")} active={tab === "all"} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">

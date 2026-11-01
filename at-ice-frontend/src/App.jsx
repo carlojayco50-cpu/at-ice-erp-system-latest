@@ -8,6 +8,8 @@ import ActionGuard from './components/ActionGuard'
 import AttachmentViewer from './components/AttachmentViewer'
 import OverflowTitle from './components/OverflowTitle'
 import { DestinationWatcher } from './lib/destination'
+import { installHeroPulse } from './lib/heroPulse'
+installHeroPulse()
 
 // -- General Pages
 import LoginPage from './pages/LoginPage'

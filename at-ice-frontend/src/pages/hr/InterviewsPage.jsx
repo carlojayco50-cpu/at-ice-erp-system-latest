@@ -515,11 +515,11 @@ export default function InterviewsPage() {
         return (
           <>
             <KpiGrid cols={5}>
-              <KpiCard label="Applicants" icon="users" tone="cyan" value={counts.all} sub={`${viaQr} applied through the QR form`} onClick={() => setTab("all")} active={tab === "all"} />
+              <KpiCard heroKey="all" label="Applicants" icon="users" tone="cyan" value={counts.all} sub={`${viaQr} applied through the QR form`} onClick={() => setTab("all")} active={tab === "all"} />
               <KpiCard label="Upcoming interviews" icon="calendar" tone="violet" value={upcomingCount} sub="Scheduled and not yet held" live={upcomingCount > 0} />
-              <KpiCard label="Interviewed" icon="message" tone="amber" value={counts.interviewed} sub="Waiting for a decision" bar={share(counts.interviewed)} onClick={() => setTab("interviewed")} active={tab === "interviewed"} />
-              <KpiCard label="Hired" icon="check" tone="emerald" value={counts.hired} sub={decided ? `${Math.round((counts.hired / decided) * 100)}% of decided applicants` : "No decisions yet"} bar={decided ? counts.hired / decided : 0} onClick={() => setTab("hired")} active={tab === "hired"} />
-              <KpiCard label="Not hired" icon="x" tone="rose" value={counts.rejected} sub="Closed applications" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
+              <KpiCard heroKey="interviewed" label="Interviewed" icon="message" tone="amber" value={counts.interviewed} sub="Waiting for a decision" bar={share(counts.interviewed)} onClick={() => setTab("interviewed")} active={tab === "interviewed"} />
+              <KpiCard heroKey="hired" label="Hired" icon="check" tone="emerald" value={counts.hired} sub={decided ? `${Math.round((counts.hired / decided) * 100)}% of decided applicants` : "No decisions yet"} bar={decided ? counts.hired / decided : 0} onClick={() => setTab("hired")} active={tab === "hired"} />
+              <KpiCard heroKey="rejected" label="Not hired" icon="x" tone="rose" value={counts.rejected} sub="Closed applications" bar={share(counts.rejected)} onClick={() => setTab("rejected")} active={tab === "rejected"} />
             </KpiGrid>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
               <StatusBreakdown title="Applicants by position" items={positions} empty="No applicants yet. Share the Application QR so people can apply." />

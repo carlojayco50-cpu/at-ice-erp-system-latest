@@ -132,8 +132,8 @@ export default function CustomerReceipts() {
             return (
               <KpiGrid cols={4}>
                 <KpiCard label="Balance due" icon="wallet" tone="amber" money value={summary.balance} sub={summary.balance > 0 ? "Unpaid and overdue invoices" : "No balance"} bar={billed ? summary.balance / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
-                <KpiCard label="Overdue" icon="alert" tone="rose" money value={summary.overdueAmount} sub={`${summary.overdueCount} invoice${summary.overdueCount === 1 ? "" : "s"}`} bar={billed ? summary.overdueAmount / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
-                <KpiCard label="Paid" icon="check" tone="emerald" money value={summary.paidAmount} sub={`${summary.paidCount} invoice${summary.paidCount === 1 ? "" : "s"}`} bar={billed ? summary.paidAmount / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
+                <KpiCard heroKey="overdue" label="Overdue" icon="alert" tone="rose" money value={summary.overdueAmount} sub={`${summary.overdueCount} invoice${summary.overdueCount === 1 ? "" : "s"}`} bar={billed ? summary.overdueAmount / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
+                <KpiCard heroKey="paid" label="Paid" icon="check" tone="emerald" money value={summary.paidAmount} sub={`${summary.paidCount} invoice${summary.paidCount === 1 ? "" : "s"}`} bar={billed ? summary.paidAmount / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
                 <KpiCard label="Proofs under review" icon="file" tone="violet" value={proofsWaiting} sub={proofsWaiting ? "We are checking your payment" : "Nothing waiting"} live={proofsWaiting > 0} />
               </KpiGrid>
             );

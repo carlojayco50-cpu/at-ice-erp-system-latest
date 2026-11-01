@@ -194,9 +194,9 @@ export default function ReceiptsPage() {
         const n = (s) => receipts.filter((r) => r.payment_status === s).length;
         return (
           <KpiGrid cols={5}>
-            <KpiCard label="Collected" icon="wallet" tone="emerald" money value={Number(summary.total_sales || 0)} sub={`${n("paid")} paid invoices`} bar={billed ? Number(summary.total_sales || 0) / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
-            <KpiCard label="Unpaid" icon="clock" tone="amber" money value={Number(summary.total_unpaid || 0)} sub={`${n("unpaid")} within the due days`} bar={billed ? Number(summary.total_unpaid || 0) / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
-            <KpiCard label="Overdue" icon="alert" tone="rose" money value={Number(summary.total_overdue || 0)} sub={`${n("overdue")} past the due days`} bar={billed ? Number(summary.total_overdue || 0) / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
+            <KpiCard heroKey="paid" label="Collected" icon="wallet" tone="emerald" money value={Number(summary.total_sales || 0)} sub={`${n("paid")} paid invoices`} bar={billed ? Number(summary.total_sales || 0) / billed : 0} onClick={() => setFilter("paid")} active={filter === "paid"} />
+            <KpiCard heroKey="unpaid" label="Unpaid" icon="clock" tone="amber" money value={Number(summary.total_unpaid || 0)} sub={`${n("unpaid")} within the due days`} bar={billed ? Number(summary.total_unpaid || 0) / billed : 0} onClick={() => setFilter("unpaid")} active={filter === "unpaid"} />
+            <KpiCard heroKey="overdue" label="Overdue" icon="alert" tone="rose" money value={Number(summary.total_overdue || 0)} sub={`${n("overdue")} past the due days`} bar={billed ? Number(summary.total_overdue || 0) / billed : 0} onClick={() => setFilter("overdue")} active={filter === "overdue"} />
             <KpiCard label="Invoices" icon="receipt" tone="cyan" value={Number(summary.receipt_count || 0)} sub={`${new Set(receipts.map((r) => r.customer_id)).size} customers billed`} />
             <KpiCard label="Proofs to review" icon="file" tone="violet" value={proofs.length} sub={proofs.length ? "Waiting for your approval" : "Nothing waiting"} live={proofs.length > 0} />
           </KpiGrid>

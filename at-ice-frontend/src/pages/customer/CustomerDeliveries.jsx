@@ -149,10 +149,10 @@ export default function CustomerDeliveries() {
       ) : (
         <>
           <KpiGrid cols={4}>
-            <KpiCard label="Deliveries" icon="truck" tone="cyan" value={counts.all || 0} sub="All your deliveries" onClick={() => setFilter("all")} active={filter === "all"} />
-            <KpiCard label="Pending" icon="clock" tone="amber" value={counts.pending || 0} sub="Scheduled, not yet on the road" bar={counts.all ? (counts.pending || 0) / counts.all : 0} onClick={() => setFilter("pending")} active={filter === "pending"} />
+            <KpiCard heroKey="all" label="Deliveries" icon="truck" tone="cyan" value={counts.all || 0} sub="All your deliveries" onClick={() => setFilter("all")} active={filter === "all"} />
+            <KpiCard heroKey="pending" label="Pending" icon="clock" tone="amber" value={counts.pending || 0} sub="Scheduled, not yet on the road" bar={counts.all ? (counts.pending || 0) / counts.all : 0} onClick={() => setFilter("pending")} active={filter === "pending"} />
             <KpiCard label="In transit" icon="truck" tone="cyan" value={counts.in_transit || 0} sub="On the way to you" live={(counts.in_transit || 0) > 0} bar={counts.all ? (counts.in_transit || 0) / counts.all : 0} onClick={() => setFilter("in_transit")} active={filter === "in_transit"} />
-            <KpiCard label="Delivered" icon="check" tone="emerald" value={counts.delivered || 0} sub="Confirmed with a photo proof" bar={counts.all ? (counts.delivered || 0) / counts.all : 0} onClick={() => setFilter("delivered")} active={filter === "delivered"} />
+            <KpiCard heroKey="delivered" label="Delivered" icon="check" tone="emerald" value={counts.delivered || 0} sub="Confirmed with a photo proof" bar={counts.all ? (counts.delivered || 0) / counts.all : 0} onClick={() => setFilter("delivered")} active={filter === "delivered"} />
           </KpiGrid>
           <div className="bg-white border border-black/[0.09] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3">
             <FilterSelect label="Status" value={filter} onChange={setFilter}

@@ -1174,7 +1174,7 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
    One card look; a card that filters the list is pressed in with a cyan ring
    while its filter is on (never painted solid, so its label stays readable). */
 .neu .kpi-card { border-color: transparent !important; border-radius: var(--neu-radius) !important; box-shadow: var(--neu-raised) !important; }
-.neu .kpi-card-active { box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(6, 182, 212, 0.65) !important; }
+.neu .kpi-card-active { box-shadow: var(--neu-inset-sm) !important; }
 .neu .insight-panel { border-color: transparent !important; border-radius: var(--neu-radius) !important; box-shadow: var(--neu-raised) !important; }
 
 /* Any box that holds a table scrolls sideways instead of cutting off the right edge */
@@ -1182,3 +1182,4 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 :where(div):has(> table) > table { min-width: 100%; }
 /* Cards in the page column keep their height and scroll with the page, not shrink */
 .ice-main > * { flex-shrink: 0; }
+

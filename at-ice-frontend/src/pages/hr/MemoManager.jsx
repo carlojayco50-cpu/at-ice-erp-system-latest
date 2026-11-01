@@ -449,9 +449,9 @@ export default function MemoManager() {
       }
     >
       <KpiGrid cols={4}>
-        <KpiCard label="Drafts to review" icon="file" tone="amber" value={counts.draft} sub="Made from missed Time Outs and saved drafts" onClick={() => setStatus("draft")} active={status === "draft"} live={counts.draft > 0} />
-        <KpiCard label="Awaiting acknowledgment" icon="clock" tone="cyan" value={counts.sent} sub="Sent to the employee's account" onClick={() => setStatus("sent")} active={status === "sent"} />
-        <KpiCard label="Awaiting sign-off" icon="alert" tone="rose" value={counts.awaiting_physical} sub="Employee must sign at the HR office" onClick={() => setStatus("awaiting_physical")} active={status === "awaiting_physical"} live={counts.awaiting_physical > 0} />
+        <KpiCard heroKey="draft" label="Drafts to review" icon="file" tone="amber" value={counts.draft} sub="Made from missed Time Outs and saved drafts" onClick={() => setStatus("draft")} active={status === "draft"} live={counts.draft > 0} />
+        <KpiCard heroKey="sent" label="Awaiting acknowledgment" icon="clock" tone="cyan" value={counts.sent} sub="Sent to the employee's account" onClick={() => setStatus("sent")} active={status === "sent"} />
+        <KpiCard heroKey="awaiting_physical" label="Awaiting sign-off" icon="alert" tone="rose" value={counts.awaiting_physical} sub="Employee must sign at the HR office" onClick={() => setStatus("awaiting_physical")} active={status === "awaiting_physical"} live={counts.awaiting_physical > 0} />
         <KpiCard label="Pending investigation" icon="shield" tone="violet" value={investigations.length} sub={investigations.length ? investigations.map((e) => e.employee_id).slice(0, 3).join(", ") : "No open investigations"} />
       </KpiGrid>
 
