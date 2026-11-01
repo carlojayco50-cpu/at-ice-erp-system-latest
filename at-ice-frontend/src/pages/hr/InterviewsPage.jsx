@@ -584,7 +584,7 @@ export default function InterviewsPage() {
 
         {/* TABLE */}
         <div className="mt-3 border-t border-black/[0.09]">
-          {loading ? (
+          {loading && applicants.length === 0 ? (
             <SkeletonList />
           ) : error ? (
             <div className="px-[18px] py-8 text-center text-[12px] text-red-600">{error}</div>

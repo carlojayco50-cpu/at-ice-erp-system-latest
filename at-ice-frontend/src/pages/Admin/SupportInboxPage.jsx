@@ -419,7 +419,7 @@ export default function SupportInboxPage() {
 
           {error && <div className="px-5 py-3 text-[12px] text-red-600 bg-red-50 border-b border-red-200">{error}</div>}
 
-          {loading ? (
+          {loading && all.length === 0 ? (
             <SkeletonList />
           ) : rows.length === 0 ? (
             <EmptyState icon="bell" title={filter === "active" ? "No open tickets" : "No tickets here"}>
