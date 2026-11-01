@@ -11,7 +11,6 @@ import { startLiveFeed } from './lib/live'
 import { installAutoCapitalize } from './lib/autoCapitalize'
 import { installAutoGrow } from './lib/autoGrow'
 import { installEffects } from './lib/fx'
-import { installModalGlow } from './lib/modalGlow'
 
 installSessionExpiryHandler()
 installAutoCapitalize()
@@ -20,7 +19,6 @@ installPressFeedback()
 startLiveFeed()
 // Optional motion layer (src/ui-effects/, switch in effectsConfig.js)
 installEffects()
-installModalGlow()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

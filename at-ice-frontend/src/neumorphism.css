@@ -637,3 +637,62 @@ select:not([multiple], [size]:not([size="1"]), [data-native]) {
     min-width: 44px;
   }
 }
+
+/* Dialog wrappers: a field, title or footer inside a modal sits on the modal's
+   own neumorphic surface. The plain bordered boxes that wrap them are removed.
+   Inputs, selects and their pressed-in field containers keep their look. */
+.fixed.inset-0 :is(div, label).border[class*="border-black"]:not(:has(> :is(input, select, textarea, button))) {
+  border-color: transparent !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: none !important;
+}
+
+/* Every dialog and popup panel is neumorphic: the same solid surface as the
+   page, one raised panel, no white card and no bordered boxes inside it.
+   Inputs, selects, textareas and buttons keep their own look. */
+.fixed.inset-0 > :is(div, form, section):is(.bg-white, [class*="bg-white/"]),
+.fixed.inset-0 > :is(div, form, section) > :is(div, form, section):is(.bg-white, [class*="bg-white/"]) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  border-radius: var(--neu-radius) !important;
+  box-shadow: var(--float-shadow) !important;
+}
+.fixed.inset-0 :is(div, label, header, section, footer):is(.bg-white, [class*="bg-white/"], [class*="border-black"]):not(input):not(select):not(textarea):not(button):not(:has(> :is(input, select, textarea))) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Captions and wrappers inside a dialog that hold no field carry no shadow:
+   they only showed as thin boxes around each label. Fields keep their own. */
+.fixed.inset-0 :is(div, label, p, span):not(:has(input, select, textarea, button, [role="switch"])) {
+  box-shadow: none !important;
+}
+
+/* A field row inside a dialog (its caption plus its input) is a plain layout
+   wrapper: it carries no floating shadow. The input keeps its own. */
+.fixed.inset-0 div:has(> label) {
+  box-shadow: none !important;
+}
+
+/* Text-type controls are recessed into their surface, the way the login fields
+   are: the same inset shadow everywhere, no raised boxes, no borders. A bare
+   field inside a search or icon row is left out: the row owns the one dent. */
+.neu :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]), select, textarea):not(:is(div, span, label).flex.items-center.border > :is(input, select)) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset) !important;
+}
+
+/* Confirmation dialogs are one raised panel: the logout card, the ActionGuard
+   card (role="alertdialog") and the page dialogs (a .fixed.inset-0 overlay's
+   panel). The title, the text, a bold name inside the text and the button row
+   are plain layout on that panel, so they carry no surface of their own.
+   The buttons, fields and the icon keep their own look. */
+:is([role="alertdialog"], .fixed.inset-0 > :is(div, form)) :is(h1, h2, h3, h4, p, b, strong, span, label):not(button, input, select, textarea, [role="switch"], .guard-icon),
+:is([role="alertdialog"], .fixed.inset-0 > :is(div, form)) :is(div.guard-context, .guard-icon *),
+:is([role="alertdialog"], .fixed.inset-0 > :is(div, form)) div:has(> button) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}

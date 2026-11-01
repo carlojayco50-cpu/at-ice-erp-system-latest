@@ -1,7 +1,7 @@
-/* Ambient glow and breathing light.
-   Soft diffused light behind dialogs and interactive surfaces, in the app's
-   cyan. Everything reads the tokens below, so a theme or a new component
-   changes the look in one place. Loaded after the neumorphism styles. */
+/* No glow. Surfaces are neumorphic: raised, inset or flat shadows only. What
+   remains here is the cyan focus ring tokens, the destination lift, and the
+   global switch-off of every glow, filter and backlight. Loaded after the
+   neumorphism styles. */
 
 /* The two animated values. Registered so the browser can animate them. */
 @property --glow-pulse { syntax: "<number>"; inherits: false; initial-value: 0; }
@@ -22,27 +22,6 @@
 .neu-dark {
   --glow-rest: 0.36;
   --glow-lift: 0.45;
-}
-
-/* ---- Dialogs, drawers and confirmation boxes ------------------------------
-   Marked by lib/modalGlow.js: data-glow="active" on the topmost one (pulses),
-   "idle" on any under it (a quiet, still glow). It is a wide box-shadow added
-   after the panel's own drop shadow, so it sits behind and around the panel,
-   is never clipped by its scroll box, and takes no clicks. The repeated
-   attribute is only specificity, to beat the older panel shadow rules. */
-:root:not(#glow) [data-glow][data-glow][data-glow][data-glow][data-glow] {
-  box-shadow:
-    var(--float-shadow, 0 24px 48px -12px rgba(15, 23, 42, 0.32)),
-    0 0 calc(var(--glow-blur) + var(--glow-pulse) * var(--glow-blur-swing) + var(--glow-boost) * 16px)
-      calc(6px + var(--glow-boost) * 6px)
-      rgba(var(--glow-rgb), calc((var(--glow-rest) + var(--glow-pulse) * var(--glow-swing) + var(--glow-boost) * var(--glow-hover)) * var(--glow-open))) !important;
-  transition: --glow-boost 0.45s ease;
-}
-:root:not(#glow) [data-glow="idle"][data-glow][data-glow][data-glow][data-glow] {
-  --glow-rest: 0.07;
-}
-@media (hover: hover) {
-  [data-glow="active"]:hover { --glow-boost: 1; }
 }
 
 /* ---- Hover, pressed and selected surfaces ---------------------------------
@@ -82,7 +61,7 @@
 /* Dropdowns and calendars: a still, soft glow behind the popup. A box-shadow, not a
    filter, so it costs nothing extra while the page scrolls. */
 .soft-pop {
-  box-shadow: var(--float-shadow-sm), 0 0 18px rgba(var(--glow-rgb), calc(var(--glow-rest) * 0.6));
+  box-shadow: var(--float-shadow-sm);
 }
 
 /* Reduced motion: no breathing, a still glow instead */
@@ -92,10 +71,6 @@
     .kpi-card-active, [aria-current="true"], [aria-current="page"], aside nav .border-l-2.border-cyan-500
   ) {
     animation: none !important;
-  }
-  :root:not(#glow) [data-glow][data-glow][data-glow][data-glow][data-glow] {
-    --glow-pulse: 0.5;
-    transition: none;
   }
 }
 
@@ -250,7 +225,6 @@ html[data-fx] .stat-card.stat-card {
   --glow-card: 0;
   --glow-card-still: 0;
 }
-[data-glow], [data-glow] * ,
 .soft-pop, .soft-link, .soft-link:hover {
   filter: none !important;
   box-shadow: var(--float-shadow-sm, none) !important;
@@ -266,11 +240,11 @@ html[data-fx] .stat-card.stat-card {
   animation: none !important;
   filter: none !important;
 }
+/* No box drawn inside a field when it is clicked: the field keeps its inset,
+   and the focus ring is drawn by its row (or by controls.css on a bare field). */
 #root :is(input, select, textarea):focus,
 #root :is(input, select, textarea):focus-visible {
-  box-shadow: none !important;
-  outline: 2px solid #94a3b8 !important;
-  outline-offset: 1px;
+  outline: none !important;
 }
 #root :is([data-dest-pulse], [data-hero-pulse]) {
   box-shadow: none !important;

@@ -100,12 +100,18 @@
     filter: drop-shadow(0 0 7px rgba(var(--glow-rgb), calc(var(--glow-lift) * 0.7)));
   }
 }
-.neu :is(.ice-main, .ice-scope) :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea):focus-visible:not([class*=" border-red"], [class^="border-red"]) {
+/* A bare field (not inside a search row) shows its focus as a plain 2px ring
+   on its own inset. The :not(#search-row) only adds specificity so this beats
+   the field inset rule in neumorphism.css; #search-row never matches. */
+.neu :is(.ice-main, .ice-scope) :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea):not(#search-row):focus:not([class*=" border-red"], [class^="border-red"]):not(:is(div, span, label).flex.items-center.border > *) {
   outline: none;
-  box-shadow: var(--neu-inset), 0 0 0 2px rgba(var(--glow-rgb), 0.7), 0 0 16px 2px rgba(var(--glow-rgb), 0.35);
+  box-shadow: var(--neu-inset), 0 0 0 2px rgba(var(--glow-rgb), 0.7) !important;
 }
-.neu :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)):focus-within {
-  box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(var(--glow-rgb), 0.7), 0 0 16px 2px rgba(var(--glow-rgb), 0.35) !important;
+/* Focus on a search or icon row: the row keeps its one inset and gets a plain
+   2px ring. The :not(#search-row) only adds specificity so this beats the row
+   rule in neumorphism.css; #search-row never matches. */
+.neu :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)):focus-within:not(#search-row) {
+  box-shadow: var(--neu-inset-sm), 0 0 0 2px rgba(var(--glow-rgb), 0.7) !important;
 }
 @media (prefers-reduced-motion: reduce) {
   :is(.ice-main, .ice-scope) :is(input, select, textarea, button) { transition: none; }
