@@ -13,7 +13,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-const PULSE_MS = 2600;
+const PULSE_MS = 450; // the lift is 400 ms; the attribute goes once it has ended
 
 // The element that holds the records for a card: data-dest by id, or the card
 // around the page's first table.
@@ -28,20 +28,42 @@ export function findDestination(id) {
   return table ? table.closest(".rounded-xl, .insight-panel") || table : null;
 }
 
-// Scroll to the element and pulse it. Calling it again restarts the pulse.
-export function pulseDestination(el) {
-  if (!el) return;
+// Run fn once the element is in view. If it is already in view, fn runs now;
+// otherwise the page scrolls and fn runs when the scroll ends (or after 900 ms
+// if no scroll event comes), so the animation never plays while the element
+// is still sliding through the viewport.
+export function runWhenInView(el, fn) {
+  const r = el.getBoundingClientRect();
+  if (r.top >= 0 && r.bottom <= window.innerHeight) return fn();
   el.scrollIntoView({ behavior: "smooth", block: "start" });
-  el.removeAttribute("data-dest-pulse");
-  void el.offsetWidth; // restart the animation
-  el.setAttribute("data-dest-pulse", "");
-  window.clearTimeout(el._destTimer);
-  el._destTimer = window.setTimeout(() => el.removeAttribute("data-dest-pulse"), PULSE_MS);
+  let fired = false;
+  const go = () => {
+    if (fired) return;
+    fired = true;
+    window.removeEventListener("scrollend", go);
+    window.clearTimeout(backstop);
+    fn();
+  };
+  const backstop = window.setTimeout(go, 900);
+  window.addEventListener("scrollend", go);
 }
 
-// Same page: give the filter a moment to render, then show the result.
+// Pulse the element once. Calling it again restarts the pulse.
+export function pulseDestination(el) {
+  if (!el) return;
+  runWhenInView(el, () => {
+    el.removeAttribute("data-dest-pulse");
+    void el.offsetWidth; // restart the animation
+    el.setAttribute("data-dest-pulse", "");
+    window.clearTimeout(el._destTimer);
+    el._destTimer = window.setTimeout(() => el.removeAttribute("data-dest-pulse"), PULSE_MS);
+  });
+}
+
+// Same page: the filter's list is committed by React before the next frame,
+// so pulse on that frame instead of after a fixed delay.
 export function focusDestination(id) {
-  window.setTimeout(() => pulseDestination(findDestination(id)), 140);
+  requestAnimationFrame(() => pulseDestination(findDestination(id)));
 }
 
 // Other page: wait (up to 5 seconds) for the list to exist and have rows.
@@ -54,7 +76,7 @@ function waitForDestination(id, done) {
   if (now) return done(now), () => {};
   const watch = new MutationObserver(() => {
     const el = ready();
-    if (el) { cleanup(); window.setTimeout(() => done(findDestination(id)), 250); }
+    if (el) { cleanup(); done(el); }
   });
   const cleanup = () => { watch.disconnect(); window.clearTimeout(giveUp); };
   const giveUp = window.setTimeout(cleanup, 5000);

@@ -222,15 +222,14 @@ html[data-fx] .stat-card.stat-card {
 }
 
 /* The destination pulse: one heartbeat, about one second, scale only */
-@keyframes hero-beat {
-  0%, 100% { transform: scale(1); }
-  25%, 75% { transform: scale(1.025); }
-  50% { transform: scale(1); }
+@keyframes hero-lift {
+  from { transform: translateY(-3px); }
+  to { transform: translateY(0); }
 }
 [data-dest-pulse],
 [data-hero-pulse] {
   box-shadow: none;
-  animation: hero-beat 1s ease-in-out 1 !important;
+  animation: hero-lift 400ms ease-out 1 both !important;
   scroll-margin-top: 12px;
 }
 @media (prefers-reduced-motion: reduce) {
