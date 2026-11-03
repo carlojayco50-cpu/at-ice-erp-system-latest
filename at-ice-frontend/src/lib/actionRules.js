@@ -41,6 +41,15 @@ const CONSEQUENCE = [
   [w("create|add|submit|request|log|file|book|post|generate|send|upload|apply"), "It is saved and sent right away."],
 ];
 
+// Approve says what is approved and what happens next, per page:
+// [path, title (null: from the label), message]
+const APPROVALS = [
+  ["/admin/receipts", "Approve payment proof?", "The invoice is marked Paid and the customer sees the payment as received."],
+  ["/admin/stock-out-approvals", "Approve parts request?", "It moves to To release. The parts leave stock only when they are released."],
+  ["/hr/timesheets", null, "The selected timesheets are approved for this pay period and wait for Admin to pay them."],
+];
+const approvalFor = (verb) => (/^approve/.test(verb) ? APPROVALS.find(([p]) => window.location.pathname.startsWith(p)) : null);
+
 // The hover reminder for a label (null: none)
 const TIPS = [
   [w("view|open|preview|details"), "Opens the details. Nothing is changed."],
@@ -132,12 +141,13 @@ export function confirmationFor(el) {
   if (!wanted) return null;
 
   const context = contextOf(el);
-  const consequence = CONSEQUENCE.find(([re]) => re.test(verb))?.[1] || "This cannot be undone by clicking again.";
+  const approval = approvalFor(verb);
+  const consequence = approval?.[2] || CONSEQUENCE.find(([re]) => re.test(verb))?.[1] || "This cannot be undone by clicking again.";
   return {
-    title: el.getAttribute("data-confirm-title") || `${label.replace(/[.…]+$/, "")}?`,
+    title: el.getAttribute("data-confirm-title") || approval?.[1] || `${label.replace(/[.…]+$/, "")}?`,
     message: explicit || consequence,
     context: explicit ? "" : context,
-    confirmLabel: label.length > 28 ? "Yes, continue" : label,
+    confirmLabel: approval ? "Approve" : label.length > 28 ? "Yes, continue" : label,
     danger: DANGER.test(verb),
   };
 }

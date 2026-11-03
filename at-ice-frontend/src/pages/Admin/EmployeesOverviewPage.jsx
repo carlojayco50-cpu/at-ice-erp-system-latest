@@ -6,6 +6,7 @@ import { useLiveTick } from "../../lib/live";
 import Pagination from "../../components/Pagination";
 import { usePagination } from "../../lib/usePagination";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { roleBadge, roleTone, SHIFT_TONE } from "../../lib/roleColors";
 import { StatusBreakdown } from "../../components/Insight";
 import { Icon } from "../../components/icons";
 
@@ -13,14 +14,7 @@ const API_BASE = "/api";
 
 const SearchIcon = () => <Icon name="search" size={14} />;
 
-const SUB_ROLE_STYLE = {
-  checker:     "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
-  salesman:    "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  maintenance: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  driver:      "bg-violet-500/10 text-violet-600 border-violet-500/20",
-  guard:       "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  bagger:      "bg-orange-500/10 text-orange-600 border-orange-500/20",
-};
+// Role colors: lib/roleColors.js (the same in every widget and table).
 
 // Guards and Baggers have no account: their Position is the role.
 function displayRole(emp) {
@@ -101,9 +95,9 @@ export default function EmployeesOverviewPage() {
   const dayShift = employees.filter((e) => shiftKind(e) === "day").length;
   const nightShift = employees.filter((e) => shiftKind(e) === "night").length;
   const share = (n) => (employees.length ? n / employees.length : 0);
-  const ROLE_TONES = ["cyan", "emerald", "violet", "amber", "rose", "slate"];
-  const byRole = roles.map((r, i) => ({ key: r || "none", label: ROLE_LABEL(r), count: employees.filter((e) => (displayRole(e) || "") === r).length, tone: ROLE_TONES[i % ROLE_TONES.length] }));
-  const byPosition = positions.map((p, i) => ({ key: p, label: p, count: employees.filter((e) => e.position === p).length, tone: ROLE_TONES[(i + 2) % ROLE_TONES.length] }));
+  // Each role and position keeps its own color (lib/roleColors.js), never one picked by list order.
+  const byRole = roles.map((r) => ({ key: r || "none", label: ROLE_LABEL(r), count: employees.filter((e) => (displayRole(e) || "") === r).length, tone: roleTone(r) }));
+  const byPosition = positions.map((p) => ({ key: p, label: p, count: employees.filter((e) => e.position === p).length, tone: roleTone(p) }));
 
   // A card or chart row sets (or, when clicked again, clears) one filter, keeps the
   // others, and scrolls the list into view inside the page's own scroll area.
@@ -117,10 +111,10 @@ export default function EmployeesOverviewPage() {
     <AdminLayout pageTitle="Employees" breadcrumb="Employees">
       <KpiGrid cols={5}>
         <KpiCard label="Active staff" icon="users" tone="cyan" value={employees.length} sub={`${positions.length} positions`} />
-        <KpiCard label="With a login" icon="key" tone="emerald" value={withLogin} sub="System accounts" bar={share(withLogin)} />
-        <KpiCard label="Attendance only" icon="shield" tone="violet" value={employees.length - withLogin} sub="Guards and Baggers" bar={share(employees.length - withLogin)} />
-        <KpiCard label="Day shift" icon="clock" tone="amber" value={dayShift} sub={`${Math.round(share(dayShift) * 100)}% of staff`} bar={share(dayShift)} onClick={() => pick("shift", "day")} active={filter.shift === "day"} />
-        <KpiCard label="Night shift" icon="clock" tone="slate" value={nightShift} sub={`${Math.round(share(nightShift) * 100)}% of staff`} bar={share(nightShift)} onClick={() => pick("shift", "night")} active={filter.shift === "night"} />
+        <KpiCard label="With a login" icon="key" tone="blue" value={withLogin} sub="System accounts" bar={share(withLogin)} />
+        <KpiCard label="Attendance only" icon="shield" tone="slate" value={employees.length - withLogin} sub="Guards and Baggers" bar={share(employees.length - withLogin)} />
+        <KpiCard label="Day shift" icon="clock" tone={SHIFT_TONE.day} value={dayShift} sub={`${Math.round(share(dayShift) * 100)}% of staff`} bar={share(dayShift)} onClick={() => pick("shift", "day")} active={filter.shift === "day"} />
+        <KpiCard label="Night shift" icon="clock" tone={SHIFT_TONE.night} value={nightShift} sub={`${Math.round(share(nightShift) * 100)}% of staff`} bar={share(nightShift)} onClick={() => pick("shift", "night")} active={filter.shift === "night"} />
       </KpiGrid>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
@@ -170,7 +164,7 @@ export default function EmployeesOverviewPage() {
             )}
           </select>
           {filtering && (
-            <button type="button" onClick={() => setFilter(NO_FILTER)} className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">Clear filters</button>
+            <button type="button" onClick={() => setFilter(NO_FILTER)} className="clear-filters">Clear filters</button>
           )}
         </div>
 
@@ -207,7 +201,7 @@ export default function EmployeesOverviewPage() {
                     <td className="px-5 py-3 text-slate-600">{emp.position}</td>
                     <td className="px-5 py-3">
                       {displayRole(emp) ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium border ${SUB_ROLE_STYLE[displayRole(emp)] || "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium border ${roleBadge(displayRole(emp))}`}>
                           {displayRole(emp).charAt(0).toUpperCase() + displayRole(emp).slice(1)}
                         </span>
                       ) : (

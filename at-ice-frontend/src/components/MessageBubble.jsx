@@ -14,7 +14,7 @@ export default function MessageBubble({ from, role, at, mine = false, tag, child
       <div
         aria-hidden="true"
         className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-semibold ${
-          mine ? "bg-cyan-500 text-white" : "bg-slate-600 text-white"
+          mine ? "msg-avatar is-mine" : "msg-avatar"
         }`}
       >
         {initialsOf(from, "?")}
@@ -25,13 +25,7 @@ export default function MessageBubble({ from, role, at, mine = false, tag, child
           {role && <span className="text-slate-400">· {role}</span>}
           {tag}
         </div>
-        <div
-          className={`px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line break-words shadow-sm ${
-            mine
-              ? "bg-cyan-500 text-white rounded-2xl rounded-br-md"
-              : "bg-white text-slate-800 border border-black/[0.09] rounded-2xl rounded-bl-md"
-          }`}
-        >
+        <div className={`msg-bubble px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line break-words rounded-2xl ${mine ? "is-mine rounded-br-md" : "rounded-bl-md"}`}>
           {children}
         </div>
         {(at || footer) && (

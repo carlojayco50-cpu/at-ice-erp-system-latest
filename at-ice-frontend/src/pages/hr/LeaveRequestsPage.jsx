@@ -252,16 +252,18 @@ export default function LeaveRequestsPage() {
                       <td className="px-[18px] py-2.5 text-slate-600 font-mono whitespace-nowrap">{length(l)}</td>
                       <td className="px-[18px] py-2.5 text-slate-600 font-mono">{l.credits ? num(l.credits.available) : "—"}</td>
                       <td className="px-[18px] py-2.5">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_CLASS[l.status] || "bg-slate-100 text-slate-500"}`}>{STATUS_LABEL[l.status] || l.status}</span>
-                        {payLabel(l) && <div className="text-[10px] text-slate-400 mt-0.5">{payLabel(l)}</div>}
+                        <div className="status-stack">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_CLASS[l.status] || "bg-slate-100 text-slate-500"}`}>{STATUS_LABEL[l.status] || l.status}</span>
+                          {payLabel(l) && <div className="status-note">{payLabel(l)}</div>}
+                        </div>
                       </td>
                       <td className="px-[18px] py-2.5">
                         <div className="flex justify-end gap-1.5">
                           <button onClick={() => setViewing(l)} className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer">View</button>
                           {l.status === "pending" && (
                             <>
-                              <button data-no-confirm onClick={() => openDecision(l, "approved")} className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 rounded-md text-[11px] font-semibold text-white cursor-pointer">Approve</button>
-                              <button data-no-confirm onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 border border-red-200 text-red-600 hover:bg-red-50 rounded-md text-[11px] font-semibold cursor-pointer">Reject</button>
+                              <button data-no-confirm onClick={() => openDecision(l, "approved")} className="px-2.5 py-1 bg-cyan-500 hover:bg-cyan-600 rounded-md text-[11px] font-semibold text-white cursor-pointer">Approve</button>
+                              <button data-no-confirm onClick={() => openDecision(l, "rejected")} className="px-2.5 py-1 bg-red-500 text-white rounded-md text-[11px] font-semibold cursor-pointer">Reject</button>
                             </>
                           )}
                         </div>
@@ -324,9 +326,9 @@ export default function LeaveRequestsPage() {
             )}
             {decisionError && <div role="alert" className="text-red-600">{decisionError}</div>}
             <div className="flex justify-end gap-2 mt-1">
-              <button onClick={() => setDecision(null)} disabled={deciding} className="px-3.5 py-1.5 text-slate-500 hover:text-slate-700 cursor-pointer">Cancel</button>
+              <button onClick={() => setDecision(null)} disabled={deciding} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 cursor-pointer">Cancel</button>
               <button onClick={submitDecision} disabled={deciding || (decision.status === "rejected" && rejectReason.trim().length < 3)}
-                className={`px-3.5 py-1.5 rounded-md text-white font-semibold disabled:opacity-50 cursor-pointer ${decision.status === "approved" ? "bg-emerald-500 hover:bg-emerald-600" : "bg-red-500 hover:bg-red-600"}`}>
+                className={`px-3.5 py-1.5 rounded-md text-white font-semibold disabled:opacity-50 cursor-pointer ${decision.status === "approved" ? "bg-cyan-500 hover:bg-cyan-600" : "bg-red-500 hover:bg-red-600"}`}>
                 {deciding ? "Saving…" : decision.status === "approved" ? "Approve" : "Reject"}
               </button>
             </div>
@@ -337,7 +339,8 @@ export default function LeaveRequestsPage() {
       {/* DETAILS */}
       {viewing && (
         <Modal title="Leave request" onClose={() => setViewing(null)}>
-          <div className="p-5 flex flex-col gap-2.5 text-xs">
+          <div className="p-5 flex flex-col gap-4 text-xs">
+            <div className="detail-well">
             {[
               ["Employee", `${empName(viewing.employee)} (${empCode(viewing.employee) || "—"})`],
               ["Type", typeLabel(viewing.leave_type)],
@@ -347,11 +350,12 @@ export default function LeaveRequestsPage() {
               ["Credits left", viewing.credits ? `${num(viewing.credits.available)} day(s)` : "—"],
               ["Filed", fmtDateTime(viewing.created_at)],
             ].map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[110px_1fr] gap-3 py-1 border-b border-black/[0.06]">
-                <span className="text-slate-400">{label}</span>
-                <span className="text-slate-700">{value}</span>
+              <div key={label} className="flex items-start justify-between gap-4">
+                <span className="text-[11px] text-slate-400 uppercase tracking-wide flex-shrink-0">{label}</span>
+                <span className="text-slate-700 text-right font-medium">{value}</span>
               </div>
             ))}
+            </div>
             {viewing.attachment_path && (
               <button type="button" onClick={() => openProtectedFile(`/api/leave-requests/${viewing.id}/attachment`, "attachment")} className="self-start text-cyan-600 font-semibold cursor-pointer">
                 {viewing.leave_type === "sick" ? "View medical certificate" : "View attachment"}

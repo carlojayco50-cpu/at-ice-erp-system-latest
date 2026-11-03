@@ -121,7 +121,7 @@ export default function TimesheetsPage() {
       <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
           <button type="button" aria-label="Previous pay period" title="Previous pay period" disabled={!period} onClick={() => setDate(addDays(period.start, -1))} className={navBtn}><Chevron left /> Previous</button>
-          <span className="px-3 py-1.5 rounded-md bg-slate-50 border border-black/[0.06] text-xs text-slate-700 font-medium min-w-[180px] text-center" title="Start and end are fixed by the pay period">
+          <span className="period-well px-3 rounded-md bg-slate-50 text-xs text-slate-700 font-medium min-w-[180px] text-center" title="Start and end are fixed by the pay period">
             {period ? payPeriodLabel(period) : "…"}
           </span>
           <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>

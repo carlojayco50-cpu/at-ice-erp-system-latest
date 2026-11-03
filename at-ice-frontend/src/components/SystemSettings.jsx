@@ -263,7 +263,8 @@ function RetentionReview() {
     }
   };
   const today = new Date().toLocaleDateString("en-CA");
-  const btn = "px-2.5 py-1 rounded-md border border-black/[0.09] text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer";
+  const btn = "min-h-[34px] px-3.5 rounded-full border border-black/[0.09] text-[12px] font-medium text-slate-700 whitespace-nowrap cursor-pointer";
+  const dangerBtn = "min-h-[34px] px-3.5 rounded-full bg-red-500 text-white text-[12px] font-medium whitespace-nowrap cursor-pointer";
 
   const rows = [
     ...(data?.employees || []).map((e) => ({
@@ -289,14 +290,17 @@ function RetentionReview() {
       {data && rows.length === 0 && <p className="mt-3 text-[12px] text-slate-400">No records are past the retention period.</p>}
       <ul className="mt-3 flex flex-col gap-1.5">
         {rows.map((r) => (
-          <li key={r.key} className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-black/[0.06] text-[12px]">
-            <span className="font-medium text-slate-800">{r.label}</span>
-            <span className="text-slate-400">{r.note}</span>
-            <span className="flex-1" />
-            <button type="button" className={btn} onClick={() => downloadProtectedFile(r.csv, r.file)}>Download CSV</button>
-            <button type="button" className={btn} onClick={() => act("keep", r.kind, r.ref, r.label)}>Keep</button>
-            {r.kind === "employee" && <button type="button" data-no-confirm className={btn} onClick={() => act("anonymize", r.kind, r.ref, r.label)}>Anonymize</button>}
-            <button type="button" data-no-confirm className="px-2.5 py-1 rounded-md border border-red-200 text-[11px] text-red-600 hover:bg-red-50 cursor-pointer" onClick={() => act("delete", r.kind, r.ref, r.label)}>Delete</button>
+          <li key={r.key} className="flex flex-col lg:flex-row lg:items-center gap-3 px-4 py-3.5 rounded-xl bg-slate-50 text-[12px]">
+            <div className="min-w-0 flex-1">
+              <span className="block font-medium text-slate-800">{r.label}</span>
+              <span className="block text-slate-500">{r.note}</span>
+            </div>
+            <div className="flex flex-wrap lg:flex-nowrap lg:shrink-0 items-center gap-2.5">
+              <button type="button" className={btn} onClick={() => downloadProtectedFile(r.csv, r.file)}>Download CSV</button>
+              <button type="button" className={btn} onClick={() => act("keep", r.kind, r.ref, r.label)}>Keep</button>
+              {r.kind === "employee" && <button type="button" data-no-confirm className={btn} onClick={() => act("anonymize", r.kind, r.ref, r.label)}>Anonymize</button>}
+              <button type="button" data-no-confirm className={dangerBtn} onClick={() => act("delete", r.kind, r.ref, r.label)}>Delete</button>
+            </div>
           </li>
         ))}
       </ul>

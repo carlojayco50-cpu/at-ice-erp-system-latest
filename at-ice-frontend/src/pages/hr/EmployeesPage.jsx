@@ -28,6 +28,7 @@ import {
 import { printBiodata } from "../../lib/printBiodata";
 import FilterSelect from "../../components/FilterSelect";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { roleBadge } from "../../lib/roleColors";
 import { Icon } from "../../components/icons";
 
 const API_BASE = "/api";
@@ -43,14 +44,7 @@ const FaceOkIcon  = () => <Icon name="faceOk" size={11} strokeWidth={2.4} />;
 const FaceNoIcon  = () => <Icon name="faceNo" size={11} strokeWidth={2.4} />;
 const SortIcon    = () => <Icon name="sort" size={12} />;
 
-const SUB_ROLE_STYLE = {
-  checker:     "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
-  salesman:    "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  maintenance: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  driver:      "bg-violet-500/10 text-violet-600 border-violet-500/20",
-  guard:       "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  bagger:      "bg-orange-500/10 text-orange-600 border-orange-500/20",
-};
+// Role colors: lib/roleColors.js (the same in every widget and table).
 
 // Role badge of an employee. Driver's account uses role:"driver" with no
 // sub_role (keeps the role:driver routes unchanged), and Guards and Baggers
@@ -728,7 +722,7 @@ export default function EmployeesPage() {
                     </td>
                     <td className="px-5 py-3">
                       {displayRole(emp) ? (
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium border ${SUB_ROLE_STYLE[displayRole(emp)] || "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium border ${roleBadge(displayRole(emp))}`}>
                           {roleLabel(displayRole(emp))}
                         </span>
                       ) : (
@@ -778,9 +772,9 @@ export default function EmployeesPage() {
                         <button data-no-confirm
                           onClick={() => printEmployeeBiodata(emp)}
                           data-tip="Prints this employee's biodata as a hard copy"
-                          className="flex items-center gap-1 px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer"
+                          className="print-btn"
                         >
-                          Biodata
+                          <Icon name="print" size={14} /> Biodata
                         </button>
                         <button
                           onClick={() => openEdit(emp)}
@@ -813,15 +807,15 @@ export default function EmployeesPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-black/[0.09]">
-              <div className="text-[15px] font-semibold text-slate-800">
+              <div className="text-xl font-bold text-slate-800">
                 {editingId ? `Edit Employee · ${[form.first_name, form.last_name].filter(Boolean).join(" ")}` : "Add Employee"}
               </div>
               <div className="flex items-center gap-2">
                 {editingId && (
                   <button type="button" data-no-confirm data-tip="Prints the saved biodata of this employee"
                     onClick={() => printEmployeeBiodata(employees.find((e) => e.id === editingId))}
-                    className="px-2.5 py-1 border border-black/[0.09] rounded-md text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer">
-                    Print biodata
+                    className="print-btn">
+                    <Icon name="print" size={14} /> Print biodata
                   </button>
                 )}
                 <button type="button" onClick={closeModal} aria-label="Close" className="text-slate-400 hover:text-slate-700">
@@ -841,11 +835,11 @@ export default function EmployeesPage() {
                   return (
                     <li key={label}>
                       <button type="button" onClick={() => setStep(i)} aria-current={state === "current" ? "step" : undefined} data-no-confirm
-                        className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left text-[11.5px] font-semibold transition-colors cursor-pointer ${
-                          state === "current" ? "border-cyan-500 bg-cyan-50 text-cyan-800"
-                            : hasError ? "border-rose-200 bg-rose-50 text-rose-700"
-                            : state === "done" ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                            : "border-black/[0.09] text-slate-500"}`}>
+                        className={`step-pill w-full flex items-center gap-2 px-3 py-2 rounded-full text-left text-[11.5px] font-semibold cursor-pointer ${
+                          state === "current" ? "is-current"
+                            : hasError ? "is-error"
+                            : state === "done" ? "is-done"
+                            : ""}`}>
                         <span className={`flex-shrink-0 w-5 h-5 rounded-full grid place-items-center text-[10px] ${state === "current" ? "bg-cyan-600 text-white" : state === "done" && !hasError ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"}`}>
                           {state === "done" && !hasError ? "✓" : i + 1}
                         </span>
@@ -1459,16 +1453,16 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
               )}
               <div className="flex-1" />
               {enrolled && capturing ? (
-                <button type="button" onClick={() => { setCapturing(false); onCapture(null, null); }} className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700 cursor-pointer">Back</button>
+                <button type="button" onClick={() => { setCapturing(false); onCapture(null, null); }} className="btn">Back</button>
               ) : (
-                <button type="button" onClick={onClose} className="px-3.5 py-1.5 text-xs text-slate-500 hover:text-slate-700 cursor-pointer">{capturing ? "Cancel" : "Close"}</button>
+                <button type="button" onClick={onClose} className="btn">{capturing ? "Cancel" : "Close"}</button>
               )}
               {capturing ? (
                 <button
                   type="button"
                   onClick={save}
                   disabled={!descriptor || busy}
-                  className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-medium rounded-md transition-colors cursor-pointer"
+                  className="btn btn-primary"
                 >
                   {busy ? "Saving…" : enrolled ? "Replace Face" : "Save Face"}
                 </button>
@@ -1476,7 +1470,7 @@ function FaceModal({ employee, authHeaders, onClose, onSaved }) {
                 <button
                   type="button"
                   onClick={() => setCapturing(true)}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-medium rounded-md transition-colors cursor-pointer"
+                  className="btn btn-primary"
                 >
                   <CameraIcon /> Re-enroll
                 </button>

@@ -231,8 +231,8 @@ function ApplyQrModal({ onClose }) {
           </p>
         )}
         <div className="w-full grid grid-cols-2 gap-2">
-          <a href={url} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-md border border-black/[0.09] text-xs font-medium text-slate-600 hover:border-cyan-400 hover:text-cyan-600 text-center">Open form</a>
-          <button type="button" onClick={print} disabled={!qr} className="px-3 py-2 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-semibold cursor-pointer disabled:opacity-50">Print poster</button>
+          <a href={url} target="_blank" rel="noreferrer" className="btn"><Icon name="enlarge" size={14} /> Open form</a>
+          <button type="button" onClick={print} disabled={!qr} className="btn btn-primary"><Icon name="print" size={14} /> Print poster</button>
         </div>
       </div>
     </Modal>
@@ -651,7 +651,7 @@ export default function InterviewsPage() {
                               <button data-no-confirm onClick={() => openStatus(a, "hired")} className={`${actionBtn} border-emerald-200 text-emerald-600 hover:bg-emerald-50`}>Hire</button>
                             )}
                             {(a.status === "pending" || a.status === "interviewed") && (
-                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-red-200 text-red-600 hover:bg-red-50`}>Reject</button>
+                              <button data-no-confirm onClick={() => openStatus(a, "rejected")} className={`${actionBtn} border-transparent bg-red-500 text-white`}>Reject</button>
                             )}
                             {!isFinal(a) && (
                               <button data-no-confirm onClick={() => { setDeleteTarget(a); setDeleteError(""); }} className={`${actionBtn} border-black/[0.09] text-slate-500 hover:border-red-300 hover:text-red-500`}>Delete</button>

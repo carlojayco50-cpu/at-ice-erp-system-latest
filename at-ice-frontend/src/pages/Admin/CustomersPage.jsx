@@ -412,7 +412,7 @@ export default function CustomersPage() {
                 <th className="px-[18px] py-2.5 font-medium">Location</th>
                 <th className="px-[18px] py-2.5 font-medium">Contact</th>
                 <th className="px-[18px] py-2.5 font-medium">Type</th>
-                <th className="px-[18px] py-2.5 font-medium">Portal Login</th>
+                <th className="px-[18px] py-2.5 font-medium text-center">Portal Login</th>
                 <th className="px-[18px] py-2.5 font-medium text-right">Actions</th>
               </tr>
             </thead>
@@ -448,9 +448,11 @@ export default function CustomersPage() {
                   <td className="px-[18px] py-2.5 text-slate-600">
                     {CUSTOMER_TYPES[c.customer_type || "dealer"]?.label}
                   </td>
-                  <td className="px-[18px] py-2.5">
+                  <td className="px-[18px] py-2.5 text-center">
                     {c.user ? (
-                      <LoginEmailChip userId={c.user.id} email={c.user.email} onSaved={fetchCustomers} />
+                      <div className="flex items-center justify-center">
+                        <LoginEmailChip userId={c.user.id} email={c.user.email} onSaved={fetchCustomers} />
+                      </div>
                     ) : (() => {
                       const missing = missingForLogin(c);
                       return (
@@ -459,7 +461,7 @@ export default function CustomersPage() {
                             onClick={() => createAccount(c)}
                             disabled={missing.length > 0 || creatingAccountFor === c.id}
                             title={missing.length ? `Fill in the ${missing.join(", ")} on Edit first.` : "Create the portal login with this customer's email"}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-black/[0.09] text-slate-700 text-[12px] font-medium"
                           >
                             <KeyIcon />
                             {creatingAccountFor === c.id ? "Creating…" : "Create Login"}
@@ -636,7 +638,7 @@ export default function CustomersPage() {
                   inputClassName="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 disabled:opacity-60"
                 />
                 <div className="col-span-2">
-                  <Field label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
+                  <Field label="Notes" multiline placeholder="Delivery instructions, landmarks, contact hours…" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} />
                 </div>
               </div>
               </div>
@@ -734,12 +736,14 @@ export default function CustomersPage() {
   );
 }
 
-function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text" }) {
+function Field({ label, value, onChange, required, disabled, placeholder, inputMode, type = "text", multiline = false }) {
+  const Tag = multiline ? "textarea" : "input";
   return (
     <div>
       <label className="text-[11px] text-slate-500 mb-1 block">{label}{required && <Req />}</label>
-      <input
-        type={type}
+      <Tag
+        {...(multiline ? { rows: 3 } : {})}
+        type={multiline ? undefined : type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
@@ -922,7 +926,7 @@ function Req() {
 function MissingBadge({ missing }) {
   // Shown right under Create Login (no floating tooltip, so nothing is covered).
   return (
-    <div role="status" className="w-full text-center text-[11px] leading-snug text-amber-700">
+    <div role="status" className="w-full text-center text-[11px] leading-snug text-slate-500">
       Fill in on Edit first: <span className="font-medium">{missing.join(", ")}</span>
     </div>
   );

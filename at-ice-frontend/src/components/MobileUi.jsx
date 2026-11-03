@@ -1,4 +1,5 @@
 import { useEffect, useId } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./icons";
 import { TONE_CLASS, toneFor, BTN, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER } from "../lib/mobileUi";
 
@@ -37,8 +38,17 @@ export function LoadingButton({ loading = false, variant = "primary", className 
 
 // Slide-up drawer for filters, confirmations and quick forms (no center
 // modals on the role screens). Closes on the backdrop and on Escape.
-export function BottomSheet({ open, onClose, title, children, footer }) {
+// It is drawn at the top of the role screen (a portal), not inside the button
+// that opened it, so the sticky header cannot trap it under the bottom nav.
+// `front` (My Memos) puts it above every other sheet: the others are only
+// hidden while it is open, never closed, so a half-filled form stays as it was.
+export function BottomSheet({ open, onClose, title, children, footer, front = false }) {
   const titleId = useId();
+  useEffect(() => {
+    if (!open || !front) return undefined;
+    document.documentElement.classList.add("front-sheet-open");
+    return () => document.documentElement.classList.remove("front-sheet-open");
+  }, [open, front]);
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -46,8 +56,9 @@ export function BottomSheet({ open, onClose, title, children, footer }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
   if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[60]" role="presentation">
+  const host = document.querySelector(".ice-scope") || document.body;
+  return createPortal(
+    <div className={`fixed inset-0 ${front ? "z-[80]" : "z-[60]"}`} role="presentation" data-front-sheet={front || undefined}>
       <button type="button" aria-label="Close" onClick={onClose} className="sheet-backdrop absolute inset-0 w-full h-full bg-slate-900/50 cursor-default" />
       <div role="dialog" aria-modal="true" aria-labelledby={titleId}
         className="role-sheet fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white p-4 shadow-2xl max-h-[88dvh] overflow-y-auto max-w-md mx-auto">
@@ -61,7 +72,8 @@ export function BottomSheet({ open, onClose, title, children, footer }) {
         <div className="space-y-4">{children}</div>
         {footer && <div className="mt-4 grid gap-2">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    host
   );
 }
 

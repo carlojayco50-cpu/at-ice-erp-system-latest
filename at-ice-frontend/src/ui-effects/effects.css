@@ -155,3 +155,14 @@ html[data-fx="on"] .animate-pulse {
 @media (prefers-reduced-motion: reduce) {
   html[data-fx="on"] *, html[data-fx="on"] *::before, html[data-fx="on"] *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---- Open dialogs escape the entrance animation -----------------------------
+   A rising card or fading row keeps a transform/opacity animation, which makes
+   it its own layer: a dialog opened inside it was clipped to the card and later
+   table rows painted over it. Any section or row that holds an open dialog
+   drops its animation, so the dialog sits above the whole page. */
+html[data-fx="on"] :is(.ice-main > *, .role-shell main > *, .kpi-grid > *, .ice-main tbody tr):has(.fixed.inset-0) {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}

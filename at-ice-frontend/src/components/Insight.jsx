@@ -32,7 +32,7 @@ export function StatusBreakdown({ title = "Status breakdown", subtitle, items, e
       {total === 0 ? (
         <EmptyState icon="clipboard" compact>{empty}</EmptyState>
       ) : (
-        <ul className="flex flex-col gap-2.5">
+        <ul className={`flex flex-col ${onPick ? "gap-1 -mx-2" : "gap-2.5"}`}>
           {items.map((i) => {
             const pct = total ? (i.count || 0) / total : 0;
             const t = TONES[i.tone] || TONES.cyan;
@@ -41,7 +41,7 @@ export function StatusBreakdown({ title = "Status breakdown", subtitle, items, e
               <li key={i.label}>
                 <Row
                   {...(onPick ? { type: "button", onClick: () => onPick(i), "data-no-confirm": true, "aria-current": active === i.key ? "true" : undefined } : {})}
-                  className={`w-full text-left ${onPick ? "cursor-pointer rounded-md -mx-1.5 px-1.5 py-1 transition-colors hover:bg-black/[0.04] active:bg-black/[0.07]" : ""} ${onPick && active === i.key ? "font-semibold" : ""}`}
+                  className={`w-full text-left ${onPick ? "breakdown-row cursor-pointer" : ""} ${onPick && active === i.key ? "font-semibold" : ""}`}
                 >
                   <div className="flex items-center gap-2 text-[12px]">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${t.bar}`} />
@@ -167,11 +167,11 @@ export function ProgressRing({ value, label, size = 76, tone = "cyan", caption }
   return (
     <div className="flex items-center gap-3">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${label}: ${Math.round(pct * 100)}%`} className="flex-shrink-0 -rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(100,116,139,0.18)" strokeWidth="8" />
+        <circle className="ring-track" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth="8" />
         <circle className="fx-ring-arc" cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - pct)} style={{ "--fx-dash-from": c, "--fx-dash-to": c * (1 - pct) }} />
         <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" transform={`rotate(90 ${size / 2} ${size / 2})`}
-          className="fill-slate-800 font-mono" style={{ fontSize: size / 4.6, fontWeight: 600 }}>{Math.round(pct * 100)}%</text>
+          className="ring-value font-mono" style={{ fontSize: size / 4.6, fontWeight: 600 }}>{Math.round(pct * 100)}%</text>
       </svg>
       <div className="min-w-0">
         <div className="text-[12px] font-semibold text-slate-800">{label}</div>

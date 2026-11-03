@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { confirmationFor, tipFor } from "../lib/actionRules";
 import { setConfirmHost } from "../lib/confirm";
@@ -66,6 +66,34 @@ export default function ActionGuard() {
     return () => document.removeEventListener("click", onClick, true);
   }, [open]);
 
+  // Buttons and links never carry a browser title: it would pop up on top of
+  // the reminder below. The text moves to data-tip (and names an icon-only
+  // button for screen readers), as soon as the element shows up.
+  useEffect(() => {
+    const SEL = "button[title], [role='button'][title], a[title]";
+    const move = (el) => {
+      // a disabled button gets no hover events, so its reason stays a browser title
+      if (!el.title || el.disabled || el.closest(".leaflet-container")) return;
+      if (!el.dataset.tip) el.dataset.tip = el.title;
+      if (!el.textContent.trim() && !el.getAttribute("aria-label")) el.setAttribute("aria-label", el.title);
+      el.removeAttribute("title");
+    };
+    const sweep = (root) => {
+      if (root.nodeType !== 1) return;
+      if (root.matches(SEL)) move(root);
+      root.querySelectorAll(SEL).forEach(move);
+    };
+    sweep(document.body);
+    const watch = new MutationObserver((list) => {
+      for (const m of list) {
+        if (m.type === "attributes") sweep(m.target);
+        else m.addedNodes.forEach(sweep);
+      }
+    });
+    watch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["title"] });
+    return () => watch.disconnect();
+  }, []);
+
   // Hover reminders (mouse only; phones have no hover)
   useEffect(() => {
     let timer = 0;
@@ -79,6 +107,7 @@ export default function ActionGuard() {
       if (!el || el.closest(".guard-host, [data-no-tip]") || el.disabled && !el.title) return;
       // the native tooltip would show on top of ours: keep its text as data-tip
       if (el.title) { el.dataset.tip = el.title; el.removeAttribute("title"); }
+      el.querySelectorAll("[title]").forEach((n) => n.removeAttribute("title"));
       const text = tipFor(el);
       if (!text) return;
       current = el;
@@ -128,30 +157,70 @@ export default function ActionGuard() {
         </div>
       )}
       {ask && (
-        <div className={`guard-host guard-layer ${ask.sheet ? "is-sheet" : ""} ${ask.dark ? "neu-dark" : ""}`}>
-          <div className="guard-backdrop" onClick={() => finish(false)} />
-          <div role="alertdialog" aria-modal="true" aria-labelledby="guard-title" aria-describedby="guard-msg" className="guard-card">
-            {ask.sheet && <div className="guard-grip" aria-hidden="true" />}
-            <div className={`guard-icon ${ask.danger ? "is-danger" : ""}`} aria-hidden="true">
-              {ask.danger ? (
-                <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-              ) : (
-                <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-              )}
-            </div>
-            <h2 id="guard-title" className="guard-title">{ask.title}</h2>
-            {ask.context && <div className="guard-context">{ask.context}</div>}
-            <p id="guard-msg" className="guard-msg">{ask.message}</p>
-            <div className="guard-actions">
-              <button type="button" data-guard-no className="guard-btn" onClick={() => finish(false)}>No, go back</button>
-              <button type="button" ref={confirmRef} className={`guard-btn is-primary ${ask.danger ? "is-danger" : ""}`} onClick={() => finish(true)}>
-                {ask.confirmLabel || "Yes, continue"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmCard
+          title={ask.title}
+          context={ask.context}
+          message={ask.message}
+          danger={ask.danger}
+          confirmLabel={ask.confirmLabel}
+          sheet={ask.sheet}
+          dark={ask.dark}
+          confirmRef={confirmRef}
+          onCancel={() => finish(false)}
+          onConfirm={() => finish(true)}
+        />
       )}
     </>,
     document.body
+  );
+}
+
+const WarnIcon = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+);
+const CheckIcon = () => (
+  <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><polyline points="8 12.5 11 15.5 16 9.5" /></svg>
+);
+
+// The one confirmation card: the "are you sure?" above, and page dialogs that
+// need a little more (Reject with a reason) use it too, so Approve and Reject
+// look the same: icon (warning for a destructive action, check otherwise),
+// title, the record, what happens in a pressed-in box, then Cancel and the action.
+export function ConfirmCard({
+  title, context, message, children, danger = false,
+  confirmLabel = "Yes, continue", cancelLabel = "Cancel",
+  busy = false, confirmDisabled = false,
+  sheet = typeof window !== "undefined" && window.innerWidth < 640, dark = false,
+  confirmRef, onCancel, onConfirm,
+}) {
+  const id = useId();
+  return (
+    <div className={`guard-host guard-layer ${sheet ? "is-sheet" : ""} ${dark ? "neu-dark" : ""}`}>
+      <div className="guard-backdrop" onClick={() => !busy && onCancel()} />
+      <form
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={`${id}-t`}
+        aria-describedby={`${id}-m`}
+        className="guard-card"
+        onSubmit={(e) => { e.preventDefault(); if (!busy && !confirmDisabled) onConfirm(); }}
+        onKeyDown={(e) => { if (e.key === "Escape" && !busy) { e.stopPropagation(); onCancel(); } }}
+      >
+        {sheet && <div className="guard-grip" aria-hidden="true" />}
+        <div className={`guard-icon ${danger ? "is-danger" : ""}`} aria-hidden="true">{danger ? <WarnIcon /> : <CheckIcon />}</div>
+        <h2 id={`${id}-t`} className="guard-title">{title}</h2>
+        <div id={`${id}-m`} className="guard-body">
+          {context && <div className="guard-context">{context}</div>}
+          {message && <p className="guard-msg">{message}</p>}
+        </div>
+        {children}
+        <div className="guard-actions">
+          <button type="button" data-guard-no className="guard-btn" disabled={busy} onClick={onCancel}>{cancelLabel}</button>
+          <button type="submit" ref={confirmRef} className={`guard-btn is-primary ${danger ? "is-danger" : ""}`} disabled={busy || confirmDisabled}>
+            {confirmLabel}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

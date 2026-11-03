@@ -136,7 +136,7 @@ export function MyMemosButton({ compact = false }) {
           <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">{pending}</span>
         )}
       </button>
-      <BottomSheet open={open} onClose={() => setOpen(false)} title="My Memos">
+      <BottomSheet open={open} onClose={() => setOpen(false)} title="My Memos" front>
         {loading ? (
           <div className="text-[14px] text-slate-500">Loading your memos…</div>
         ) : error ? (
@@ -145,7 +145,11 @@ export function MyMemosButton({ compact = false }) {
             <button type="button" data-no-confirm onClick={load} className="min-h-[44px] px-4 rounded-xl border border-slate-300 text-[14px]">Try again</button>
           </div>
         ) : memos.length === 0 ? (
-          <div className="text-[14px] text-slate-500">You have no memos from HR.</div>
+          <div className="memo-empty flex flex-col items-center text-center gap-3 py-6">
+            <span className="memo-empty-icon grid place-items-center w-14 h-14 rounded-2xl text-cyan-700"><Icon name="file" size={24} /></span>
+            <div className="text-[15px] font-semibold text-slate-800">No memos yet</div>
+            <p className="max-w-[260px] text-[13px] leading-relaxed text-slate-500">Important announcements and shift notes will appear here.</p>
+          </div>
         ) : (
           memos.map((m) => (
             <MemoCard key={m.id} memo={m} onAcknowledged={(id, at) => setMemos((list) => list.map((x) => (x.id === id ? { ...x, status: "acknowledged", acknowledged_at: at } : x)))} />

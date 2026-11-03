@@ -337,7 +337,7 @@ export default function StockOutApprovalPage() {
                           </button>
                           <button data-no-confirm
                             onClick={() => setRejectingId(req.id)}
-                            className="px-3 py-1.5 rounded-lg border border-black/[0.09] text-sm font-medium text-slate-600"
+                            className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-sm font-medium"
                           >
                             Reject
                           </button>

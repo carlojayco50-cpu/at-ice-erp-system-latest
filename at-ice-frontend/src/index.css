@@ -7,7 +7,7 @@
 :root {
   --surface-card: rgba(255, 255, 255, 0.8);
   --surface-card-dark: rgba(15, 23, 42, 0.8);
-  --control-height: 2.5rem;
+  --control-height: 40px; /* one height for every field, select, search box and button on a computer; phones use 44px */
   --control-radius: 0.75rem;
   /* Table row controls: every button and badge in a table cell is this box */
   --tbl-ctl-height: 2rem;
@@ -231,8 +231,8 @@
   align-items: center;
   gap: 5px;
   max-width: 100%;
-  height: 22px;
-  padding: 0 10px 0 8px;
+  height: 24px;
+  padding: 0 10px 0 9px;
   border-radius: 9999px;
   font-size: 11.5px;
   font-weight: 500;
@@ -241,9 +241,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
-  color: #155e75;
-  background-color: rgba(6, 182, 212, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.25);
+  /* a soft pressed-in chip on the page's own material, not a flat cyan pill */
+  color: var(--neu-accent);
+  background-color: var(--neu-bg);
+  box-shadow: var(--neu-inset-sm);
 }
 .email-chip::before {
   content: "";
@@ -256,8 +257,8 @@
 }
 :is(.cp-dark, .neu-dark) .email-chip {
   color: #a5f3fc;
-  background-color: rgba(34, 211, 238, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.28);
+  background-color: var(--neu-bg);
+  box-shadow: var(--neu-inset-sm);
 }
 /* The row actions column (last column holding buttons) is only as wide as its
    buttons and sits at the right end of the table; its header, buttons and
@@ -664,11 +665,11 @@ select:-webkit-autofill {
    board status cells (rounded-sm / rounded-md blocks) keep their board look.
    Badges in a table cell take the table control box instead (see "Table row
    actions and status badges"). */
-:is(.ice-main, .ice-scope) span.rounded-full:is([class*=" px-"], [class^="px-"]):is([class*="text-[10px]"], [class*="text-[10.5px]"], [class*="text-[11px]"], .text-xs):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"], td span, .table-status-badge) {
+:is(.ice-main, .ice-scope) span.rounded-full:is([class*=" px-"], [class^="px-"]):is([class*="text-[10px]"], [class*="text-[10.5px]"], [class*="text-[11px]"], .text-xs):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"], td span, .table-status-badge, .hidden) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
   line-height: 18px !important;
   padding: 0 8px !important;
@@ -789,8 +790,8 @@ header .topbar-avatar { width: 40px !important; height: 40px !important; }
 /* Toolbars inside a page: a button, link or field in the same row as a
    filter dropdown (FilterSelect) is as tall as the dropdown (40px). */
 .ice-main .flex:has(> label > select) > :is(button, a, input:not([type="checkbox"], [type="radio"])) {
-  height: 40px !important;
-  min-height: 40px !important;
+  height: var(--control-height) !important;
+  min-height: var(--control-height) !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
   box-sizing: border-box;
@@ -800,11 +801,11 @@ header .topbar-avatar { width: 40px !important; height: 40px !important; }
   align-items: center;
 }
 
-/* ---- Desktop sidebar: white with a thin right border ----------------------- */
-.neu:not(.cp-dark) aside.rail {
-  background-color: #ffffff !important;
-  border-right: 1px solid rgba(15, 23, 42, 0.08) !important;
-  box-shadow: none !important;
+/* ---- Desktop sidebar: the page's own material, lifted by a soft edge ------ */
+.neu aside.rail {
+  background-color: var(--neu-bg) !important;
+  border-right-color: transparent !important;
+  box-shadow: 6px 0 16px -6px var(--neu-lo) !important;
 }
 
 /* A dashboard stat card that is open (Inventory Alerts): accent outline and lifted */
@@ -897,15 +898,24 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
   display: grid; place-items: center; border-radius: 12px;
   color: var(--neu-accent); box-shadow: var(--neu-inset-sm);
 }
-.guard-icon.is-danger { color: #be123c; }
-.neu-dark .guard-icon.is-danger { color: #fda4af; }
+.guard-icon.is-danger { color: #b91c1c; }
+:is(.neu-dark, .cp-dark) .guard-icon.is-danger { color: #fca5a5; }
 .guard-title { font-size: 16px; font-weight: 700; line-height: 1.35; color: var(--neu-text); }
 .guard-context {
   margin-top: 6px;
   font-size: 12.5px; font-weight: 600; color: var(--neu-text);
   overflow-wrap: anywhere;
 }
-.guard-msg { margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--neu-muted); }
+/* What happens sits in a pressed-in box under the title */
+.guard-body {
+  margin-top: 12px; padding: 12px 14px;
+  border-radius: var(--neu-radius-sm);
+  background: var(--neu-bg);
+  box-shadow: var(--neu-inset-sm) !important;
+}
+.guard-body .guard-context { margin-top: 0; }
+.guard-msg { margin-top: 0; font-size: 13px; line-height: 1.5; color: var(--neu-muted); }
+.guard-context + .guard-msg { margin-top: 6px; }
 .guard-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .guard-btn {
   min-height: 38px; padding: 0 16px; border: 0; border-radius: 10px;
@@ -914,10 +924,26 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 }
 .guard-btn:active { box-shadow: var(--neu-inset-sm); }
 .guard-btn:focus-visible { outline: none; box-shadow: var(--neu-raised-sm), var(--neu-focus); }
-.guard-btn.is-primary { background: #0891b2; color: #ffffff; box-shadow: 3px 3px 8px var(--neu-lo), -3px -3px 8px var(--neu-hi); }
-.guard-btn.is-primary:hover { background: #0e7490; }
-.guard-btn.is-danger { background: #e11d48; }
-.guard-btn.is-danger:hover { background: #be123c; }
+/* The same cyan primary and red danger as every other button in the app */
+/* :is(#root, body) only lifts these over the page button rules when the card
+   is drawn inside a page (Reject with a reason) */
+:is(#root, body) .guard-btn:not(.is-primary):not(:disabled) { background-color: var(--neu-bg) !important; color: var(--neu-text) !important; box-shadow: var(--neu-raised-sm) !important; }
+:is(#root, body) .guard-btn.is-primary:not(:disabled) { background-color: #06b6d4 !important; color: #0f172a !important; box-shadow: 4px 4px 10px var(--neu-lo), -4px -4px 10px var(--neu-hi) !important; }
+:is(#root, body) .guard-btn.is-primary:not(:disabled):hover { background-color: #0891b2 !important; }
+:is(#root, body) .guard-btn.is-danger:not(:disabled) { background-color: #dc2626 !important; color: #ffffff !important; }
+:is(#root, body) .guard-btn.is-danger:not(:disabled):hover { background-color: #b91c1c !important; }
+:is(#root, body) .guard-btn:not(:disabled):active { box-shadow: var(--neu-inset-sm) !important; }
+/* A reason box inside the card (Reject with a reason) */
+.guard-field { display: block; margin-top: 14px; }
+.guard-field > span { display: block; margin-bottom: 6px; font-size: 11.5px; font-weight: 600; color: var(--neu-muted); }
+.guard-field textarea {
+  width: 100%; min-height: 84px; padding: 10px 12px; resize: none;
+  border: 0; border-radius: var(--neu-radius-sm); outline: none;
+  font: inherit; font-size: 13px; color: var(--neu-text);
+  background: var(--neu-bg); box-shadow: var(--neu-inset);
+}
+.guard-field textarea:focus-visible { box-shadow: var(--neu-inset), 0 0 0 2px rgba(6, 182, 212, 0.7); }
+.guard-field textarea::placeholder { color: var(--neu-faint); }
 .guard-layer.is-sheet { align-items: flex-end; padding: 0; }
 .guard-layer.is-sheet .guard-card {
   max-width: 448px; border-radius: 20px 20px 0 0;
@@ -933,18 +959,26 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
 @keyframes guard-sheet { from { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) { .guard-backdrop, .guard-card { animation: none !important; } }
 
+/* Hover tip: a small floating pill that always stands out from the page: a
+   dark slate pill in light mode, a light pill in night mode, with a soft
+   neumorphic lift and a faint top highlight (never a flat black box). */
 .guard-tip {
   position: fixed; z-index: 210; max-width: 260px;
   transform: translate(-50%, -100%);
-  padding: 7px 10px; border-radius: 10px;
-  background: #0f172a; color: #f1f5f9;
-  font-size: 11.5px; font-weight: 500; line-height: 1.4; text-align: center;
-  box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.45);
+  padding: 8px 12px; border-radius: 12px;
+  background: #1e2431; color: #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11.5px; font-weight: 500; line-height: 1.45; text-align: center;
+  box-shadow: 5px 5px 12px rgba(100, 116, 139, 0.45), -3px -3px 8px rgba(255, 255, 255, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   pointer-events: none;
   animation: guard-fade 120ms ease-out;
 }
 .guard-tip.is-below { transform: translate(-50%, 0); }
-.guard-tip.neu-dark { background: #e2e8f0; color: #0f172a; }
+.guard-tip.neu-dark {
+  background: #e2e8f0; color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 5px 5px 12px rgba(0, 0, 0, 0.6), -2px -2px 6px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
 
 /* ---- Night mode parity for every status color (owner, 2026-10-20) ---------
    Tinted badge and notice colors (50/100/200 backgrounds, 200/300 borders,
@@ -1145,7 +1179,7 @@ input:is([type="checkbox"], [type="radio"]):disabled { opacity: 0.45; cursor: no
    instead of being cut, and only then ends in an ellipsis; the whole text
    shows on hover (components/OverflowTitle.jsx). The collapsed sidebar labels
    and flex/grid boxes (chips with an icon) keep their single line. */
-:is(.ice-main, .ice-scope, .fixed.inset-0) .truncate:not(aside *, .rail-label, .flex, .inline-flex, .grid, .inline-grid, .font-mono, input, select) {
+:is(.ice-main, .ice-scope, .fixed.inset-0) .truncate:not(aside *, .rail-label, .flex, .inline-flex, .grid, .inline-grid, .font-mono, input, select, header h1, .page-title) {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

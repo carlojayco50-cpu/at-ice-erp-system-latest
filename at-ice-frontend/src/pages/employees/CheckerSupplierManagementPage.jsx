@@ -130,14 +130,15 @@ export default function CheckerSupplierManagementPage() {
       role="checker"
       title="Suppliers"
       actionBar={<ActionBar><LoadingButton onClick={startCreate} disabled={timedIn === false}><Icon name="plus" /> Add supplier</LoadingButton></ActionBar>}
+      subHeader={
+        <div className="relative">
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search supplier, code or city" aria-label="Search suppliers" className={`${FIELD} pl-10`} />
+        </div>
+      }
     >
       <TimeInNotice timedIn={timedIn} />
       <SuccessBanner>{notice}</SuccessBanner>
-
-      <div className="relative">
-        <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search supplier, code or city" aria-label="Search suppliers" className={`${FIELD} pl-10`} />
-      </div>
 
       {status === "loading" && <CardSkeleton rows={3} />}
       {status === "error" && <ErrorBanner onRetry={load}>{loadError}</ErrorBanner>}

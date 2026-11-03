@@ -147,7 +147,7 @@ export default function PerformancePage() {
             {data.periods.map((p, i) => <option key={p.start} value={p.start}>{i === 0 ? `This period (${periodLabel(p)})` : periodLabel(p)}</option>)}
           </select>
           {filtering && (
-            <button type="button" onClick={() => setFilter(NO_FILTER)} className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">Clear filters</button>
+            <button type="button" onClick={() => setFilter(NO_FILTER)} className="clear-filters">Clear filters</button>
           )}
         </div>
 
@@ -198,7 +198,7 @@ export default function PerformancePage() {
                         {r.goal_completion == null ? <span className="text-slate-300">—</span> : (
                           <div className="inline-flex flex-col items-center gap-1 min-w-[110px]">
                             <span className="text-[12px] font-semibold text-slate-700 tabular-nums">{pct(r.goal_completion)}</span>
-                            <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden" aria-hidden="true">
+                            <div className="goal-bar w-full rounded-full overflow-hidden" aria-hidden="true">
                               <div className="h-full bg-cyan-600" style={{ width: `${Math.min(100, r.goal_completion)}%` }} />
                             </div>
                             <span className="text-[10px] text-slate-400 tabular-nums">{r.goal_done} of {r.goal_target}</span>

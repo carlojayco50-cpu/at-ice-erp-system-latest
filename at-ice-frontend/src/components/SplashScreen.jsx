@@ -188,9 +188,9 @@ function DesktopSplash() {
           </MotionDiv>
 
           {/* Progress line, filled over the splash time */}
-          <div className="relative mt-7 h-[2px] w-[min(40vw,160px)] overflow-hidden rounded-full bg-white/10">
+          <div className="splash-track relative mt-7 h-[2px] w-[min(40vw,160px)] overflow-hidden rounded-full bg-white/10">
             <MotionDiv
-              className="absolute inset-0 origin-left rounded-full bg-cyan-400"
+              className="splash-fill absolute inset-0 origin-left rounded-full bg-cyan-400"
               initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
               transition={{ duration: reduceMotion ? 1.1 : length - 0.15, ease: [0.4, 0, 0.2, 1] }}

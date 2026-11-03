@@ -3,7 +3,9 @@ import { useEffect } from "react";
 // Mounted once in App.jsx. When the mouse rests on a text, field or dropdown
 // whose content does not fit (a truncated name, a long address, a long value
 // in a narrow field), its whole text shows as the hover tip. Elements that
-// already have their own title or tip are left alone.
+// already have their own title or tip are left alone. Buttons and links have
+// the app's own hover tip (ActionGuard), so their full text goes there
+// (data-tip) instead of a browser title: never two tips on top of each other.
 const TARGET = ".truncate, [class*='line-clamp'], input:not([type=checkbox]):not([type=radio]):not([type=file]), select, td, th, button, a, label";
 
 function fullText(el) {
@@ -29,6 +31,12 @@ export default function OverflowTitle() {
       const el = e.target instanceof Element ? e.target.closest(TARGET) : null;
       if (!el || el.hasAttribute("data-tip") || (el.title && !el.dataset.autoTitle)) return;
       const text = fullText(el);
+      const ctl = el.closest("button, a, [role='button']");
+      if (ctl) {
+        if (el.dataset.autoTitle) { el.removeAttribute("title"); delete el.dataset.autoTitle; }
+        if (!ctl.dataset.tip && !ctl.title && text && overflows(el)) ctl.dataset.tip = text;
+        return;
+      }
       if (text && overflows(el)) {
         el.title = text;
         el.dataset.autoTitle = "1";

@@ -75,7 +75,8 @@ function keepPositioned(host) {
 // scroll box it pulled the whole form to wherever the popup was at that moment (the top,
 // before it was placed). Only the popup's box is moved here.
 function keepInView(item) {
-  const box = item?.closest(".soft-pop");
+  // a searchable list scrolls on its own under the fixed search box
+  const box = item?.closest(".soft-searchable .soft-list") || item?.closest(".soft-pop");
   if (!box) return;
   const b = box.getBoundingClientRect();
   const i = item.getBoundingClientRect();
@@ -181,7 +182,8 @@ function SelectList({ el, close }) {
   if (!searchable) return list;
   return (
     <div onKeyDown={onKeyDown} className="soft-searchable">
-      <input
+      <div className="soft-search-head">
+        <input
         ref={searchRef}
         type="search"
         data-native
@@ -190,7 +192,8 @@ function SelectList({ el, close }) {
         placeholder="Type to search…"
         aria-label="Search the list"
         className="soft-search"
-      />
+        />
+      </div>
       {list}
     </div>
   );

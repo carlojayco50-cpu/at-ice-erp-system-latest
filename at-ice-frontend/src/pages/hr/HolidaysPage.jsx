@@ -212,7 +212,7 @@ export default function HolidaysPage({ admin = false }) {
               <option value="">All types ({all.length})</option>
               {TYPES.map(([k, l]) => <option key={k} value={k}>{l} ({countType(k)})</option>)}
             </select></label>
-          {filtering && <button type="button" onClick={() => setFilter(NO_FILTER)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 cursor-pointer">Clear filters</button>}
+          {filtering && <button type="button" onClick={() => setFilter(NO_FILTER)} className="clear-filters">Clear filters</button>}
         </div>
 
         {!data && !error ? <SkeletonList /> : error ? (

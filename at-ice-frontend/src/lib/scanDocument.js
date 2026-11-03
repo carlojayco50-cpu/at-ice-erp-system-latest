@@ -140,21 +140,40 @@ async function scanBody(file, kind) {
 // { person: { first_name, middle_initial, last_name, suffix, phone, email, license_number, license_expiry } | null,
 //   address: { block_lot, street, subdivision, barangay, city, province, postal_code } | null }
 // Fields not found in the document are "".
+// An error that means "the auto-fill is offline", not "this file is wrong".
+function scanOffline(message) {
+  const err = new Error(message);
+  err.offline = true;
+  return err;
+}
+
+// Nothing read: the page keeps the file and the user types the fields.
+export const EMPTY_SCAN = { person: null, address: null, biodata: null };
+
 export async function scanDocument(file, kind = "resume") {
   if (file.size > 20 * 1024 * 1024) throw new Error("The file is too large (over 20 MB).");
   const body = await scanBody(file, kind);
-  const res = await fetch("/api/scan-document", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-    },
-    body: JSON.stringify({ kind, ...body }),
-  });
+  let res;
+  try {
+    res = await fetch("/api/scan-document", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+      },
+      body: JSON.stringify({ kind, ...body }),
+    });
+  } catch {
+    throw scanOffline("The scan service could not be reached.");
+  }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(data?.errors ? Object.values(data.errors)[0][0] : data?.message || "The document could not be read. Try again.");
+    const message = data?.errors ? Object.values(data.errors)[0][0] : data?.message || "The document could not be read. Try again.";
+    // The reader itself is unavailable (no AI key on this server, server or
+    // network trouble): the file is still fine, only the auto-fill is not.
+    if ([400, 501, 502, 503, 504].includes(res.status) || /not set up|GROQ/i.test(message)) throw scanOffline(message);
+    throw new Error(message);
   }
   return data;
 }

@@ -263,7 +263,7 @@ export default function PayrollRecordsPage() {
           <div className="bg-white border border-black/[0.09] rounded-xl px-[18px] py-3.5 flex flex-wrap items-center gap-3">
             <div className="flex flex-wrap items-center gap-1.5">
               <button type="button" aria-label="Previous pay period" title="Previous pay period" disabled={!period} onClick={() => setDate(addDays(period.start, -1))} className={navBtn}><Chevron left /> Previous</button>
-              <span className="px-3 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-xs text-slate-800 font-semibold min-w-[180px] text-center" title="Start and end are fixed by the pay period">{period ? payPeriodLabel(period) : "…"}</span>
+              <span className="period-well px-3 rounded-md bg-slate-50 text-xs text-slate-800 font-semibold min-w-[180px] text-center" title="Start and end are fixed by the pay period">{period ? payPeriodLabel(period) : "…"}</span>
               <button type="button" aria-label="Next pay period" title="Next pay period" disabled={!period} onClick={() => setDate(addDays(period.end, 1))} className={navBtn}>Next <Chevron /></button>
               <input type="date" aria-label="Go to the pay period of a date" title="Go to the pay period of a date" max={todayManila()} onChange={(e) => e.target.value && setDate(e.target.value)} className="px-2 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700" />
             </div>
@@ -334,7 +334,7 @@ export default function PayrollRecordsPage() {
                                   {p.status === "unpaid"
                                     ? <button onClick={() => setAdjusting(p)} className={`${rowBtn} border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer`}>Earnings</button>
                                     : <span className="w-[84px] flex-shrink-0" aria-hidden="true" />}
-                                  <button onClick={() => openPayslip(p)} className={`${rowBtn} border border-black/[0.09] text-slate-600 hover:bg-slate-50 cursor-pointer`}>Payslip</button>
+                                  <button onClick={() => openPayslip(p)} className="print-btn"><Icon name="print" size={14} /> Payslip</button>
                                   {p.status === "unpaid"
                                     ? <button data-no-confirm onClick={() => markPaid([p.id], r.employee_id)} disabled={busy} className={`${rowBtn} bg-emerald-500 hover:bg-emerald-600 text-white font-semibold disabled:opacity-40 cursor-pointer`}>Mark paid</button>
                                     : <span className="w-[84px] table-status-badge border border-emerald-200 bg-emerald-50 text-emerald-700">Paid</span>}

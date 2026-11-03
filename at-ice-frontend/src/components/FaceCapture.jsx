@@ -171,13 +171,13 @@ export default function FaceCapture({ descriptor, onChange, onError, title = "We
   };
 
   return (
-    <div className="bg-white border border-black/[0.09] rounded-xl overflow-hidden">
+    <div className="face-card rounded-2xl overflow-hidden">
       <div className="px-[18px] py-3.5 border-b border-black/[0.09] flex items-center gap-2">
         <span className="text-cyan-500"><CameraIcon /></span>
         <div className="text-[13px] font-semibold text-slate-800">{title}</div>
       </div>
       <div className="p-[18px]">
-        <div className="relative w-full aspect-video bg-slate-900 rounded-lg overflow-hidden">
+        <div className="face-viewport relative w-full aspect-video bg-slate-900 rounded-xl overflow-hidden">
           {/* Mirrored like a selfie camera; the face box is mirrored to match */}
           <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover -scale-x-100" />
           {scan && (
@@ -220,7 +220,7 @@ export default function FaceCapture({ descriptor, onChange, onError, title = "We
             type="button"
             onClick={handleCapture}
             disabled={!cameraReady || detecting}
-            className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] font-semibold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-2"
+            className="btn btn-primary flex-1"
           >
             {detecting ? (
               <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Look at the camera…</>
@@ -230,7 +230,7 @@ export default function FaceCapture({ descriptor, onChange, onError, title = "We
             <button
               type="button"
               onClick={stopScan}
-              className="px-4 py-2.5 rounded-lg border border-black/[0.12] text-slate-500 text-[13px] font-medium hover:bg-slate-50 transition-colors"
+              className="btn"
             >
               Cancel
             </button>
@@ -239,7 +239,7 @@ export default function FaceCapture({ descriptor, onChange, onError, title = "We
             <button
               type="button"
               onClick={() => onChange(null, null)}
-              className="px-4 py-2.5 rounded-lg border border-black/[0.12] text-slate-500 text-[13px] font-medium hover:bg-slate-50 transition-colors"
+              className="btn"
             >
               Retake
             </button>

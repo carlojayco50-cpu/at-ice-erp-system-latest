@@ -1,4 +1,5 @@
-﻿import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import L from "leaflet";
 import { Icon } from "./icons";
 import "leaflet/dist/leaflet.css";
@@ -32,6 +33,10 @@ async function lookUp(lat, lng) {
 export default function PinPickerMap({ latitude, longitude, onChange, onAddress }) {
   const boxRef = useRef(null);
   const [big, setBig] = useState(false);
+  // The map lives in its own node. Enlarged, that node moves to the page body,
+  // so no dialog around it can squeeze it; the Leaflet map inside is kept.
+  const [host] = useState(() => document.createElement("div"));
+  const slotRef = useRef(null);
   const mapRef = useRef(null);
   const propRef = useRef(null);
   const armedRef = useRef(false);
@@ -133,6 +138,31 @@ export default function PinPickerMap({ latitude, longitude, onChange, onAddress 
     );
   };
 
+  // Put the map node inline or over the whole page, then let Leaflet redraw
+  // its tiles for the new size.
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    if (!slot) return;
+    if (big) {
+      const dark = !!slot.closest(".cp-dark, .neu-dark");
+      host.className = `map-overlay${dark ? " cp-dark neu-dark" : ""}`;
+      document.body.appendChild(host);
+    } else {
+      host.className = "map-inline-host";
+      slot.appendChild(host);
+    }
+    const map = mapRef.current;
+    requestAnimationFrame(() => map?.invalidateSize());
+    const late = setTimeout(() => map?.invalidateSize(), 250);
+    return () => clearTimeout(late);
+  }, [big, host]);
+  useEffect(() => () => host.remove(), [host]);
+  useEffect(() => {
+    const onDown = (e) => { if (big && e.target === host) setBig(false); };
+    host.addEventListener("mousedown", onDown);
+    return () => host.removeEventListener("mousedown", onDown);
+  }, [big, host]);
+
   // Enlarge: the map covers the page (Close or Esc shrinks it back).
   useEffect(() => {
     if (!big) return;
@@ -141,68 +171,121 @@ export default function PinPickerMap({ latitude, longitude, onChange, onAddress 
     return () => document.removeEventListener("keydown", onKey, true);
   }, [big]);
 
-  const bubble = hasPin ? (label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`) : "Drag the map to the store";
+  const coords = hasPin ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "";
+  // Over the pin while it can move: what to do, then where it is.
+  const bubble = hasPin ? (label || coords) : "Drag the map to place the red pin directly on the store";
+
+  // The next step is always one clear button: Lock pin once the map was
+  // moved (disabled until then), Change pin once it is locked.
+  const lockButton = (
+    <button
+      type="button"
+      onClick={lock}
+      disabled={!hasPin}
+      title={!hasPin ? "Drag the map to the store first" : undefined}
+      className="map-btn map-btn-primary"
+    >
+      <PinIcon /> Lock pin location
+    </button>
+  );
+  const changeButton = (
+    <button type="button" onClick={() => setLocked(false)} className="map-btn">
+      <UnlockIcon /> Change pin
+    </button>
+  );
+  // Locked: a small status pill at the edge, so the middle of the map stays clear.
+  const lockedStatus = (
+    <span className="map-status" title={label || coords}>
+      <LockIcon /> <b>Pin locked</b> <span className="map-status-coords">{coords}</span>
+    </span>
+  );
+
+  const card = (
+    <div className={big ? "map-full-card" : "map-inline"} role={big ? "dialog" : undefined} aria-modal={big || undefined} aria-labelledby={big ? "map-full-title" : undefined}>
+      {/* the enlarged map has no title bar or footer: the map fills the frame
+          and the few controls float on it */}
+      {big && <h2 id="map-full-title" className="sr-only">Select store location on map</h2>}
+      <div className="map-area">
+        <div ref={boxRef} className="absolute inset-0 z-0" />
+
+        {/* Pin fixed in the middle; its tip marks the spot. */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-[500] flex flex-col items-center -translate-x-1/2 -translate-y-full">
+          {!locked && (
+            <div className={`map-bubble mb-1.5 flex max-w-[280px] items-center gap-1.5 rounded-2xl px-3.5 py-2 text-[12.5px] font-semibold text-center leading-snug transition-opacity ${moving ? "opacity-0" : "opacity-100"}`}>
+              <span className="line-clamp-2">{bubble}</span>
+            </div>
+          )}
+          <svg width="30" height="40" viewBox="0 0 30 40" className={`drop-shadow-md transition-transform ${moving ? "-translate-y-2" : ""}`}>
+            <path d="M15 0C6.7 0 0 6.6 0 14.8 0 25.9 15 40 15 40s15-14.1 15-25.2C30 6.6 23.3 0 15 0z" fill="#ef4444" />
+            <circle cx="15" cy="14.5" r="5.5" fill="#fff" />
+          </svg>
+        </div>
+        <div className={`pointer-events-none absolute left-1/2 top-1/2 z-[499] h-1.5 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/30 transition-opacity ${moving ? "opacity-60" : "opacity-0"}`} />
+
+        {!big && (
+          <div className="absolute left-3 right-14 bottom-3 z-[500] flex flex-wrap items-center gap-2">
+            {locked ? <>{lockedStatus}{changeButton}</> : lockButton}
+          </div>
+        )}
+
+        {!big && (
+          <button type="button" onClick={() => setBig(true)} className="map-btn absolute left-3 top-3 z-[500]">
+            <EnlargeIcon /> Enlarge map
+          </button>
+        )}
+
+        {big && (
+          <button type="button" onClick={() => setBig(false)} className="map-close absolute right-3 top-3 z-[501]" aria-label="Close the map">
+            <CloseIcon />
+          </button>
+        )}
+
+        {!locked && (
+          <button
+            type="button"
+            onClick={locate}
+            data-tip="Go to my location"
+            aria-label="Go to my location"
+            className={`map-btn map-btn-icon absolute right-3 z-[500] ${big ? "top-[60px]" : "top-3"}`}
+          >
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" className={locating ? "animate-pulse" : ""}>
+              <circle cx="12" cy="12" r="4" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" />
+            </svg>
+          </button>
+        )}
+        {big && (
+          <div className="map-float-actions absolute left-1/2 bottom-4 z-[500] -translate-x-1/2 flex flex-wrap items-center justify-center gap-2">
+            {locked ? (
+              <>
+                {lockedStatus}
+                {changeButton}
+                <button type="button" onClick={() => setBig(false)} className="map-btn map-btn-primary map-btn-lg">
+                  <CheckIcon /> Done
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={lock} disabled={!hasPin} data-tip={!hasPin ? "Drag the map to the store first" : undefined} className="map-btn map-btn-primary map-btn-lg">
+                <CheckIcon /> Confirm &amp; lock pin
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <>
-    {big && <div className="fixed inset-0 z-[9998] bg-black/50" onClick={() => setBig(false)} />}
-    <div
-      className={`isolate overflow-hidden rounded-xl border border-black/[0.09] bg-slate-100 ${
-        big ? "fixed inset-3 sm:inset-8 z-[9999] shadow-2xl" : "relative h-[260px]"
-      }`}
-    >
-      <div ref={boxRef} className="absolute inset-0 z-0" />
-
-      {/* Pin fixed in the middle; its tip marks the spot. */}
-      <div className="pointer-events-none absolute left-1/2 top-1/2 z-[500] flex flex-col items-center -translate-x-1/2 -translate-y-full">
-        <div className={`mb-1.5 flex max-w-[240px] items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-800 shadow-lg transition-opacity ${moving ? "opacity-0" : "opacity-100"}`}>
-          {locked && <LockIcon className="shrink-0 text-emerald-600" />}
-          <span className="truncate">{bubble}</span>
-        </div>
-        <svg width="30" height="40" viewBox="0 0 30 40" className={`drop-shadow-md transition-transform ${moving ? "-translate-y-2" : ""}`}>
-          <path d="M15 0C6.7 0 0 6.6 0 14.8 0 25.9 15 40 15 40s15-14.1 15-25.2C30 6.6 23.3 0 15 0z" fill="#ef4444" />
-          <circle cx="15" cy="14.5" r="5.5" fill="#fff" />
-        </svg>
-      </div>
-      <div className={`pointer-events-none absolute left-1/2 top-1/2 z-[499] h-1.5 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/30 transition-opacity ${moving ? "opacity-60" : "opacity-0"}`} />
-
-      <button
-        type="button"
-        onClick={() => (locked ? setLocked(false) : lock())}
-        disabled={!hasPin && !locked}
-        className={`absolute left-2.5 bottom-2.5 z-[500] flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-semibold shadow-lg cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
-          locked ? "bg-white text-slate-700 hover:bg-slate-50" : "bg-emerald-600 text-white hover:bg-emerald-700"
-        }`}
-      >
-        {locked ? <><UnlockIcon /> Change pin</> : <><LockIcon /> Lock pin</>}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setBig((v) => !v)}
-        className="absolute left-2.5 top-2.5 z-[500] flex h-10 items-center gap-1.5 rounded-full bg-white px-3.5 text-[12px] font-semibold text-slate-700 shadow-lg cursor-pointer hover:bg-slate-50"
-      >
-        {big ? <><ShrinkIcon /> Close</> : <><EnlargeIcon /> Enlarge</>}
-      </button>
-
-      {!locked && <button
-        type="button"
-        onClick={locate}
-        title="Go to my location"
-        aria-label="Go to my location"
-        className="absolute right-2.5 top-2.5 z-[500] grid h-10 w-10 place-items-center rounded-full bg-white text-slate-700 shadow-lg cursor-pointer hover:bg-slate-50"
-      >
-        <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className={locating ? "animate-pulse" : ""}>
-          <circle cx="12" cy="12" r="4" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" />
-        </svg>
-      </button>}
-    </div>
-    {big && <div className="h-[260px]" />}{/* keeps the form from jumping */}
+      {/* where the map sits in the form (it keeps its height while enlarged) */}
+      <div ref={slotRef} className="relative h-[260px]" />
+      {createPortal(card, host)}
     </>
   );
 }
 
-const LockIcon = ({ className = "" }) => <Icon name="lockSmall" size={13} strokeWidth={2.2} className={className} />;
-const EnlargeIcon = () => <Icon name="enlarge" size={13} strokeWidth={2.2} />;
-const ShrinkIcon = () => <Icon name="shrink" size={13} strokeWidth={2.2} />;
-const UnlockIcon = () => <Icon name="unlock" size={13} strokeWidth={2.2} />;
+const LockIcon = ({ className = "" }) => <Icon name="lockSmall" size={14} strokeWidth={2.2} className={className} />;
+const EnlargeIcon = () => <Icon name="enlarge" size={14} strokeWidth={2.2} />;
+const UnlockIcon = () => <Icon name="unlock" size={14} strokeWidth={2.2} />;
+const CloseIcon = () => <Icon name="x" size={18} strokeWidth={2.4} />;
+const CheckIcon = () => <Icon name="check" size={16} strokeWidth={2.6} />;
+const PinIcon = () => <Icon name="pin" size={15} strokeWidth={2.2} />;

@@ -44,7 +44,7 @@ export default function FileDropZone({ files, onChange, accept, label = "Drop fi
         onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); if (!disabled) add(e.dataTransfer.files); }}
         title="Drop files here, or click to choose them"
-        className={`file-drop w-full rounded-xl border-2 border-dashed px-4 py-5 text-center shadow-inner transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`file-drop drop-well w-full rounded-xl border-2 border-dashed px-4 py-5 text-center shadow-inner transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
           over ? "border-cyan-500 bg-cyan-50/60" : "border-slate-300 bg-slate-50 hover:border-cyan-400"
         }`}
       >
@@ -131,7 +131,7 @@ export function FileUploadProgress({ file, url, field = "file", extra, onUploade
     };
   }, [attempt, file, url, field]);
 
-  const bar = status === "error" ? "bg-red-500" : status === "done" ? "bg-emerald-500" : "bg-cyan-500";
+  const bar = status === "error" ? "bg-red-500" : "upload-fill";
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -159,7 +159,7 @@ export function FileUploadProgress({ file, url, field = "file", extra, onUploade
 // Upload progress for a whole form submit: a percent bar, then done or the error.
 export function UploadBar({ progress, error = "" }) {
   const state = error ? "error" : progress >= 100 ? "done" : "uploading";
-  const bar = state === "error" ? "bg-red-500" : state === "done" ? "bg-emerald-500" : "bg-cyan-500";
+  const bar = state === "error" ? "bg-red-500" : "upload-fill";
   return (
     <div className="flex flex-col gap-1">
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>

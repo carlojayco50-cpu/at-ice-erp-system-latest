@@ -98,7 +98,7 @@ export default function ContractsTab({ stores, live, onChanged }) {
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1.5 justify-end">
                     {c.status === "pending" && (
-                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11.5px] font-medium">Approve</button>
+                      <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "approve" })} className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[11.5px] font-medium">Approve</button>
                     )}
                     {c.status !== "cancelled" && (
                       <button data-no-confirm type="button" onClick={() => setConfirm({ contract: c, action: "cancel" })} className="px-2 py-1 rounded-md border border-black/[0.09] text-red-600 text-[11.5px] hover:bg-red-50">Cancel</button>
@@ -128,7 +128,7 @@ export default function ContractsTab({ stores, live, onChanged }) {
                 : <>All of <b>{confirm.contract.name}</b>'s upcoming deliveries that have not started will be cancelled. Deliveries in transit or delivered stay.</>}
             </p>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirm(null)} className={btnGhost}>Back</button>
+              <button type="button" onClick={() => setConfirm(null)} className={btnGhost}>{confirm.action === "approve" ? "Cancel" : "Keep contract"}</button>
               <button type="button" disabled={busy} onClick={act} className={confirm.action === "approve" ? btnPrimary : "px-3.5 py-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white text-[12px] font-medium disabled:opacity-50"}>
                 {busy ? "Working…" : confirm.action === "approve" ? "Approve" : "Cancel contract"}
               </button>
@@ -258,7 +258,7 @@ function ContractForm({ stores, onClose, onSaved }) {
         </div>
         <div>
           <label className={labelCls}>Notes</label>
-          <input value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
+          <textarea rows={3} value={form.notes} onChange={(e) => set({ notes: e.target.value })} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

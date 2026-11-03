@@ -216,7 +216,7 @@ export default function CustomerReceipts() {
                 <div className="mt-1"><Badge receipt={selected} /></div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => printReceipt(selected)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]">
+                <button onClick={() => printReceipt(selected)} className="print-btn">
                   <PrintIcon /> Print
                 </button>
                 <button onClick={() => setSelectedId(null)} className="text-slate-400 hover:text-slate-700 text-lg leading-none px-2" aria-label="Close">
@@ -229,7 +229,7 @@ export default function CustomerReceipts() {
               {(selected.items || []).length === 0 ? (
                 <div className="text-xs text-slate-400">No item breakdown available.</div>
               ) : (
-                <div className="border border-black/[0.09] rounded-md overflow-hidden">
+                <div className="detail-well !p-2 overflow-hidden">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="text-left text-slate-400 bg-slate-50">
@@ -254,7 +254,7 @@ export default function CustomerReceipts() {
                   </table>
                 </div>
               )}
-              <div className="flex items-center justify-between mt-4 text-sm">
+              <div className="total-row flex items-center justify-between mt-4 rounded-xl px-3.5 py-3 text-sm">
                 <span className="text-slate-500">Total</span>
                 <span className="font-semibold text-slate-800">{peso(selected.total_amount)}</span>
               </div>

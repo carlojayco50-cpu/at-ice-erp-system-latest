@@ -7,5 +7,7 @@ export const TONES = {
   rose: { badge: "bg-rose-500/10 text-rose-700", bar: "bg-rose-500", text: "text-rose-700" },
   violet: { badge: "bg-violet-500/10 text-violet-700", bar: "bg-violet-500", text: "text-violet-700" },
   slate: { badge: "bg-slate-500/10 text-slate-600", bar: "bg-slate-400", text: "text-slate-600" },
+  blue: { badge: "bg-blue-500/10 text-blue-700", bar: "bg-blue-500", text: "text-blue-700" },
+  orange: { badge: "bg-orange-500/10 text-orange-700", bar: "bg-orange-500", text: "text-orange-700" },
 };
 

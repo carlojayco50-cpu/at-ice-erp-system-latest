@@ -229,7 +229,7 @@ export default function AttendancePage() {
             {rangeMode === "cutoff" ? (
               <div className="flex items-center gap-1.5">
                 <button type="button" aria-label="Previous cutoff" disabled={!period} onClick={() => loadPeriod(addDays(period.start, -1))} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500 hover:border-cyan-400 cursor-pointer">‹</button>
-                <span className="px-2.5 py-1.5 rounded-md bg-slate-50 border border-black/[0.06] text-xs text-slate-700 font-medium min-w-[170px] text-center" title="Start and end are fixed by the pay period">
+                <span className="period-well px-2.5 rounded-md bg-slate-50 text-xs text-slate-700 font-medium min-w-[170px] text-center" title="Start and end are fixed by the pay period">
                   {period ? payPeriodLabel(period) : "…"}
                 </span>
                 <button type="button" aria-label="Next cutoff" disabled={!period} onClick={() => loadPeriod(addDays(period.end, 1))} className="px-2 py-1.5 border border-black/[0.09] rounded-md text-xs text-slate-500 hover:border-cyan-400 cursor-pointer">›</button>

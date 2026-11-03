@@ -14,8 +14,9 @@ import { Icon } from "./MobileUi";
 // request and profile on the right), the page in a 16px-padded column, and a
 // 64px bottom navigation with the role's tabs. `actionBar` is the page's main
 // action, kept just above the navigation. It sits inside NightScope (App.jsx),
-// so the ice theme and night mode apply.
-export default function RoleShell({ role, title, children, actionBar = null, headerAction = null }) {
+// so the ice theme and night mode apply. `subHeader` (e.g. a search box)
+// stays stuck under the title bar while the page scrolls.
+export default function RoleShell({ role, title, children, actionBar = null, headerAction = null, subHeader = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -26,18 +27,24 @@ export default function RoleShell({ role, title, children, actionBar = null, hea
   });
 
   return (
-    <div className={`role-shell min-h-[100dvh] w-full overflow-x-hidden bg-slate-50 ${actionBar ? "pb-40" : "pb-20"}`}>
+    <div className={`role-shell min-h-[100dvh] w-full overflow-x-clip bg-slate-50 ${actionBar ? "pb-40" : "pb-20"}`}>
       {logoutDialog}
 
-      <header className="sticky top-0 z-40 h-14 bg-white border-b border-slate-200 px-4 flex flex-nowrap items-center justify-between gap-2">
-        <h1 className="min-w-0 flex-1 text-lg font-bold text-slate-900 truncate">{title}</h1>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {headerAction}
-          <span className="hidden min-[380px]:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">{label}</span>
-          <MyMemosButton compact />
-          <LeaveRequestButton compact />
-          <HeaderAvatar initials={initialsOf(user?.name, label.slice(0, 2).toUpperCase())} name={user?.name || label} subtitle={user?.email || label} onSignOut={askLogout} mobileSignOut />
+      <header className="role-top sticky top-0 z-40 bg-white border-b border-slate-200">
+        <div className="h-14 px-4 flex flex-nowrap items-center justify-between gap-2">
+          {/* one line, never split mid-word; the role badge only shows when it adds something */}
+          <h1 className="page-title min-w-0 flex-1 text-[17px] min-[380px]:text-lg font-bold text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis">{title}</h1>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {headerAction}
+            {String(title).toLowerCase() !== String(label).toLowerCase() && (
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">{label}</span>
+            )}
+            <MyMemosButton compact />
+            <LeaveRequestButton compact />
+            <HeaderAvatar initials={initialsOf(user?.name, label.slice(0, 2).toUpperCase())} name={user?.name || label} subtitle={user?.email || label} onSignOut={askLogout} mobileSignOut />
+          </div>
         </div>
+        {subHeader && <div className="px-4 pb-3 max-w-md mx-auto md:max-w-none">{subHeader}</div>}
       </header>
 
       <main className="p-4 space-y-4 max-w-md mx-auto md:max-w-none">

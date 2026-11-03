@@ -20,7 +20,7 @@ const ICONS = {
 export default function EmptyState({ icon = "box", compact = false, title, action, children }) {
   return (
     <div className={`flex flex-col items-center justify-center text-center ${compact ? "gap-2 py-4" : "gap-3 px-6 py-10"}`} role="status">
-      <div className={`${compact ? "w-10 h-10" : "w-14 h-14"} rounded-full bg-slate-50 border border-black/[0.06] flex items-center justify-center text-slate-400`}>
+      <div className={`${compact ? "w-10 h-10" : "w-14 h-14"} empty-icon rounded-full flex items-center justify-center text-slate-400`}>
         <svg width={compact ? 18 : 24} height={compact ? 18 : 24} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
           {ICONS[icon] || ICONS.box}
         </svg>

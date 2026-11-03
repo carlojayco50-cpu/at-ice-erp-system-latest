@@ -251,7 +251,7 @@ export function EditDeliveryModal({ delivery, drivers, isToday, onClose, onSaved
         </div>
         <div>
           <label className={labelCls}>Notes</label>
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputCls} />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-black/[0.09]">
           <button type="button" onClick={onClose} className={btnGhost}>Close</button>

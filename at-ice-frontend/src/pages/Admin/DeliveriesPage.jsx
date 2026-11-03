@@ -635,8 +635,8 @@ export default function DeliveriesPage() {
                         </div>
                         <div>
                           <label className="text-[11px] text-slate-500 mb-1 block">Notes</label>
-                          <input
-                            type="text"
+                          <textarea
+                            rows={3}
                             value={block.notes}
                             onChange={(e) => updateBlock(bi, { notes: e.target.value })}
                             className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500"
@@ -645,10 +645,10 @@ export default function DeliveriesPage() {
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-500 mb-2 block">Items *</label>
+                        <label className="text-[11px] text-slate-500 mb-2 block">Items * <span className="text-slate-400">(up to {maxQty} each)</span></label>
                         <div className="flex flex-col gap-2">
                           {block.items.map((item, idx) => (
-                            <div key={idx} className="grid grid-cols-[minmax(0,1fr)_72px_auto] sm:grid-cols-[1fr_110px_auto] gap-2 items-center">
+                            <div key={idx} className="grid grid-cols-[minmax(0,1fr)_84px_40px] sm:grid-cols-[1fr_120px_40px] gap-2 items-center">
                               <select
                                 value={item.product_type}
                                 onChange={(e) => updateItem(bi, idx, "product_type", e.target.value)}
@@ -661,7 +661,7 @@ export default function DeliveriesPage() {
                                 ))}
                               </select>
                               <input
-                                type="number" min="1" max={maxQty} placeholder={`Qty (max ${maxQty})`}
+                                type="number" min="1" max={maxQty} placeholder="Qty"
                                 aria-label={`Quantity ${idx + 1}`}
                                 value={item.quantity_ordered}
                                 onChange={(e) => updateItem(bi, idx, "quantity_ordered", e.target.value)}
@@ -672,7 +672,7 @@ export default function DeliveriesPage() {
                                 onClick={() => removeItemRow(bi, idx)}
                                 disabled={block.items.length === 1}
                                 aria-label="Remove item"
-                                className="p-1.5 rounded-md border border-black/[0.09] text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="grid h-10 w-10 place-items-center rounded-lg border border-black/[0.09] text-red-600 cursor-pointer"
                               >
                                 <TrashIcon />
                               </button>
@@ -683,7 +683,7 @@ export default function DeliveriesPage() {
                           type="button"
                           onClick={() => addItemRow(bi)}
                           disabled={block.items.length >= PRODUCT_TYPES.length}
-                          className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border-2 border-dashed border-cyan-500 bg-cyan-50 text-cyan-700 text-[12px] font-semibold hover:bg-cyan-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 border-dashed border-cyan-500/60 text-cyan-700 text-[12px] font-semibold"
                         >
                           <PlusIcon /> Add item
                         </button>
@@ -699,7 +699,7 @@ export default function DeliveriesPage() {
               <button
                 type="button"
                 onClick={addBlock}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border-2 border-dashed border-cyan-500/60 text-cyan-700 hover:bg-cyan-500/[0.06] text-[13px] font-semibold"
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-cyan-500/60 text-cyan-700 text-[13px] font-semibold"
               >
                 <PlusIcon /> New delivery
               </button>
@@ -727,7 +727,8 @@ export default function DeliveriesPage() {
                 <XIcon />
               </button>
             </div>
-            <div className="p-5 flex flex-col gap-3 text-[13px]">
+            <div className="p-5 flex flex-col gap-4 text-[13px]">
+              <div className="detail-well">
               <Row label="Customer" value={viewing.customer?.name} />
               <Row label="Driver" value={<>{viewing.driver?.name || (viewing.status === "queued" ? "Queued, waiting for a driver" : "—")} {viewing.reassigned_from && <span className="ml-1"><ReassignedTag delivery={viewing} /></span>}</>} />
               {viewing.contract && <Row label="Contract" value={`${viewing.contract.contract_no} · ${viewing.contract.name}`} />}
@@ -735,11 +736,12 @@ export default function DeliveriesPage() {
               <Row label="Scheduled" value={viewing.scheduled_date ? new Date(viewing.scheduled_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"} />
               <Row label="Status" value={<span className="capitalize">{viewing.status?.replace("_", " ")}</span>} />
               <Row label="Notes" value={viewing.notes || "—"} />
+              </div>
               <div>
                 <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-1.5">Items</div>
                 <div className="flex flex-col gap-1.5">
                   {(viewing.items || []).map((it) => (
-                    <div key={it.id} className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
+                    <div key={it.id} className="item-card flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5">
                       <span className="text-slate-700">{it.product_type ? productLabel(it.product_type) : it.product?.name}</span>
                       <span className="text-slate-500 font-mono text-right">
                         {it.quantity_ordered} × ₱{Number(it.unit_price).toFixed(2)}
@@ -962,12 +964,11 @@ function DriverPicker({ drivers, loading, enforced, value, onChange, onOpen }) {
         ) : (
           <span className="text-slate-400">Select driver…</span>
         )}
-        <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="text-slate-400 flex-shrink-0"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1 w-full min-w-[280px] bg-white border border-black/[0.12] rounded-lg shadow-lg">
-          <div className="p-2 border-b border-black/[0.07]">
+        <div className="menu-pop absolute z-20 mt-2 w-full min-w-[340px] max-w-[calc(100vw-48px)] p-1.5">
+          <div className="p-1.5 pb-2">
             <input
               ref={inputRef}
               type="text"
@@ -993,7 +994,7 @@ function DriverPicker({ drivers, loading, enforced, value, onChange, onOpen }) {
                   aria-disabled={!ok}
                   onMouseEnter={() => setActive(i)}
                   onClick={() => pick(d)}
-                  className={`px-3 py-2 flex items-center justify-between gap-2 text-[13px] ${ok ? "cursor-pointer" : "cursor-not-allowed opacity-60"} ${i === active && ok ? "bg-cyan-50" : ""}`}
+                  className={`soft-opt text-[13px] ${ok ? "" : "is-disabled"} ${i === active && ok ? "is-active" : ""}`}
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />

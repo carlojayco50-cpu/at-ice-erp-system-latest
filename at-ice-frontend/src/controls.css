@@ -4,13 +4,13 @@
    or a button always lines up. Loaded after the neumorphism and glow styles. */
 
 :root {
-  --ctl-h: var(--control-height); /* the app's one control height (index.css): 40px */
+  --ctl-h: var(--control-height); /* the app's one control height (index.css): 44px */
   --ctl-radius: var(--control-radius);
   --ctl-font: 13px;
   --ctl-icon: 14px;
 }
 @media (max-width: 639px) {
-  :root { --ctl-h: 44px; } /* touch target, same as the phone rule in neumorphism.css */
+  :root { --ctl-h: 44px; --control-height: 44px; } /* touch target, same as the phone rule in neumorphism.css */
 }
 
 /* Standalone fields and selects */
@@ -76,30 +76,13 @@
   justify-content: center;
   gap: 6px;
 }
-:is(.ice-main, .ice-scope) button:is([aria-label^="Previous"], [aria-label^="Next"]):disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  filter: none;
-}
 /* The calendar popup's arrows match them */
 .soft-icon-btn, .soft-cal-caption { height: var(--ctl-h) !important; }
 .soft-icon-btn { width: var(--ctl-h) !important; border-radius: var(--ctl-radius) !important; }
 .soft-cal-caption { border-radius: var(--ctl-radius) !important; }
-@media (hover: hover) {
-  .soft-icon-btn:not(:disabled):hover, .soft-cal-caption:not(:disabled):hover, .soft-day:not(:disabled):hover {
-    filter: drop-shadow(0 0 7px rgba(var(--glow-rgb), calc(var(--glow-lift) * 0.8)));
-  }
-}
-.soft-icon-btn:not(:disabled):active, .soft-day:not(:disabled):active { filter: none; }
 
-/* Hover and focus: a soft cyan glow, stronger on focus. Fields keep their
-   pressed-in look; the glow is added to it, and an error outline wins. */
-@media (hover: hover) {
-  :is(.ice-main, .ice-scope) :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select, textarea):not(:focus):hover,
-  :is(.ice-main, .ice-scope) :is(div, span, label).flex.items-center.border:has(> :is(input, select)):not(:focus-within):hover {
-    filter: drop-shadow(0 0 7px rgba(var(--glow-rgb), calc(var(--glow-lift) * 0.7)));
-  }
-}
+/* Focus: one plain 2px ring, never a glow. Fields keep their pressed-in look
+   and an error outline wins. */
 /* A bare field (not inside a search row) shows its focus as a plain 2px ring
    on its own inset. The :not(#search-row) only adds specificity so this beats
    the field inset rule in neumorphism.css; #search-row never matches. */
@@ -115,4 +98,1002 @@
 }
 @media (prefers-reduced-motion: reduce) {
   :is(.ice-main, .ice-scope) :is(input, select, textarea, button) { transition: none; }
+}
+
+/* ---- Shared states, every role and page ----------------------------------
+   Last in the cascade so a page's own classes cannot undo them. */
+
+/* Disabled: one look for every button (neutral, cyan primary, red danger and
+   icon buttons). It sits flat in the base color, slightly pressed in, with
+   faint text, so it reads as "not available" in light and night mode instead
+   of a washed-out pink or pale cyan. Cards, tabs, switches and the calendar
+   keep their own disabled look. */
+#root button:is(:disabled, [aria-disabled="true"]):not(.soft-pop *, .leaflet-container *, .map-btn, [role="switch"], [role="tab"], .bg-transparent, .text-left, .kpi-card, .stat-card, .stat-pill),
+.guard-btn:disabled {
+  background-color: var(--neu-bg) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  color: var(--neu-faint) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+  opacity: 1 !important;
+  filter: none !important;
+  cursor: not-allowed !important;
+  pointer-events: auto;
+}
+#root button:is(:disabled, [aria-disabled="true"]):not(.soft-pop *, .leaflet-container *, .map-btn, [role="switch"], [role="tab"], .bg-transparent, .text-left, .kpi-card, .stat-card, .stat-pill) :is(span, svg) {
+  color: inherit !important;
+}
+
+/* Custom dropdowns (a button that opens a list, e.g. the Driver picker) look
+   exactly like a native select: the same dent, height, radius and cyan chevron. */
+#root button[aria-haspopup="listbox"] {
+  min-height: var(--ctl-h);
+  border-radius: var(--ctl-radius) !important;
+  font-size: var(--ctl-font);
+  color: var(--neu-text);
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2306b6d4' stroke-width='2.4' viewBox='0 0 24 24'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 32px !important;
+}
+#root button[aria-haspopup="listbox"]:focus-visible,
+#root button[aria-haspopup="listbox"][aria-expanded="true"] {
+  box-shadow: var(--neu-inset), 0 0 0 2px rgba(6, 182, 212, 0.7) !important;
+}
+#root button[aria-haspopup="listbox"]:is(:active, [data-pressed]) { color: var(--neu-text) !important; }
+
+/* Dropdown menus: the soft picker popup and custom menus (.menu-pop) are one
+   solid floating surface with a shadow, above the fields, on a page or in a
+   dialog. Nothing under them shows through. */
+.soft-pop,
+.menu-pop {
+  background-color: var(--neu-bg) !important;
+  border: 1px solid rgba(255, 255, 255, 0.75) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--float-shadow-sm) !important;
+  z-index: 1500 !important;
+}
+:is(.cp-dark, .neu-dark) :is(.soft-pop, .menu-pop), :is(.soft-pop, .menu-pop):is(.neu-dark) { border-color: rgba(255, 255, 255, 0.07) !important; }
+.menu-pop [role="option"][aria-selected="true"] { box-shadow: var(--neu-inset-sm); color: var(--neu-accent); font-weight: 600; }
+:is(.soft-pop, .menu-pop) .soft-opt:not(.is-disabled):hover { color: var(--neu-accent); }
+
+/* Phone number: the +63 prefix sits in the field, split from the number by a
+   thin groove, on the same line and size as the typed digits. */
+.phone-field { position: relative; width: 100%; }
+.phone-prefix {
+  position: absolute; top: 0; bottom: 0; left: 0; z-index: 1;
+  display: flex; align-items: center;
+  padding-left: 12px;
+  font-size: var(--ctl-font); font-weight: 600; line-height: 1;
+  color: var(--neu-muted);
+  pointer-events: none; user-select: none;
+}
+.phone-prefix::after {
+  content: "";
+  width: 1px; height: 18px; margin-left: 10px;
+  background-color: var(--neu-lo);
+}
+.phone-field > input { padding-left: 56px !important; }
+.phone-field:has(> input:is(.text-base, [class*="text-[15px]"], [class*="text-[16px]"])) .phone-prefix { font-size: 16px; }
+.phone-field:has(> input:is(.text-base, [class*="text-[15px]"], [class*="text-[16px]"])) > input { padding-left: 64px !important; }
+
+/* Dashed "add" buttons (+ Add item, + New delivery): a pressed-in well that
+   keeps its cyan dashed edge, so it reads as "drop a new one here". */
+#root button.border-dashed:not(:disabled) {
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+#root button.border-dashed:not(:disabled):hover { box-shadow: var(--neu-inset) !important; }
+
+/* Dialogs: a read-only summary (e.g. "From Maintenance" in Edit project) is a
+   pressed-in box with soft labels, not loose text on the card. */
+#root .fixed.inset-0 div:is(.bg-slate-50, .bg-slate-100):is(.rounded, .rounded-md, .rounded-lg, .rounded-xl):not(:has(input, select, textarea, button)) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  border-radius: var(--neu-radius-sm) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+/* Confirm-only dialogs (no fields, e.g. Delete project?): the warning text
+   sits in the same pressed-in box as the shared confirmation card. */
+#root .fixed.inset-0 > :is(div, form):not(:has(input, select, textarea, table, img, canvas, ul, ol)) > p {
+  margin-top: 12px !important;
+  padding: 12px 14px;
+  border-radius: var(--neu-radius-sm);
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+  line-height: 1.5;
+}
+
+/* Soft list rows (Dashboard projects and critical stock): each row is its own
+   slot on the card. A clickable row lifts on hover and sinks when pressed; a
+   plain row is a shallow dent. Status chips on them are slightly raised. */
+#root .soft-row {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background-color: var(--neu-bg) !important;
+  transition: box-shadow 0.16s ease-out;
+}
+#root div.soft-row { box-shadow: var(--neu-inset-sm); }
+#root button.soft-row { box-shadow: none; }
+#root button.soft-row:hover { box-shadow: var(--neu-raised-sm) !important; }
+#root button.soft-row:is(:active, [data-pressed]) { box-shadow: var(--neu-inset-sm) !important; color: inherit !important; }
+#root .soft-chip { box-shadow: 2px 2px 5px var(--neu-lo), -2px -2px 5px var(--neu-hi) !important; border-color: transparent !important; }
+
+/* Breakdown rows that filter a list (Staff by role, Staff by position...):
+   a padded slot that sinks in on hover and stays sunk while it is the active
+   filter, the same as a selected KPI card. */
+#root button.breakdown-row {
+  display: block;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background-color: var(--neu-bg) !important;
+  box-shadow: none;
+  transition: box-shadow 0.18s ease-out;
+}
+#root button.breakdown-row:hover { box-shadow: var(--neu-inset-sm) !important; }
+#root button.breakdown-row:is([aria-current="true"], :active, [data-pressed]) {
+  box-shadow: var(--neu-inset) !important;
+  color: inherit !important;
+}
+
+/* Drop zones (resume, documents, files): a pressed-in well with a dashed cyan
+   edge; it sinks deeper while a file is dragged over it. */
+#root .drop-well {
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset) !important;
+  border-color: rgba(6, 182, 212, 0.45) !important;
+}
+#root .drop-well:is(:hover, .border-cyan-500) {
+  box-shadow: inset 6px 6px 12px var(--neu-lo), inset -6px -6px 12px var(--neu-hi) !important;
+  border-color: rgba(6, 182, 212, 0.8) !important;
+}
+
+/* Form steps (Add Employee): every step is a raised pill; the current one is
+   pressed in with the accent text; done and error steps keep a colored text. */
+#root button.step-pill {
+  background-color: var(--neu-bg) !important;
+  border: 0 !important;
+  color: var(--neu-muted) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+#root button.step-pill > span:first-child { background-color: var(--neu-bg) !important; color: inherit !important; box-shadow: var(--neu-inset-sm); }
+#root button.step-pill.is-current { box-shadow: var(--neu-inset) !important; color: var(--neu-accent) !important; }
+#root button.step-pill.is-current > span:first-child { background-color: #06b6d4 !important; color: #0f172a !important; box-shadow: none; }
+#root button.step-pill.is-done { color: #047857 !important; }
+#root button.step-pill.is-error { color: #b91c1c !important; }
+#root .cp-dark button.step-pill.is-done { color: #6ee7b7 !important; }
+#root .cp-dark button.step-pill.is-error { color: #fca5a5 !important; }
+
+/* Icon fields (Login, Forgot password and any row with an icon and a bare
+   field): the row is the one pressed-in pill; the field inside stays flat, so
+   there is no second box or edge beside the icon. */
+#root :is(.neu-inset, .flex.items-center:has(> svg, > span > svg)) > :is(input, textarea).bg-transparent,
+#root .neu-inset > :is(input, select, textarea) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Text areas: never smaller than about four lines, grow downwards only, and
+   long words wrap instead of running out of the box (desktop and phone). */
+#root textarea:not(.soft-pop *) {
+  min-height: 96px;
+  height: auto !important;
+  padding: 12px 14px !important;
+  line-height: 1.5;
+  resize: vertical;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+/* every Notes, remarks and reply box is the same deep well (like the
+   support reply box), with readable text and placeholder in both themes */
+#root textarea:not(.soft-pop *, .guard-field textarea) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  border-radius: 14px !important;
+  box-shadow: var(--neu-inset) !important;
+  color: var(--neu-text) !important;
+}
+#root textarea:not(.soft-pop *)::placeholder { color: var(--neu-faint) !important; opacity: 1; }
+#root textarea:not(.soft-pop *):focus { box-shadow: var(--neu-inset), 0 0 0 2px rgba(6, 182, 212, 0.7) !important; }
+
+/* Text buttons and links (Remove, Change, Clear, Copy link): rounded, so a
+   press or keyboard focus is a soft pill, never a square box. */
+#root button:not([class*="rounded"], .soft-pop *, .leaflet-container *) { border-radius: 10px; }
+#root :is(button, a):not([class*="rounded"]):is(:active, [data-pressed], :focus-visible) { border-radius: 10px !important; }
+
+/* Pay period toolbars (Attendance, Timesheets, Payroll): Previous, the period,
+   Next, the date picker, dropdowns and search are all one 44px height. */
+/* the bars use the app's one control height */
+#root .period-well {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--ctl-h);
+  border-radius: var(--ctl-radius) !important;
+}
+#root :is(.flex:has(> .period-well), .flex:has(> .flex > .period-well)) :is(button, input, select) {
+  min-height: var(--ctl-h);
+  border-radius: var(--ctl-radius);
+}
+#root .date-pill { background-color: var(--neu-bg) !important; }
+
+/* Open dialogs and bottom sheets hold the page still: a swipe inside the sheet
+   never scrolls the list behind it. The calendar and dropdown popups are not
+   dialogs (no full-screen layer), so they leave the page scrollable. */
+html:has(:is(.fixed.inset-0[class*="z-"]:not(.pointer-events-none), .guard-layer)),
+html:has(:is(.fixed.inset-0[class*="z-"]:not(.pointer-events-none), .guard-layer)) body,
+html:has(:is(.fixed.inset-0[class*="z-"]:not(.pointer-events-none), .guard-layer)) .ice-main {
+  overflow: hidden !important;
+}
+:is(.role-sheet, .guard-card, .fixed.inset-0 [class*="overflow-y-auto"], .fixed.inset-0[class*="overflow-y-auto"]) {
+  overscroll-behavior: contain;
+}
+
+/* My Memos in front: other open sheets and dialogs are hidden, not closed,
+   so whatever was typed in them is still there when My Memos closes. */
+html.front-sheet-open :is(.fixed.inset-0[class*="z-"], .guard-layer):not([data-front-sheet], [data-front-sheet] *) {
+  visibility: hidden !important;
+}
+:is(#root, body) .memo-empty-icon { background-color: var(--neu-bg) !important; box-shadow: var(--neu-inset) !important; }
+
+/* Pagination: the "2 / 5" counter is a pressed-in well between the raised
+   Previous and Next buttons. */
+#root .pager span[aria-current="page"] {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+
+/* Round icon tiles (empty states, avatars, icon badges): a pressed-in well
+   when grey, a raised disc when white. Small dots and switch knobs (under
+   32px) keep their own look. */
+#root .empty-icon,
+#root :is(div, span).rounded-full:is(.bg-slate-50, .bg-slate-100, .bg-gray-100):is([class*="w-8 "], [class*="w-9 "], [class*="w-10"], [class*="w-11"], [class*="w-12"], [class*="w-14"], [class*="w-16"]) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+#root .neu :is(div, span).rounded-full:is(.bg-white, [class*="bg-white/"]):is([class*="w-8 "], [class*="w-9 "], [class*="w-10"], [class*="w-11"], [class*="w-12"], [class*="w-14"], [class*="w-16"]) {
+  background-color: var(--neu-bg) !important;
+  border-color: transparent !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+
+/* ---- Store map (components/PinPickerMap.jsx) ------------------------------
+   Inline: a 260px map in the form. Enlarged: the map moves to the page body
+   in a near full-screen card (92vw x 88vh) over a dimmed, blurred page, with
+   a title bar that says what to do and big Lock pin / Done buttons. The map
+   buttons are solid and high-contrast so they never blend into the tiles. */
+.map-inline-host { position: absolute; inset: 0; }
+.map-inline { position: absolute; inset: 0; }
+.map-area {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  height: 100%;
+  border-radius: 14px;
+  background-color: #e2e8f0;
+  box-shadow: var(--neu-inset-sm);
+}
+.map-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(15, 23, 42, 0.5);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.map-full-card {
+  width: 92vw;
+  max-width: 1480px;
+  height: 86vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px;
+  border-radius: 20px;
+  color: var(--neu-text);
+  background-color: var(--neu-bg);
+  box-shadow: var(--float-shadow);
+  font-family: inherit;
+}
+.map-full-card .map-area { flex: 1 1 auto; min-height: 0; height: auto; }
+.map-full-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 2px 4px;
+}
+.map-full-head h2 { font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--neu-text); }
+.map-full-head p { margin-top: 2px; font-size: 13px; line-height: 1.45; color: var(--neu-muted); }
+
+.map-btn.map-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22), 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+.map-btn.map-btn svg { color: #0891b2; }
+.map-btn.map-btn:hover { background-color: #f1f5f9 !important; }
+.map-btn.map-btn:active { box-shadow: inset 2px 2px 5px rgba(15, 23, 42, 0.25) !important; }
+.map-btn.map-btn:focus-visible { outline: none; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22), 0 0 0 3px #38bdf8 !important; }
+.map-btn.map-btn-primary { background-color: #06b6d4 !important; color: #0f172a !important; }
+.map-btn.map-btn-primary svg { color: #0f172a; }
+.map-btn.map-btn-primary:hover { background-color: #0891b2 !important; }
+.map-btn.map-btn-locked { background-color: #047857 !important; color: #ffffff !important; }
+.map-btn.map-btn-locked svg { color: #ffffff; }
+.map-btn.map-btn-locked:hover { background-color: #065f46 !important; }
+.map-btn.map-btn-icon { width: 38px; padding: 0; }
+.map-btn.map-btn:disabled {
+  cursor: not-allowed;
+  color: #64748b !important;
+  background-color: #e2e8f0 !important;
+  box-shadow: inset 2px 2px 5px rgba(100, 116, 139, 0.35), 0 4px 12px rgba(15, 23, 42, 0.18) !important;
+}
+.map-btn.map-btn:disabled svg { color: inherit; }
+.map-bubble { background-color: #ffffff; color: #0f172a; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22); }
+
+/* Long option names wrap onto two lines with room between them */
+.soft-pop .soft-opt { padding: 8px 12px; line-height: 1.35; }
+.soft-pop .soft-list { gap: 4px; }
+
+/* Status pills and small badges (In stock, Pending, Paid, role badges...):
+   they keep their tone, lose the hard border, and sit slightly raised on the
+   surface instead of lying flat. Dots and fixed-size icon tiles are left out. */
+#root span.rounded-full:is([class*="bg-"][class*="-50 "], [class*="bg-"][class$="-50"], [class*="bg-"][class*="-100 "], [class*="bg-"][class$="-100"]):not([class*=" w-"], [class^="w-"], [class*=" h-"], [class^="h-"]),
+#root .table-status-badge {
+  border-color: transparent !important;
+  box-shadow: 2px 2px 5px var(--neu-lo), -2px -2px 5px var(--neu-hi) !important;
+}
+
+/* ---- Every modal, dialog, popup and bottom sheet: one tactile frame -------
+   A chamfered neumorphic bezel (light top-left edge, deep drop shadow, a soft
+   inner bevel), a sticky header with a bold title and a round X, and a sticky
+   footer with the actions, each split from the body by an etched groove. The
+   same anatomy as the dialogs people know from other apps. */
+:root {
+  --bezel-edge: rgba(255, 255, 255, 0.78);
+  --bezel-shadow: 0 18px 40px -8px rgba(15, 23, 42, 0.28), 0 4px 12px -4px rgba(15, 23, 42, 0.14), inset 1px 1px 2px rgba(255, 255, 255, 0.55), inset -1px -1px 3px rgba(148, 163, 184, 0.35);
+  --groove-line: rgba(148, 163, 184, 0.22);
+  --groove-light: rgba(255, 255, 255, 0.8);
+  --modal-dim: rgba(15, 23, 42, 0.25);
+}
+.cp-dark, .neu-dark {
+  --bezel-edge: rgba(255, 255, 255, 0.08);
+  --bezel-shadow: 0 18px 40px -8px rgba(0, 0, 0, 0.6), 0 4px 12px -4px rgba(0, 0, 0, 0.4), inset 1px 1px 2px rgba(255, 255, 255, 0.04), inset -1px -1px 3px rgba(0, 0, 0, 0.35);
+  --groove-line: rgba(0, 0, 0, 0.4);
+  --groove-light: rgba(255, 255, 255, 0.05);
+  --modal-dim: rgba(2, 6, 23, 0.45);
+}
+
+/* the frame (#modal-panel never matches; it only outweighs the older modal
+   rule in neumorphism.css, which uses the same trick) */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]),
+#root .fixed.inset-0 > :is(div, form) > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):is([class*="max-w-"], [class*="overflow-y-auto"]),
+:is(#root, body) .guard-card,
+.map-full-card,
+:is(#root, body) .role-sheet {
+  background-color: var(--neu-bg) !important;
+  /* no CSS border: a light top-left border on a rounded box leaves a hard
+     line where it fades out at the corners; the inner highlight is the edge */
+  border: 0 !important;
+  border-radius: 24px !important;
+  box-shadow: var(--bezel-shadow) !important;
+}
+:is(#root, body) .role-sheet,
+:is(#root, body) .guard-layer.is-sheet .guard-card {
+  border-bottom: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+/* one dimmed, blurred backdrop behind all of them */
+#root .fixed.inset-0:is([class*="bg-black/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"]),
+#root .fixed.inset-0 > .absolute.inset-0:is([class*="bg-black/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"]),
+:is(#root, body) .sheet-backdrop,
+:is(#root, body) .guard-backdrop,
+.map-overlay {
+  background-color: var(--modal-dim) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* sticky header: bold title, etched groove under it */
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-b:first-child {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 16px 20px !important;
+  background-color: var(--neu-bg) !important;
+  border-bottom: 1px solid var(--groove-line) !important;
+  box-shadow: 0 1px 0 var(--groove-light) !important;
+}
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-b:first-child > :is(h1, h2, h3, div:not(:has(*))):first-child,
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-b:first-child > div:first-child > :is(h1, h2, h3, div:not(:has(*))):first-child,
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > :is(h2, h3, div.font-semibold, div.font-bold):first-child,
+:is(#root, body) .guard-title,
+.map-full-head h2 {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  color: var(--neu-text) !important;
+}
+
+/* the X: a raised round button that presses in */
+#root .fixed.inset-0 button:is([aria-label="Close" i], [aria-label^="Close " i]):not(.sheet-backdrop, .map-btn),
+#root .fixed.inset-0 > :is(div, form) > div.border-b:first-child > button:last-child:has(> svg:only-child):not(.print-btn),
+#root .fixed.inset-0 > :is(div, form) > div.border-b:first-child > div > button:has(> svg:only-child):last-child:not(.print-btn),
+:is(#root, body) .role-sheet button[aria-label="Close"] {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  padding: 0 !important;
+  flex-shrink: 0;
+  display: inline-grid !important;
+  place-items: center;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  color: var(--neu-muted) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+  transition: box-shadow 0.15s ease-out;
+}
+#root .fixed.inset-0 button:is([aria-label="Close" i], [aria-label^="Close " i]):not(.sheet-backdrop, .map-btn):is(:hover, :active, [data-pressed]),
+#root .fixed.inset-0 > :is(div, form) > div.border-b:first-child > button:last-child:has(> svg:only-child):not(.print-btn):is(:hover, :active, [data-pressed]),
+#root .fixed.inset-0 > :is(div, form) > div.border-b:first-child > div > button:has(> svg:only-child):last-child:not(.print-btn):is(:hover, :active, [data-pressed]),
+:is(#root, body) .role-sheet button[aria-label="Close"]:is(:hover, :active, [data-pressed]) {
+  box-shadow: var(--neu-inset-sm) !important;
+  color: var(--neu-text) !important;
+}
+
+/* sticky footer: actions always in view, etched groove above them */
+#root .fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > div.flex:is(.justify-end, .justify-between, .border-t):has(> button):last-child:not(:first-child),
+#root .fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > form > div.flex:is(.justify-end, .justify-between, .border-t):has(> button):last-child:not(:first-child),
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-t:last-child {
+  border-top: 1px solid var(--groove-line) !important;
+  box-shadow: inset 0 1px 0 var(--groove-light) !important;
+}
+:is(#root, body) .guard-actions {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--groove-line);
+  box-shadow: inset 0 1px 0 var(--groove-light);
+}
+
+/* Store map: header and footer of the enlarged view, the round close, the
+   locked status pill and the big confirm button */
+.map-full-head {
+  flex: none;
+  flex-wrap: nowrap !important;
+  padding: 4px 4px 12px !important;
+  border-bottom: 1px solid var(--groove-line);
+  box-shadow: 0 1px 0 var(--groove-light);
+}
+.map-full-foot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 4px 2px;
+  border-top: 1px solid var(--groove-line);
+  box-shadow: inset 0 1px 0 var(--groove-light);
+}
+.map-foot-place { color: var(--neu-muted); }
+.map-foot-place b { color: var(--neu-text); }
+.map-close {
+  flex: none;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 9999px; cursor: pointer;
+  color: var(--neu-muted);
+  background-color: var(--neu-bg);
+  box-shadow: var(--neu-raised-sm);
+  transition: box-shadow 0.15s ease-out;
+}
+.map-close:is(:hover, :active) { box-shadow: var(--neu-inset-sm); color: var(--neu-text); }
+.map-close:focus-visible { outline: none; box-shadow: var(--neu-raised-sm), 0 0 0 3px #38bdf8; }
+.map-btn.map-btn.map-btn-lg { min-height: 40px; padding: 0 18px; font-size: 13.5px; font-weight: 600; }
+.map-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; max-width: 100%; padding: 0 12px;
+  border-radius: 9999px;
+  font-size: 12.5px; color: #065f46;
+  background-color: #ecfdf5;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  white-space: nowrap; overflow: hidden;
+}
+.map-status b { font-weight: 700; }
+.map-status-coords { font-family: ui-monospace, monospace; font-size: 11.5px; color: #047857; overflow: hidden; text-overflow: ellipsis; }
+.map-full-foot .map-status { box-shadow: var(--neu-inset-sm); background-color: var(--neu-bg); color: var(--neu-text); }
+.map-full-foot .map-status-coords { color: var(--neu-muted); }
+
+/* Pagination: Previous, the page counter, Next and the rows menu are the same
+   44px as every other control */
+#root .pager :is(button, span[aria-current="page"], select) {
+  min-height: var(--ctl-h) !important;
+  height: var(--ctl-h);
+}
+/* the map's own pills keep their surface inside a dialog */
+:is(#root, body) .map-status { background-color: #ecfdf5 !important; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18) !important; }
+:is(#root, body) .map-full-foot .map-status { background-color: var(--neu-bg) !important; box-shadow: var(--neu-inset-sm) !important; }
+:is(#root, body) .map-bubble { background-color: #ffffff !important; color: #0f172a !important; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22) !important; }
+/* bottom sheets stay square at the bottom edge (#modal-panel only adds weight) */
+:is(#root, body) .fixed.inset-0 > :is(.role-sheet, #modal-panel).bg-white {
+  border-bottom: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+/* ---- Final polish: utility buttons, filters, progress, modal surfaces ----- */
+:root {
+  --track-inset: inset 2px 2px 4px rgba(148, 163, 184, 0.55), inset -2px -2px 4px rgba(255, 255, 255, 0.9);
+  --modal-cap: color-mix(in srgb, var(--neu-bg) 84%, #ffffff);
+  --modal-body: color-mix(in srgb, var(--neu-bg) 97%, #64748b);
+  --groove-dark: rgba(148, 163, 184, 0.35);
+}
+.cp-dark, .neu-dark {
+  --track-inset: inset 2px 2px 4px rgba(0, 0, 0, 0.6), inset -2px -2px 4px rgba(255, 255, 255, 0.06);
+  --modal-cap: color-mix(in srgb, var(--neu-bg) 95%, #ffffff);
+  --modal-body: color-mix(in srgb, var(--neu-bg) 94%, #000000);
+  --groove-dark: rgba(0, 0, 0, 0.45);
+}
+
+/* Print and other header utilities: a raised pill with icon and text side by
+   side (never a circle; only the X is round). It sinks in on hover and press. */
+:is(#root, body) .print-btn {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  width: auto !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  min-width: 0 !important;
+  padding: 0 16px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--neu-text) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+  transition: box-shadow 0.15s ease-out;
+}
+:is(#root, body) .print-btn svg { flex: none; color: var(--neu-accent); }
+:is(#root, body) .print-btn:is(:hover, :active, [data-pressed]) { box-shadow: var(--neu-inset-sm) !important; }
+:is(#root, body) td .print-btn { height: 32px !important; min-height: 32px !important; padding: 0 12px !important; }
+
+/* Clear filters: a raised 44px pill like the controls beside it; pressed in
+   with cyan text on hover and click. */
+#root button.clear-filters.clear-filters {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--ctl-h) !important;
+  min-height: var(--ctl-h) !important;
+  padding: 0 16px !important;
+  border: 0;
+  border-radius: 12px !important;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  color: var(--neu-muted) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+  transition: box-shadow 0.15s ease-out, color 0.15s ease-out;
+}
+#root button.clear-filters:is(:hover, :active, [data-pressed]) { box-shadow: var(--neu-inset-sm) !important; color: var(--neu-accent) !important; }
+
+/* Goal Completion bars (Performance): a sunken channel that shows even at
+   0%, a small nub at the start when empty, and a fill with a soft top
+   highlight when there is progress. Other progress bars keep their own look. */
+#root .goal-bar {
+  height: 10px !important;
+  padding: 2px;
+  box-sizing: border-box;
+  border-radius: 9999px !important;
+  overflow: hidden;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--track-inset) !important;
+}
+#root .goal-bar > * {
+  display: block;
+  height: 100% !important;
+  min-width: 6px;
+  max-width: 100%;
+  border-radius: 9999px !important;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 65%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+#root .goal-bar > :is([style*="width: 0%"], [style*="width:0%"]) {
+  background-color: var(--neu-faint) !important;
+  background-image: none;
+  opacity: 0.45;
+}
+
+/* Modals: the header and footer are a brighter raised cap, the body between
+   them a slightly deeper well, split by a two-line etched groove (a dark line
+   and a light line). */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]),
+#root .fixed.inset-0 > :is(div, form) > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):is([class*="max-w-"], [class*="overflow-y-auto"]) {
+  background-color: var(--modal-body) !important;
+}
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-b:first-child {
+  background-color: var(--modal-cap) !important;
+  border-bottom: 1px solid var(--groove-dark) !important;
+  box-shadow: 0 1px 0 var(--groove-light) !important;
+}
+#root .fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > div.flex:is(.justify-end, .justify-between, .border-t):has(> button):last-child:not(:first-child),
+#root .fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > form > div.flex:is(.justify-end, .justify-between, .border-t):has(> button):last-child:not(:first-child),
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]) > div.border-t:last-child {
+  background-color: var(--modal-cap) !important;
+  border-top: 1px solid var(--groove-dark) !important;
+  box-shadow: inset 0 1px 0 var(--groove-light) !important;
+}
+
+/* Detail views (invoice details, payment proofs): the key-value rows sit in
+   a pressed-in well. */
+:is(#root, body) .detail-well {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 16px;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+
+:is(#root, body) .item-card {
+  background-color: var(--neu-bg) !important;
+  border: 0 !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+:is(#root, body) .total-row {
+  background-color: var(--modal-cap) !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+
+/* ---- Modal shell: header, scrolling body, footer ---------------------------
+   A dialog marked .modal-shell (or any dialog whose panel is exactly a title
+   bar, a middle and a bottom bar) is a column no taller than 90% of the
+   screen: the title bar and the footer stay put and only the middle scrolls,
+   so the actions and drop zones are never cut off. */
+#root .fixed.inset-0 > .modal-shell,
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child):has(> div.border-t:last-child):has(> :nth-child(3):last-child) {
+  display: flex !important;
+  flex-direction: column;
+  max-height: 90vh !important;
+  overflow: hidden !important;
+}
+#root .fixed.inset-0 > .modal-shell > .modal-body,
+#root .fixed.inset-0 > :is(div, form):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child):has(> div.border-t:last-child):has(> :nth-child(3):last-child) > :nth-child(2) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#root .fixed.inset-0 > :is(.modal-shell, :is(div, form)) > :is(div.border-b:first-child, div.border-t:last-child) { flex: none; }
+
+/* A long dialog that scrolls as a whole: no strip of padding under its
+   footer, which sits flush on the bottom edge. */
+#root .fixed.inset-0 > [class*="overflow-y-auto"]:not(aside):has(> div.flex:is(.justify-end, .justify-between, .border-t):has(> button):last-child) { padding-bottom: 0 !important; }
+#root .fixed.inset-0 > [class*="overflow-y-auto"]:not(aside) > form:has(> div.flex:is(.justify-end, .justify-between, .border-t):has(> button):last-child) { padding-bottom: 0 !important; }
+
+/* Scrollbars inside dialogs, sheets and menus: a slim rounded thumb on a
+   clear track, held 3px in from the frame and clear of the rounded corners,
+   so it never presses against the edge. (Firefox, which has no
+   ::-webkit-scrollbar, gets its thin scrollbar instead.) */
+/* the gutter is reserved only where the content really scrolls (set in the
+   modal shell below), never on a panel that does not scroll */
+#root .fixed.inset-0 *::-webkit-scrollbar,
+:is(#root, body) :is(.role-sheet, .guard-card, .soft-list)::-webkit-scrollbar { width: 12px; height: 12px; }
+#root .fixed.inset-0 *::-webkit-scrollbar-track,
+:is(#root, body) :is(.role-sheet, .guard-card, .soft-list)::-webkit-scrollbar-track { background: transparent; margin-block: 12px; }
+#root .fixed.inset-0 *::-webkit-scrollbar-thumb,
+:is(#root, body) :is(.role-sheet, .guard-card, .soft-list)::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-right-width: 5px;
+  border-radius: 9999px;
+  background-clip: padding-box;
+  background-color: color-mix(in srgb, var(--neu-faint) 45%, transparent);
+}
+#root .fixed.inset-0 *::-webkit-scrollbar-thumb:hover,
+:is(#root, body) :is(.role-sheet, .guard-card, .soft-list)::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--neu-faint) 70%, transparent); }
+@supports not selector(::-webkit-scrollbar) {
+  #root .fixed.inset-0 :is([class*="overflow-y-auto"], .modal-body, .modal-scroll),
+  :is(#root, body) :is(.role-sheet, .guard-card, .soft-list) { scrollbar-width: thin; scrollbar-color: var(--neu-lo) transparent; }
+}
+
+/* Filter grids: every filter is a label over its field, in equal columns
+   (4 on a wide card, 2 on a tablet, 1 on a phone), so fields never stack
+   unevenly or end up in two rows of different widths. */
+#root .filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+@media (min-width: 1280px) { #root .filter-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 639px) { #root .filter-grid { grid-template-columns: minmax(0, 1fr); } }
+#root .filter-grid > label {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch !important;
+  gap: 4px !important;
+  min-width: 0;
+}
+#root .filter-grid > label > span:first-child {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--neu-muted);
+  white-space: nowrap;
+}
+#root .filter-grid :is(select, input) { width: 100% !important; min-width: 0 !important; max-width: none !important; }
+
+/* ---- One button family ----------------------------------------------------
+   .btn (neutral), .btn-primary (cyan), .btn-danger (red): 44px, the same
+   padding, radius and weight, raised at rest and pressed in when held. Every
+   dialog footer's buttons and links take the same size, so Cancel, Save,
+   Send memo, Open form and Print poster always line up. */
+#root :is(.btn, .fixed.inset-0 > :is(div, form) > div.border-t:last-child > :is(button, a), .fixed.inset-0 > [class*="overflow-y-auto"] > div.flex:is(.justify-end, .justify-between, .border-t):last-child > :is(button, a), .fixed.inset-0 > [class*="overflow-y-auto"] > form > div.flex:is(.justify-end, .justify-between, .border-t):last-child > :is(button, a)) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--ctl-h) !important;
+  min-height: var(--ctl-h) !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+#root .btn:not(.btn-primary, .btn-danger) {
+  color: var(--neu-text) !important;
+  background-color: var(--neu-bg) !important;
+  border: 0 !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+#root .btn svg { flex: none; color: var(--neu-accent); }
+#root .btn.btn-primary { color: #0f172a !important; background-color: #06b6d4 !important; border: 0 !important; box-shadow: 4px 4px 10px var(--neu-lo), -4px -4px 10px var(--neu-hi) !important; }
+#root .btn.btn-primary svg { color: inherit; }
+#root .btn.btn-danger { color: #ffffff !important; background-color: #dc2626 !important; border: 0 !important; box-shadow: 4px 4px 10px var(--neu-lo), -4px -4px 10px var(--neu-hi) !important; }
+#root .btn:not(:disabled):is(:active, [data-pressed]) { box-shadow: var(--neu-inset-sm) !important; }
+#root .btn:not(.btn-primary, .btn-danger):not(:disabled):hover { box-shadow: var(--neu-inset-sm) !important; }
+#root .btn.btn-primary:not(:disabled):hover { background-color: #0891b2 !important; }
+#root .btn.btn-danger:not(:disabled):hover { background-color: #b91c1c !important; }
+
+/* Solid colored buttons (cyan, red, green...) get their depth from a soft
+   cast shadow and a faint top highlight, never a light halo around the color
+   (a white halo on a red or cyan button reads as a neon glow). */
+#root button:is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-red-700, .bg-rose-500, .bg-rose-600, .bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600, .bg-orange-500, .bg-blue-500, .bg-blue-600, .bg-amber-500, .bg-violet-500):not(:disabled),
+:is(#root, body) .guard-btn.is-primary:not(:disabled),
+#root .btn:is(.btn-primary, .btn-danger):not(:disabled) {
+  box-shadow: 3px 3px 8px var(--neu-lo), inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+  filter: none !important;
+}
+#root button:is(.bg-cyan-500, .bg-cyan-600, .bg-red-500, .bg-red-600, .bg-red-700, .bg-rose-500, .bg-rose-600, .bg-emerald-500, .bg-emerald-600, .bg-green-500, .bg-green-600, .bg-orange-500, .bg-blue-500, .bg-blue-600, .bg-amber-500, .bg-violet-500):not(:disabled):is(:active, [data-pressed]) {
+  box-shadow: inset 3px 3px 6px rgba(8, 30, 50, 0.4) !important;
+}
+
+/* Table cells with a status pill and a small note (Approved · Paid): one
+   inline group on the same line as the row's buttons, so the pill and the
+   View button share one center line. Every cell is vertically centered. */
+#root :is(.ice-main, .ice-scope, .fixed.inset-0) :is(td, th) { vertical-align: middle; }
+#root .status-stack {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+#root :is(.status-stack > .status-note, td > :is(span, div).rounded-full + :is(div, small)) {
+  display: block;
+  margin-top: 0 !important;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--neu-faint);
+  white-space: nowrap;
+}
+#root td > :is(span, div).rounded-full + :is(div, small) { margin-top: 4px !important; }
+#root td:has(> .status-stack) { white-space: nowrap; }
+
+/* File uploads: one vibrant blue fill (the brand accent) on a soft track,
+   while uploading and when done; a failed upload stays red. */
+:is(#root, body) .upload-fill {
+  border-radius: 9999px;
+  background-color: #0ea5e9 !important;
+  background-image: linear-gradient(90deg, #0284c7, #0ea5e9 60%, #38bdf8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Splash screen loading line: a faint track and a blue fill that grows over
+   the splash time. The splash is a full-screen layer, so the dialog panel
+   rules would otherwise turn its track into a grey card. */
+:is(#root, body) .splash-track {
+  height: 3px !important;
+  border: 0 !important;
+  border-radius: 9999px !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: none !important;
+}
+:is(#root, body) .splash-fill {
+  border-radius: 9999px !important;
+  background-color: #0ea5e9 !important;
+  background-image: linear-gradient(90deg, #0284c7, #38bdf8) !important;
+  box-shadow: none !important;
+}
+
+/* ---- Chat bubbles (components/MessageBubble.jsx): leave reasons, HR
+   remarks, support messages. Theirs is a raised card, mine a raised card
+   with a soft cyan tint; no notice bar, no flat white box. */
+:is(#root, body) .msg-bubble {
+  color: var(--neu-text) !important;
+  background-color: var(--neu-bg) !important;
+  border: 0 !important;
+  box-shadow: var(--neu-raised-sm) !important;
+}
+:is(#root, body) .msg-bubble.is-mine {
+  background-color: color-mix(in srgb, #06b6d4 14%, var(--neu-bg)) !important;
+}
+:is(#root, body) .msg-avatar { color: #ffffff; background-color: #475569 !important; box-shadow: var(--neu-raised-sm) !important; }
+:is(#root, body) .msg-avatar.is-mine { color: #0f172a; background-color: #06b6d4 !important; }
+
+/* Webcam capture (Enroll Face): the outer card is raised so it stands out
+   from the dialog; the camera picture inside stays a plain rounded frame. */
+:is(#root, body) .face-card {
+  background-color: var(--neu-bg) !important;
+  border: 0 !important;
+  box-shadow: var(--neu-raised) !important;
+}
+:is(#root, body) .face-card > div.border-b:first-child { border-bottom: 1px solid var(--groove-dark) !important; box-shadow: 0 1px 0 var(--groove-light) !important; }
+:is(#root, body) .face-viewport { box-shadow: none !important; border: 0 !important; }
+
+/* ---- One modal shell for every dialog with a title bar ---------------------
+   The panel is a column no taller than 90% of the screen that never scrolls
+   itself: the title bar stays at the top, one region in the middle scrolls,
+   and the footer sits flush on the bottom edge (no gap under it, no button
+   cut off by the rounded corner). Two shapes are handled:
+   - header, a form holding its own scrolling body and a footer (Add Customer)
+   - header (steps), then a form or body whose last row is the footer
+     (Add Employee, Add Applicant): that region scrolls and its footer sticks
+     to its bottom with the padding under it removed.
+   #modal-panel never matches; it only outweighs the older panel rules. */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) {
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: 90vh !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > * { flex: 0 0 auto; }
+/* the scrolling region: the last child, or the one before a separate footer */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child):not(:has(> div.border-t:last-child)) > :last-child:not(:first-child),
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child):has(> div.border-t:last-child) > :nth-last-child(2):not(:first-child) {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* a form that already holds its own scrolling body: it is a column, not a scroller */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > form:has(> [class*="overflow-y-auto"]) {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > form > [class*="overflow-y-auto"] { flex: 1 1 auto; min-height: 0; }
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > form > div.border-t:last-child { flex: 0 0 auto; margin: 0 !important; }
+/* a footer at the end of the scrolling region: stuck to its bottom, edge to edge */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])):has(> div.flex:is(.justify-end, .justify-between, .border-t):last-child) {
+  padding-bottom: 0 !important;
+}
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])) > div.flex:is(.justify-end, .justify-between, .border-t):last-child:not(:first-child) {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin: 8px -20px 0 !important;
+  padding: 14px 20px !important;
+  background-color: var(--modal-cap) !important;
+  border-top: 1px solid var(--groove-dark) !important;
+  box-shadow: inset 0 1px 0 var(--groove-light) !important;
+}
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > :last-child:not(:has(> [class*="overflow-y-auto"])) > div.flex:is(.justify-end, .justify-between, .border-t):last-child:not(:first-child) :is(button, a) {
+  height: var(--ctl-h) !important;
+  min-height: var(--ctl-h) !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) > div.border-b:first-child {
+  position: relative;
+  top: auto;
+  padding: 16px 20px !important;
+}
+
+/* Resume / license scan: a blue bar runs while the file is read, and when the
+   auto-fill is offline a quiet info line says the file is attached anyway. */
+.scan-progress { width: 40%; animation: scan-slide 1.1s ease-in-out infinite; }
+@keyframes scan-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .scan-progress { animation: none; width: 100%; } }
+:is(#root, body) .scan-note {
+  display: inline-block;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--neu-accent) !important;
+  background-color: var(--neu-bg) !important;
+  box-shadow: var(--neu-inset-sm) !important;
+}
+
+/* no reserved scrollbar gutter: the slim inset thumb above gives the room,
+   and the sticky footer still reaches both edges */
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child),
+#root .fixed.inset-0 > :is(div, form, #modal-panel):is(.bg-white, [class*="bg-white/"]):has(> div.border-b:first-child) * { scrollbar-gutter: auto !important; }
+
+/* Numbers and labels drawn in SVG (progress rings, gauges, charts) follow the
+   theme like the rest of the text: dark on light, light on dark. */
+.ring-value { fill: var(--neu-text); }
+.ring-track { stroke: rgba(100, 116, 139, 0.18); }
+:is(.cp-dark, .neu-dark) .ring-track { stroke: rgba(255, 255, 255, 0.1); }
+:is(.cp-dark, .neu-dark) :is(.fill-slate-600, .fill-slate-700, .fill-slate-800, .fill-slate-900, .fill-black) { fill: var(--neu-text) !important; }
+:is(.cp-dark, .neu-dark) :is(.fill-slate-400, .fill-slate-500) { fill: var(--neu-muted) !important; }
+
+/* ---- One type scale (SaaS proportions) -----------------------------------
+   Page and dialog titles 16-18px, card titles 15-16px, body 13-14px, captions
+   12px, badges 12px. On the role screens (phones), display numbers are 20px
+   and buttons use 14px text; they keep their 44px touch height. */
+.role-shell main :is(.text-2xl, .text-3xl, .text-4xl) { font-size: 20px !important; line-height: 1.2 !important; }
+.role-shell main :is(.text-xl, .text-lg, [class*="text-[17px]"], [class*="text-[18px]"]) { font-size: 16px !important; line-height: 1.35 !important; }
+.role-shell main :is(.text-base, [class*="text-[15px]"]):not(input, select, textarea) { font-size: 14px !important; }
+.role-shell :is(main, .role-sheet, .fixed) :is(button, a[role="button"]):not(.role-nav *, .rounded-full:not([class*="px-"])) { font-size: 14px; }
+.role-shell .rounded-full:is([class*="text-[12px]"], [class*="text-[13px]"]):is([class*=" px-"], [class^="px-"]) { font-size: 12px !important; padding: 2px 10px !important; line-height: 1.4 !important; }
+
+/* Enlarged map: just the map in a soft frame; the close and locate buttons
+   float at the top right, the main action at the bottom center (clear of the
+   zoom buttons), all compact and readable in light and night mode. */
+.map-full-card .map-area { border-radius: 16px; }
+.map-full-card .map-close { width: 38px; height: 38px; background-color: #ffffff; color: #0f172a; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22); }
+.map-full-card .map-close:is(:hover, :active) { background-color: #f1f5f9; box-shadow: inset 2px 2px 5px rgba(15, 23, 42, 0.2); }
+.map-float-actions { max-width: calc(100% - 120px); }
+@media (max-width: 639px) {
+  .map-full-card { width: 94vw; height: 84vh; padding: 6px; }
+  .map-float-actions { max-width: calc(100% - 24px); bottom: 64px; }
 }

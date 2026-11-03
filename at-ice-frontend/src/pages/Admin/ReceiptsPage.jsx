@@ -8,6 +8,7 @@ import { printReceipt } from "../../lib/printReceipt";
 import { toast } from "../../lib/toast";
 import { useDraft } from "../../lib/useDraft";
 import DraftHint from "../../components/DraftHint";
+import { ConfirmCard } from "../../components/ActionGuard";
 import { PROOF_STATUS, openProofFile } from "../../lib/paymentProof";
 import { PAYMENT_BADGE, paymentState } from "../../lib/paymentStatus";
 import { formatDateTime } from "../../lib/time";
@@ -231,14 +232,14 @@ export default function ReceiptsPage() {
                   <button
                     onClick={() => reviewProof(p, "approve")}
                     disabled={proofBusy === p.id}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[12px] font-medium disabled:opacity-50"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-cyan-500 hover:bg-cyan-600 text-white text-[12px] font-medium"
                   >
                     <CheckIcon /> Approve
                   </button>
                   <button data-no-confirm
                     onClick={() => { setRejectTarget(p); setRejectReason(""); }}
                     disabled={proofBusy === p.id}
-                    className="px-2.5 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50 text-[12px] disabled:opacity-50"
+                    className="px-2.5 py-1 rounded-md bg-red-500 text-white text-[12px] font-medium"
                   >
                     Reject
                   </button>
@@ -362,8 +363,8 @@ export default function ReceiptsPage() {
                         <button onClick={() => setViewing(r)} className="p-1.5 rounded-md border border-black/[0.09] text-slate-500 hover:bg-slate-50" title="View">
                           <EyeIcon />
                         </button>
-                        <button onClick={() => printReceipt(r)} className="p-1.5 rounded-md border border-black/[0.09] text-slate-500 hover:bg-slate-50" title="Print invoice" aria-label={`Print ${r.receipt_no}`}>
-                          <PrintIcon />
+                        <button onClick={() => printReceipt(r)} className="print-btn" data-tip="Opens a printable copy of this invoice." aria-label={`Print ${r.receipt_no}`}>
+                          <PrintIcon /> Print
                         </button>
                         {r.payment_status !== "paid" && (
                           <button data-no-confirm
@@ -393,7 +394,7 @@ export default function ReceiptsPage() {
             <div className="px-5 py-4 border-b border-black/[0.09] flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-slate-800">{viewing.receipt_no}</h3>
               <div className="flex items-center gap-2">
-                <button onClick={() => printReceipt(viewing)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-black/[0.09] text-slate-600 hover:bg-slate-50 text-[12px]">
+                <button onClick={() => printReceipt(viewing)} className="print-btn">
                   <PrintIcon /> Print
                 </button>
                 <button onClick={() => setViewing(null)} className="text-slate-400 hover:text-slate-600" aria-label="Close">
@@ -401,7 +402,8 @@ export default function ReceiptsPage() {
                 </button>
               </div>
             </div>
-            <div className="p-5 flex flex-col gap-3 text-[13px]">
+            <div className="p-5 flex flex-col gap-4 text-[13px]">
+              <div className="detail-well">
               <Row label="Customer" value={viewing.customer?.name || "—"} />
               <Row label="Salesman" value={viewing.salesman?.name || "—"} />
               <Row label="Delivery" value={viewing.delivery?.delivery_no || "—"} />
@@ -412,11 +414,12 @@ export default function ReceiptsPage() {
                   <Row label="Paid At" value={viewing.paid_at ? new Date(viewing.paid_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "—"} />
                 </>
               )}
+              </div>
               <div>
                 <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-1.5">Items</div>
                 <div className="flex flex-col gap-1.5">
                   {(viewing.items || []).map((it) => (
-                    <div key={it.id} className="flex items-center justify-between bg-slate-50 border border-black/[0.09] rounded-md px-3 py-2">
+                    <div key={it.id} className="item-card flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5">
                       <span className="text-slate-700 capitalize">{it.product_type?.replace("_", " ")}</span>
                       <span className="text-slate-500 font-mono text-right">
                         {it.quantity} × ₱{Number(it.unit_price).toFixed(2)} = {peso(it.line_total)}
@@ -432,13 +435,13 @@ export default function ReceiptsPage() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-center justify-between border-t border-black/[0.09] pt-3 mt-1">
+              <div className="total-row flex items-center justify-between rounded-xl px-3.5 py-3">
                 <span className="text-[13px] font-semibold text-slate-800">Total</span>
                 <span className="text-[13px] font-semibold font-mono text-slate-800">{peso(viewing.total_amount)}</span>
               </div>
               {/* What the customer attached as proof of payment, newest first. */}
-              <div className="border-t border-black/[0.09] pt-3">
-                <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-1.5">Payment proofs</div>
+              <div className="detail-well">
+                <div className="text-[11px] text-slate-400 uppercase tracking-wide">Payment proofs</div>
                 {(viewing.payment_proofs || []).length === 0 ? (
                   <div className="text-[12px] text-slate-400">The customer has not sent a payment proof.</div>
                 ) : (
@@ -446,7 +449,7 @@ export default function ReceiptsPage() {
                     {viewing.payment_proofs.map((p) => {
                       const st = PROOF_STATUS[p.status] || PROOF_STATUS.pending;
                       return (
-                        <div key={p.id} className="border border-black/[0.09] rounded-md px-3 py-2 text-[12px]">
+                        <div key={p.id} className="item-card rounded-xl px-3.5 py-2.5 text-[12px]">
                           <div className="flex items-center justify-between gap-2">
                             <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${st.cls}`}>{st.label}</span>
                             <span className="text-slate-400">Sent {formatDateTime(p.created_at, { year: false })}</span>
@@ -482,17 +485,20 @@ export default function ReceiptsPage() {
 
       {/* Reject payment proof: the reason is shown to the customer */}
       {rejectTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form
-            onSubmit={(e) => { e.preventDefault(); reviewProof(rejectTarget, "reject", rejectReason.trim()); }}
-            className="bg-white rounded-xl border border-black/[0.09] w-full max-w-sm p-5"
-          >
-            <h3 className="text-[14px] font-semibold text-slate-800 mb-1.5">Reject payment proof?</h3>
-            <p className="text-[12px] text-slate-500 mb-3">
-              <span className="font-medium text-slate-700">{rejectTarget.receipt?.receipt_no}</span> stays unpaid and its overdue count goes on. The customer sees the reason and can send a new proof.
-            </p>
-            <DraftHint draft={rejectDraft} className="mb-3" />
-            <label className="text-[11px] text-slate-500 mb-1 block">Reason<span className="text-red-500"> *</span></label>
+        <ConfirmCard
+          danger
+          title="Reject payment proof?"
+          context={rejectTarget.receipt?.receipt_no}
+          message="The invoice stays unpaid and its overdue count goes on. The customer sees your reason and can send a new proof."
+          confirmLabel={proofBusy === rejectTarget.id ? "Saving…" : "Reject"}
+          busy={proofBusy === rejectTarget.id}
+          confirmDisabled={rejectReason.trim().length < 3}
+          onCancel={() => setRejectTarget(null)}
+          onConfirm={() => reviewProof(rejectTarget, "reject", rejectReason.trim())}
+        >
+          <DraftHint draft={rejectDraft} className="mt-3" />
+          <label className="guard-field">
+            <span>Reason (shown to the customer) *</span>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
@@ -500,19 +506,11 @@ export default function ReceiptsPage() {
               minLength={3}
               maxLength={500}
               rows={3}
+              autoFocus
               placeholder="e.g. The amount does not match the invoice."
-              className="w-full bg-slate-50 border border-black/[0.09] rounded-md px-2.5 py-1.5 text-[13px] outline-none focus:border-cyan-500 mb-4 resize-none"
             />
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setRejectTarget(null)} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-slate-600 text-[12px]">
-                Cancel
-              </button>
-              <button type="submit" disabled={proofBusy === rejectTarget.id || rejectReason.trim().length < 3} className="px-3.5 py-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white text-[12px] font-medium disabled:opacity-50">
-                {proofBusy === rejectTarget.id ? "Saving…" : "Reject"}
-              </button>
-            </div>
-          </form>
-        </div>
+          </label>
+        </ConfirmCard>
       )}
 
       {/* Mark as Paid modal */}

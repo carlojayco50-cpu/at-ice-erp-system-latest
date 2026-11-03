@@ -81,13 +81,14 @@ function Timeline({ p }) {
   // readable in light and night mode.
   return (
     <div className="min-w-[120px] max-w-[220px] mx-auto" title={p.overdue ? "Past the due date" : `${pct}% of the time used`}>
-      <div className="relative h-6 rounded-full bg-slate-100 overflow-hidden" style={{ boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 35%, transparent)` }}>
+      {/* clip-path keeps the colored fill inside the round ends */}
+      <div className="date-pill relative h-6 overflow-hidden" style={{ borderRadius: 9999, clipPath: "inset(0 round 9999px)", isolation: "isolate", boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 35%, transparent)` }}>
         <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, background: `color-mix(in srgb, ${color} 30%, transparent)` }} />
-        <span className="relative z-10 flex items-center justify-center h-full text-[11px] font-semibold text-slate-800">
+        <span className="relative z-10 flex items-center justify-center gap-1.5 h-full px-2 text-[11px] font-semibold text-slate-800 whitespace-nowrap">
           {day(p.start_date) || "?"} – {day(p.due_date) || "?"}
+          {p.overdue && <span className="text-[10px] font-bold uppercase tracking-wide text-rose-700">· Overdue</span>}
         </span>
       </div>
-      {p.overdue && <div className="text-[11px] text-rose-700 font-semibold mt-1">Overdue</div>}
     </div>
   );
 }

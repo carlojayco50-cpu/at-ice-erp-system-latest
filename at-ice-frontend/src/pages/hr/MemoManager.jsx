@@ -8,6 +8,7 @@ import FileDropZone from "../../components/FileDropZone";
 import { usePagination } from "../../lib/usePagination";
 import { sendForm } from "../../lib/upload";
 import { KpiCard, KpiGrid } from "../../components/Kpi";
+import { Icon } from "../../components/icons";
 import { ActivityFeed, StatusBreakdown, TipsWidget } from "../../components/Insight";
 import { useLiveTick } from "../../lib/live";
 import { formatDateShort, formatDateTime } from "../../lib/time";
@@ -120,11 +121,15 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label="Issue a memo" onClick={(e) => e.stopPropagation()} className="bg-white rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-5 flex flex-col gap-3.5">
-        <div>
-          <div className="text-[15px] font-semibold text-slate-800">Issue a memo</div>
-          <div className="text-[11px] text-slate-500 mt-0.5">The letter is filled in from the violation and the employee's earlier offenses. Edit it as needed.</div>
+      <div role="dialog" aria-modal="true" aria-label="Issue a memo" onClick={(e) => e.stopPropagation()} className="modal-shell bg-white rounded-xl w-full max-w-2xl">
+        <div className="px-5 py-4 border-b border-black/[0.09] flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold text-slate-800">Issue a memo</div>
+            <p className="text-[11px] text-slate-500 mt-0.5">The letter is filled in from the violation and the employee's earlier offenses. Edit it as needed.</p>
+          </div>
+          <button type="button" data-no-confirm onClick={onClose} aria-label="Close"><Icon name="x" size={16} /></button>
         </div>
+        <div className="modal-body p-5 flex flex-col gap-3.5">
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="text-[11px] font-medium text-slate-600">Employee</span>
@@ -165,8 +170,9 @@ function IssueMemoDialog({ employees, violations, levels, presetEmployee, onClos
         </div>
 
         {error && <div className="text-[12px] text-red-600">{error}</div>}
+        </div>
 
-        <div className="flex flex-wrap justify-end gap-2 pt-1">
+        <div className="px-5 py-3 border-t border-black/[0.09] flex flex-wrap justify-end gap-2">
           <button type="button" data-no-confirm onClick={onClose} className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
           <button type="button" disabled={!!busy} onClick={() => save(false)} title="Keep it as a draft; the employee does not see it yet" className="px-3.5 py-1.5 rounded-md border border-black/[0.09] text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50">
             {busy === "draft" ? "Saving…" : "Save draft"}
@@ -290,7 +296,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
             <ul className="flex flex-col gap-1">
               {[...attachments, ...signedCopies].map((f) => (
                 <li key={f.id} className="flex items-center gap-2 text-[12px]">
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${f.kind === "signed_copy" ? "bg-cyan-50 text-cyan-800 border-cyan-200" : "bg-slate-50 text-slate-600 border-slate-200"}`}>{f.kind === "signed_copy" ? "Signed copy" : "Attachment"}</span>
+                  <span className={`soft-chip inline-flex items-center px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold whitespace-nowrap ${f.kind === "signed_copy" ? "text-[color:var(--neu-accent)]" : "text-slate-600"}`}>{f.kind === "signed_copy" ? "Signed copy" : "Attachment"}</span>
                   <button type="button" data-no-confirm onClick={() => openProtectedFile(`/api/memos/${memo.id}/files/${f.id}`, f.original_name)} title="Open this file" className="min-w-0 truncate text-cyan-700 hover:underline cursor-pointer text-left">{f.original_name}</button>
                 </li>
               ))}
@@ -343,7 +349,7 @@ function MemoPanel({ memo, onChanged, onClose }) {
         {error && <div className="text-[12px] text-red-600">{error}</div>}
 
         <div className="flex flex-wrap gap-2 pt-3 border-t border-black/[0.06]">
-          <button type="button" data-no-confirm onClick={() => printMemo(memo)} title="Print the memo letter, or save it as a PDF" className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-slate-700 hover:bg-slate-50 cursor-pointer">Print / PDF</button>
+          <button type="button" data-no-confirm onClick={() => printMemo(memo)} data-tip="Print the memo letter, or save it as a PDF" className="print-btn"><Icon name="print" size={14} /> Print / PDF</button>
           {["draft", "sent", "awaiting_physical"].includes(memo.status) && !mode && (
             <button type="button" data-no-confirm onClick={() => setMode("cancel")} title="Cancel this memo with a reason" className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-black/[0.09] text-rose-700 hover:bg-rose-50 cursor-pointer">Cancel memo…</button>
           )}
@@ -462,12 +468,16 @@ export default function MemoManager() {
               <div className="text-[13px] font-semibold text-slate-800">Disciplinary memos</div>
               <div className="text-[11px] text-slate-400 mt-0.5">Missed Time Outs become drafts here. Nothing reaches an employee until HR sends it.</div>
             </div>
+          </div>
+          {/* one even grid of filters: label above each field, wraps 4 / 2 / 1 */}
+          <div className="filter-grid px-5 py-3.5 border-b border-black/[0.06]">
             <FilterSelect label="Status" value={status} onChange={setStatus} options={STATUS_OPTIONS} />
             <FilterSelect label="Type" value={category} onChange={setCategory} options={[{ value: "all", label: "All", count: memos.length }, ...Object.entries(CATEGORY_LABEL).map(([k, l]) => ({ value: k, label: l, count: memos.filter((m) => m.category === k).length }))]} />
-          </div>
-          <div className="px-5 py-3 border-b border-black/[0.06] flex flex-wrap items-center gap-3">
-            <FilterSelect label="Employee" value={employee} onChange={setEmployee} className="min-w-0 flex-1" options={[{ value: "all", label: "All employees", count: memos.filter((m) => m.status !== "cancelled").length }, ...employees.map((e) => ({ value: e.id, label: empLabel(e), count: memos.filter((m) => m.employee_id === e.id && m.status !== "cancelled").length }))]} />
-            <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search memo no., employee or violation" className="w-full sm:w-64 px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60" />
+            <FilterSelect label="Employee" value={employee} onChange={setEmployee} options={[{ value: "all", label: "All employees", count: memos.filter((m) => m.status !== "cancelled").length }, ...employees.map((e) => ({ value: e.id, label: empLabel(e), count: memos.filter((m) => m.employee_id === e.id && m.status !== "cancelled").length }))]} />
+            <label>
+              <span>Search</span>
+              <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Memo no., employee or violation" className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-md text-xs text-slate-700 outline-none focus:border-cyan-500/60" />
+            </label>
           </div>
 
           {error && <div className="px-5 py-3 text-[12px] text-red-600 bg-red-50 border-b border-red-200">{error}</div>}

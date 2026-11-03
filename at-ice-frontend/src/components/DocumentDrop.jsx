@@ -40,7 +40,7 @@ function Zone({ kind, items, onAdd, onRemove, viewUrl, disabled }) {
         onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}
         data-no-confirm
         data-tip={`Drop or choose a file: ${kind.hint}`}
-        className={`w-full rounded-xl border-2 border-dashed px-3 py-4 text-center transition-colors outline-none focus-visible:border-cyan-500 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${over ? "border-cyan-500 bg-cyan-50" : "border-slate-300 hover:border-cyan-400"}`}
+        className={`drop-well w-full rounded-xl border-2 border-dashed px-3 py-4 text-center transition-colors outline-none focus-visible:border-cyan-500 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${over ? "border-cyan-500 bg-cyan-50" : "border-slate-300 hover:border-cyan-400"}`}
       >
         <div className="text-[12.5px] font-semibold text-slate-700">{kind.label}</div>
         <div className="text-[11px] text-slate-500 mt-0.5">Drop here or tap to choose · {kind.hint}</div>
@@ -67,7 +67,7 @@ function Zone({ kind, items, onAdd, onRemove, viewUrl, disabled }) {
           </div>
           {(it.status === "uploading" || it.status === "queued") && (
             <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-valuenow={it.progress || 0} aria-valuemin={0} aria-valuemax={100}>
-              <div className="h-full bg-cyan-600 transition-[width] duration-200" style={{ width: `${it.progress || 0}%` }} />
+              <div className="upload-fill h-full transition-[width] duration-200" style={{ width: `${it.progress || 0}%` }} />
             </div>
           )}
           <div className="text-[10.5px] mt-1 text-slate-500">

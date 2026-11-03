@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { SCAN_ACCEPT, scanDocument } from "@/lib/scanDocument";
+import { EMPTY_SCAN, SCAN_ACCEPT, scanDocument } from "@/lib/scanDocument";
 import { toast } from "@/lib/toast";
 
 // Drop zone on Add Employee and Add Applicant (HR). kind "resume" takes a PDF
@@ -21,6 +21,7 @@ export default function ScanDropZone({ onScan, onRemove, kind = "resume", fills 
   const text = TEXT[kind];
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
+  const [offline, setOffline] = useState(false); // file kept, auto-fill not available
   const [over, setOver] = useState(false);
   const inputRef = useRef(null);
 
@@ -29,6 +30,7 @@ export default function ScanDropZone({ onScan, onRemove, kind = "resume", fills 
     e.stopPropagation();
     if (inputRef.current) inputRef.current.value = "";
     setDone("");
+    setOffline(false);
     onRemove?.();
   };
 
@@ -36,13 +38,21 @@ export default function ScanDropZone({ onScan, onRemove, kind = "resume", fills 
     if (!file || busy) return;
     setBusy(true);
     setDone("");
+    setOffline(false);
     try {
       const result = await scanDocument(file, kind);
       onScan(result, file);
       setDone(file.name);
       toast.success("The form was filled in from the document. Check it before saving.");
     } catch (err) {
-      toast.error(err.message || "The document could not be read.");
+      if (err.offline) {
+        // Never block the form: keep the file and say so quietly.
+        onScan(EMPTY_SCAN, file);
+        setDone(file.name);
+        setOffline(true);
+      } else {
+        toast.error(err.message || "The document could not be read.");
+      }
     } finally {
       setBusy(false);
     }
@@ -60,7 +70,7 @@ export default function ScanDropZone({ onScan, onRemove, kind = "resume", fills 
       onDragLeave={() => setOver(false)}
       onDrop={onDrop}
       aria-busy={busy}
-      className={`relative flex flex-col items-center justify-center gap-1 px-4 py-4 rounded-lg border-2 border-dashed text-center transition-colors focus-within:ring-2 focus-within:ring-cyan-500/40 ${
+      className={`drop-well relative flex flex-col items-center justify-center gap-1 px-4 py-4 rounded-xl border-2 border-dashed text-center transition-colors focus-within:ring-2 focus-within:ring-cyan-500/40 ${
         busy ? "border-cyan-400 bg-cyan-50/60 cursor-wait"
           : over ? "border-cyan-500 bg-cyan-50 cursor-copy"
           : "border-cyan-500/40 bg-cyan-50/30 hover:bg-cyan-50/70 cursor-pointer"
@@ -84,10 +94,22 @@ export default function ScanDropZone({ onScan, onRemove, kind = "resume", fills 
       <span className="text-[11px] text-slate-500" aria-live="polite">
         {busy
           ? "This takes a few seconds."
-          : done
-            ? `Filled in from ${done}. Check every field before saving. Drop another file to scan again.`
-            : `or click to choose (${text.types}). Fills in the ${fills}.`}
+          : done && offline
+            ? `${done} is attached.`
+            : done
+              ? `Filled in from ${done}. Check every field before saving. Drop another file to scan again.`
+              : `or click to choose (${text.types}). Fills in the ${fills}.`}
       </span>
+      {busy && (
+        <span className="mt-1.5 h-1.5 w-[min(240px,80%)] overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Reading the document">
+          <span className="upload-fill scan-progress block h-full" />
+        </span>
+      )}
+      {done && offline && !busy && (
+        <span role="status" className="scan-note mt-1.5">
+          File attached. Auto-fill scan is offline, so please fill in the fields by hand.
+        </span>
+      )}
       {done && !busy && (
         <button
           type="button"

@@ -227,7 +227,6 @@ html[data-fx] .stat-card.stat-card {
 }
 .soft-pop, .soft-link, .soft-link:hover {
   filter: none !important;
-  box-shadow: var(--float-shadow-sm, none) !important;
 }
 #root :is(button, [role="button"], a, summary, [role="tab"], input, select, textarea, label, div),
 #root :is(button, [role="button"], a, summary, [role="tab"], input, select, textarea, label, div):hover,
